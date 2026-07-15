@@ -25,7 +25,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 360
     env:
       BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.head_ref == 'experimental/linux-7.1.3-lqx-marie-adios' && 'package' || 'validate' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -33,6 +33,8 @@ jobs:
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPILERCHECK: content
       CCACHE_NOHASHDIR: "true"
+      CCACHE_DEPEND: "true"
+      CCACHE_SLOPPINESS: include_file_ctime,include_file_mtime,time_macros
       KBUILD_BUILD_USER: kernelnote
       KBUILD_BUILD_HOST: github-actions
       KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
@@ -40,17 +42,23 @@ jobs:
       SOURCE_DATE_EPOCH: "1767225600"
       LC_ALL: C
       TZ: UTC
+
     steps:
-      - name: Free disk space
+      - name: Free /opt runner space
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo find /opt -maxdepth 1 -mindepth 1 \
+            ! -path /opt/containerd \
+            ! -path /opt/actionarchivecache \
+            ! -path /opt/runner \
+            ! -path /opt/runner-cache \
+            -print -exec rm -rf -- {} +
+
+      - name: Free tool cache
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
 
       - name: Check out project
         uses: actions/checkout@v4
@@ -69,37 +77,31 @@ jobs:
           echo "JOBS=$JOBS" >> "$GITHUB_ENV"
           echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
 
-          configure_zswap() {
-            local parameters=/sys/module/zswap/parameters
+          # Match the proven linux-charcoal-TD host setup exactly: ZSTD, a 90%
+          # pool, the zswap shrinker enabled, and zswap enabled before swap is
+          # created. GitHub's host kernel exposes these as runtime parameters.
+          parameters=/sys/module/zswap/parameters
+          test -d "$parameters"
+          test -w "$parameters/compressor"
+          test -w "$parameters/max_pool_percent"
+          test -w "$parameters/shrinker_enabled"
+          test -w "$parameters/enabled"
 
-            sudo modprobe zswap 2>/dev/null || true
-            sudo modprobe zstd_compress 2>/dev/null || true
-            sudo modprobe crypto_zstd 2>/dev/null || true
-            sudo modprobe zstd 2>/dev/null || true
+          echo zstd | sudo tee "$parameters/compressor"
+          echo 90   | sudo tee "$parameters/max_pool_percent"
+          echo 1    | sudo tee "$parameters/shrinker_enabled"
+          echo 1    | sudo tee "$parameters/enabled"
 
-            if [[ ! -d "$parameters" ]]; then
-              echo "::warning::The host kernel does not expose runtime zswap parameters; continuing with disk swap only"
-              return 0
-            fi
+          enabled="$(cat "$parameters/enabled")"
+          compressor="$(cat "$parameters/compressor")"
+          pool="$(cat "$parameters/max_pool_percent")"
+          shrinker="$(cat "$parameters/shrinker_enabled")"
 
-            if ! printf '%s\n' zstd | sudo tee "$parameters/compressor" >/dev/null; then
-              printf '%s\n' N | sudo tee "$parameters/enabled" >/dev/null || true
-              printf '%s\n' zstd | sudo tee "$parameters/compressor" >/dev/null || true
-            fi
-            printf '%s\n' 30 | sudo tee "$parameters/max_pool_percent" >/dev/null || true
-            printf '%s\n' Y | sudo tee "$parameters/enabled" >/dev/null || true
+          case "$enabled" in Y|1) ;; *) echo "zswap was not enabled: $enabled" >&2; exit 1 ;; esac
+          [[ "$compressor" == "zstd" ]]
+          [[ "$pool" == "90" ]]
+          case "$shrinker" in Y|1) ;; *) echo "zswap shrinker was not enabled: $shrinker" >&2; exit 1 ;; esac
 
-            local enabled compressor pool
-            enabled="$(cat "$parameters/enabled")"
-            compressor="$(cat "$parameters/compressor")"
-            pool="$(cat "$parameters/max_pool_percent")"
-
-            if [[ "$enabled" != "Y" || "$compressor" != "zstd" || "$pool" != "30" ]]; then
-              echo "::warning::Requested zswap settings were not fully accepted by the host kernel: enabled=$enabled compressor=$compressor pool=$pool"
-            fi
-          }
-
-          configure_zswap
           echo "Detected logical CPUs: $JOBS"
           echo "Configured MAKEFLAGS: -j$JOBS"
 
@@ -128,21 +130,23 @@ jobs:
             exit 1
           fi
 
-          if [[ -d /sys/module/zswap/parameters ]]; then
-            printf 'zswap enabled: '
-            cat /sys/module/zswap/parameters/enabled
-            printf 'zswap compressor: '
-            cat /sys/module/zswap/parameters/compressor
-            printf 'zswap maximum pool: '
-            cat /sys/module/zswap/parameters/max_pool_percent
-          fi
+          parameters=/sys/module/zswap/parameters
+          printf 'zswap enabled: '
+          cat "$parameters/enabled"
+          printf 'zswap compressor: '
+          cat "$parameters/compressor"
+          printf 'zswap maximum pool: '
+          cat "$parameters/max_pool_percent"
+          printf 'zswap shrinker: '
+          cat "$parameters/shrinker_enabled"
 
       - name: Restore compiler cache
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: kernelnote-thinlto-v4-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
+          key: kernelnote-thinlto-v5-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
           restore-keys: |
+            kernelnote-thinlto-v5-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v4-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v3-${{ runner.os }}-${{ runner.arch }}-
 
@@ -156,22 +160,22 @@ jobs:
             bc bison build-essential ccache clang cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
             kmod libdw-dev libelf-dev libssl-dev lld llvm pahole patchutils python3 rsync xz-utils zstd
 
-          # bindeb-pkg generates Build-Depends on debhelper-compat (= 12) and
-          # libdw-dev:native. Ubuntu's debhelper package provides the requested
-          # compatibility levels, while libdw-dev supplies the native DWARF API.
-          dpkg-query -W -f='${binary:Package} ${Version}\n' debhelper libdw-dev | tee logs/package-build-dependencies.txt
+          dpkg-query -W -f='${binary:Package} ${Version}\n' debhelper libdw-dev \
+            | tee logs/package-build-dependencies.txt
 
           ccache --set-config=max_size="$CCACHE_MAXSIZE"
           ccache --set-config=compression=true
           ccache --set-config=compiler_check=content
           ccache --set-config=base_dir="$CCACHE_BASEDIR"
           ccache --set-config=hash_dir=false
+          ccache --set-config=depend_mode=true
+          ccache --set-config=sloppiness="$CCACHE_SLOPPINESS"
           ccache --zero-stats
+
           clang --version
           ld.lld --version
           llvm-ar --version | head -n 1
           ccache --version | head -n 1
-          interdiff --version | head -n 1
 
       - name: Configure cached CI toolchain
         shell: bash
@@ -189,7 +193,7 @@ jobs:
 
       - name: Prepare and build ThinLTO kernel
         run: |
-          chmod +x scripts/build-kernelnote.sh scripts/build-tuning-package.sh
+          chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
 
       - name: Show compiler cache statistics
@@ -218,7 +222,7 @@ jobs:
         if: ${{ env.BUILD_MODE == 'package' }}
         uses: actions/upload-artifact@v4
         with:
-          name: linux-7.1.3-lqx-marie-bore-adios-thinlto-debs
+          name: linux-7.1.3-lqx-marie-bore-poc-nap-adios-zramir-thinlto-debs
           path: |
             artifacts/*.deb
             artifacts/SHA256SUMS
@@ -236,18 +240,26 @@ jobs:
           shopt -s nullglob
           packages=(artifacts/*.deb)
           short_sha="${RELEASE_TARGET:0:7}"
-          tag="kernelnote-7.1.3-lqx1-marie-0.7.7-${short_sha}"
-          title="Kernelnote Linux 7.1.3 Liquorix + Marie 0.7.7"
+          tag="kernelnote-7.1.3-lqx1-poc-2.6.2r2-nap-0.5.0-${short_sha}"
+          title="Kernelnote Linux 7.1.3 Liquorix + POC + NAP"
 
           cat > release-notes.md <<EOF
           Experimental AMD64 kernel for LMDE 7 / Debian 13.
 
           Components:
           - Linux 7.1.3 / Liquorix v7.1.3-lqx1
-          - Marie LRU 0.7.7 testing, pinned at 4d57ede4ab9b2000ae9ddc25714b8ac219671d35
+          - Marie LRU 0.7.7 testing
           - BORE 6.8.0-rc1
+          - POC Selector 2.6.2r2, native Linux 7.1 patch
+          - NAP CPUIdle governor 0.5.0, ported from the stable Linux 6.18.3 patch
           - ADIOS 3.2.0
+          - ZRAM-IR 1.2 with LZ4 -> ZSTD
           - Clang/LLVM ThinLTO
+          - mitigations=off nowatchdog cpuidle.governor=nap
+
+          DWARF/BTF debug information is intentionally disabled to keep the
+          hosted build and package size practical. The kernel image, modules,
+          headers and runtime symbols remain included.
 
           Source commit: ${RELEASE_TARGET}
           GitHub Actions run: ${GITHUB_RUN_ID}
