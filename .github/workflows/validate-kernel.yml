@@ -150,10 +150,17 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
+          set -Eeuo pipefail
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential ccache clang cpio curl diffstat dpkg-dev fakeroot flex git \
-            kmod libelf-dev libssl-dev lld llvm pahole patchutils python3 rsync xz-utils zstd
+            bc bison build-essential ccache clang cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
+            kmod libdw-dev libelf-dev libssl-dev lld llvm pahole patchutils python3 rsync xz-utils zstd
+
+          # bindeb-pkg generates Build-Depends on debhelper-compat (= 12) and
+          # libdw-dev:native. Ubuntu's debhelper package provides the requested
+          # compatibility levels, while libdw-dev supplies the native DWARF API.
+          dpkg-query -W -f='${binary:Package} ${Version}\n' debhelper libdw-dev | tee logs/package-build-dependencies.txt
+
           ccache --set-config=max_size="$CCACHE_MAXSIZE"
           ccache --set-config=compression=true
           ccache --set-config=compiler_check=content
