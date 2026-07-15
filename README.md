@@ -9,6 +9,8 @@ Kernel experimental para o notebook HP 240 G4 com Intel Core i3-5005U, destinado
 - Scheduler interativo: BORE 6.8.0-rc1
 - Gerenciamento de memória: Marie LRU 0.7.7
 - Scheduler de disco: ADIOS 3.2.0
+- Compilador: Clang/LLVM
+- Otimização de link: ThinLTO
 - Distribuição alvo: LMDE 7 / Debian 13 Trixie
 - Arquitetura: amd64
 
@@ -18,7 +20,12 @@ Kernel experimental para o notebook HP 240 G4 com Intel Core i3-5005U, destinado
 - `CONFIG_LRU_MARIE=y`
 - `CONFIG_MQ_IOSCHED_ADIOS=y`
 - `CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y`
+- `CONFIG_LTO=y`
+- `CONFIG_LTO_CLANG=y`
+- `CONFIG_LTO_CLANG_THIN=y`
 - scheduler alternativo PDS/BMQ do Liquorix desativado para que o BORE atue sobre CFS/EEVDF
+
+A compilação usa obrigatoriamente `LLVM=1 LLVM_IAS=1`. O workflow falha se o Kconfig selecionar GCC, BFD, `LTO_NONE` ou Full LTO.
 
 ## Pacote de ajustes
 
@@ -39,6 +46,6 @@ O workflow aplica os patches na seguinte ordem:
 3. Marie LRU 0.7.7
 4. ADIOS 3.2.0
 
-Depois executa `olddefconfig`, verifica as opções obrigatórias e compila `bzImage` e módulos. O modo manual `package` gera pacotes Debian.
+Depois executa `olddefconfig` com LLVM, confirma ThinLTO e compila `bzImage` e módulos. O modo manual `package` gera pacotes Debian usando o mesmo toolchain ThinLTO.
 
 > BORE 6.8.0-rc1 é a revisão mais recente para Linux 7.1, mas ainda pertence à árvore `testing`. Esta branch não deve ser mesclada na `main` antes da compilação e dos testes de inicialização no notebook.
