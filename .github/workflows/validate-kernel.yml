@@ -28,6 +28,40 @@ jobs:
       - name: Check out project
         uses: actions/checkout@v4
 
+      - name: Configure build resources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          JOBS="$(nproc --all)"
+          echo "JOBS=$JOBS" >> "$GITHUB_ENV"
+          echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
+
+          sudo fallocate -l 16G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+
+          if [[ ! -d /sys/module/zswap/parameters ]]; then
+            echo "The host kernel does not expose runtime zswap parameters" >&2
+            exit 1
+          fi
+
+          echo zstd | sudo tee /sys/module/zswap/parameters/compressor
+          echo 30 | sudo tee /sys/module/zswap/parameters/max_pool_percent
+          echo Y | sudo tee /sys/module/zswap/parameters/enabled
+
+          echo "Detected logical CPUs: $JOBS"
+          echo "Configured MAKEFLAGS: -j$JOBS"
+          swapon --show
+          free -h
+          printf 'zswap enabled: '
+          cat /sys/module/zswap/parameters/enabled
+          printf 'zswap compressor: '
+          cat /sys/module/zswap/parameters/compressor
+          printf 'zswap maximum pool: '
+          cat /sys/module/zswap/parameters/max_pool_percent
+
       - name: Install build dependencies
         run: |
           sudo apt-get update
