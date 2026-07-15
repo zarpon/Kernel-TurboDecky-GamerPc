@@ -1,4 +1,4 @@
-name: Validate Liquorix Marie kernel
+name: Validate Kernelnote kernel
 
 on:
   pull_request:
@@ -21,7 +21,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 240
     env:
       BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'validate' }}
     steps:
@@ -32,19 +32,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc bison build-essential cpio curl dpkg-dev fakeroot flex \
+            bc bison build-essential cpio curl dpkg-dev fakeroot flex git \
             kmod libelf-dev libssl-dev pahole python3 rsync xz-utils zstd
 
       - name: Prepare and build kernel
         run: |
-          chmod +x scripts/build-lqx-marie.sh
-          scripts/build-lqx-marie.sh "$BUILD_MODE"
+          chmod +x scripts/build-kernelnote.sh scripts/build-tuning-package.sh
+          scripts/build-kernelnote.sh "$BUILD_MODE"
 
       - name: Upload Debian packages
         if: ${{ env.BUILD_MODE == 'package' }}
         uses: actions/upload-artifact@v4
         with:
-          name: linux-7.1.3-lqx-marie-debs
+          name: linux-7.1.3-lqx-marie-bore-adios-debs
           path: artifacts/*.deb
           if-no-files-found: error
 
@@ -52,6 +52,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: validation-logs
+          name: kernelnote-validation-logs
           path: logs/
           if-no-files-found: warn
