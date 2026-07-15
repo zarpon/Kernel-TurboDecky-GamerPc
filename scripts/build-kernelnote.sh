@@ -8,6 +8,7 @@ LOGDIR="$ROOT/logs"
 ARTIFACTS="$ROOT/artifacts"
 PATCHDIR="$WORKDIR/patches"
 KERNELDIR="$WORKDIR/linux"
+MARIEDIR="$WORKDIR/lru_marie"
 JOBS="${JOBS:-$(nproc --all)}"
 MAKE=(make LLVM=1 LLVM_IAS=1)
 
@@ -15,10 +16,14 @@ KERNEL_TAG="v7.1.3-lqx1"
 KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 BORE_URL="https://raw.githubusercontent.com/firelzrd/bore-scheduler/16bf5baebbb42cdba393c501ba9c2af5f84e4749/patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
-MARIE_PORT_BASE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/7faf2e78aba6842e9b76a1b05fa51ed8001017d1/patches/testing/0001-linux7.1-rc5-lru_marie-7.1-marie.patch"
-MARIE_STABLE_BASE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/7faf2e78aba6842e9b76a1b05fa51ed8001017d1/patches/stable/0001-linux6.12.74-lru_marie-0.6.5.patch"
-MARIE_STABLE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/fff3375dbd948072c1e64af6c0754aa0a4a00911/patches/stable/0001-linux6.12.74-lru_marie-0.6.7.patch"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
+
+# Marie is fetched as a pinned local Git checkout rather than through a raw
+# patch URL. Only the exact patch blob is materialized in the workspace.
+MARIE_REPO="https://github.com/firelzrd/lru_marie.git"
+MARIE_COMMIT="4d57ede4ab9b2000ae9ddc25714b8ac219671d35"
+MARIE_PATCH_PATH="patches/testing/0001-linux7.1-rc5-lru_marie-0.7.7.patch"
+MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"
 
 case "$MODE" in
   validate|package) ;;
@@ -39,97 +44,108 @@ download() {
   sha256sum "$output" | tee -a "$LOGDIR/downloads.sha256"
 }
 
-apply_patch_file() {
-  local label="$1" file="$2"
-  echo "==> Checking $label"
-  if ! patch --batch --forward --strip=1 --dry-run < "$file" > "$LOGDIR/${label}.dry-run.log" 2>&1; then
-    cat "$LOGDIR/${label}.dry-run.log"
-    return 1
-  fi
-  echo "==> Applying $label"
-  patch --batch --forward --strip=1 < "$file" | tee "$LOGDIR/${label}.apply.log"
-  find "$KERNELDIR" -name '*.orig' -delete
+fetch_marie_testing_patch() {
+  echo "==> Fetching pinned Marie LRU 0.7.7 testing source locally"
+  rm -rf "$MARIEDIR"
+  git init --quiet "$MARIEDIR"
+  git -C "$MARIEDIR" remote add origin "$MARIE_REPO"
+  git -C "$MARIEDIR" config remote.origin.promisor true
+  git -C "$MARIEDIR" config remote.origin.partialclonefilter blob:none
+  git -C "$MARIEDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$MARIE_COMMIT" \
+    2>&1 | tee "$LOGDIR/02-lru-marie-fetch.log"
+
+  git -C "$MARIEDIR" show "FETCH_HEAD:$MARIE_PATCH_PATH" > "$MARIE_PATCH"
+  test -s "$MARIE_PATCH"
+  grep -Fq 'Subject: [PATCH] linux7.1-rc5-lru_marie-0.7.7' "$MARIE_PATCH"
+
+  {
+    echo "Marie source policy: testing-compatible"
+    echo "Repository: firelzrd/lru_marie"
+    echo "Commit: $MARIE_COMMIT"
+    echo "Path: $MARIE_PATCH_PATH"
+    echo "SHA256: $(sha256sum "$MARIE_PATCH" | awk '{print $1}')"
+    echo "Acquisition: pinned local partial Git checkout; no raw patch URL"
+  } | tee "$LOGDIR/02-lru-marie-provenance.txt"
 }
 
-apply_marie_stable_patch() {
-  local port_base="$1" stable_base="$2" stable_target="$3"
-  local delta="$PATCHDIR/0002b-lru-marie-stable-0.6.5-to-0.6.7.patch"
-  local status=0
+normalize_changed_whitespace() {
+  mapfile -d '' -t changed_files < <(git diff --name-only --diff-filter=ACM -z)
+  ((${#changed_files[@]})) || return 0
 
-  echo "==> Porting Marie LRU 0.6.7 stable to $KERNEL_TAG through the Linux 7.1 0.6.5 port base"
-  grep -Fq 'Subject: [PATCH] linux7.1-rc5-lru_marie-7.1-marie' "$port_base"
-  grep -Fq 'Subject: [PATCH] linux6.12.74-lru_marie-0.6.5' "$stable_base"
-  grep -Fq 'Subject: [PATCH] linux6.12.74-lru_marie-0.6.7' "$stable_target"
+  python3 - "${changed_files[@]}" <<'PY'
+from pathlib import Path
+import re
+import sys
 
-  {
-    echo "port-base-7.1-0.6.5 $(sha256sum "$port_base" | awk '{print $1}')"
-    echo "stable-base-6.12-0.6.5 $(sha256sum "$stable_base" | awk '{print $1}')"
-    echo "stable-target-6.12-0.6.7 $(sha256sum "$stable_target" | awk '{print $1}')"
-  } | tee "$LOGDIR/02-lru-marie-port-inputs.txt"
+for name in sys.argv[1:]:
+    path = Path(name)
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, FileNotFoundError):
+        continue
 
-  interdiff "$stable_base" "$stable_target" > "$delta"
-  test -s "$delta"
-  {
-    echo "==> Marie stable delta summary"
-    diffstat "$delta"
-  } | tee "$LOGDIR/02-lru-marie-stable-delta.log"
+    output = []
+    for line in raw.splitlines(keepends=True):
+        ending = "\n" if line.endswith("\n") else ""
+        body = line[:-1] if ending else line
+        body = body.rstrip(" \t")
+        match = re.match(r"^[ \t]+", body)
+        if match:
+            prefix = match.group(0)
+            while " \t" in prefix:
+                prefix = prefix.replace(" \t", "\t")
+            body = prefix + body[match.end():]
+        output.append(body + ending)
 
-  echo "==> Applying Linux 7.1 Marie 0.6.5 port scaffold"
-  if patch --batch --forward --strip=1 --dry-run < "$port_base" \
-      > "$LOGDIR/02-lru-marie-port-base.dry-run.log" 2>&1; then
-    patch --batch --forward --strip=1 < "$port_base" \
-      | tee "$LOGDIR/02-lru-marie-port-base.apply.log"
+    path.write_text("".join(output), encoding="utf-8")
+PY
+}
+
+apply_marie_testing_patch() {
+  local file="$1" status=0
+
+  echo "==> Applying local Marie LRU 0.7.7 testing patch for Linux 7.1"
+  if patch --batch --forward --strip=1 --dry-run < "$file" \
+      > "$LOGDIR/02-lru-marie.dry-run.log" 2>&1; then
+    patch --batch --forward --strip=1 < "$file" \
+      | tee "$LOGDIR/02-lru-marie.apply.log"
   else
-    cat "$LOGDIR/02-lru-marie-port-base.dry-run.log"
-    if git apply --3way --index "$port_base" \
-        > "$LOGDIR/02-lru-marie-port-base.3way.log" 2>&1; then
-      git reset --quiet
-    else
-      status=$?
-      cat "$LOGDIR/02-lru-marie-port-base.3way.log"
-      {
-        git status --short
-        git diff --cc || true
-      } | tee "$LOGDIR/02-lru-marie-port-base-conflicts.log"
-      return "$status"
-    fi
-  fi
+    cat "$LOGDIR/02-lru-marie.dry-run.log"
+    echo "==> Retrying Marie with maximum safe patch fuzz"
+    set +e
+    patch --batch --forward --fuzz=3 --strip=1 < "$file" \
+      > "$LOGDIR/02-lru-marie.fuzz-apply.log" 2>&1
+    status=$?
+    set -e
+    cat "$LOGDIR/02-lru-marie.fuzz-apply.log"
 
-  echo "==> Applying official stable delta Marie 0.6.5 -> 0.6.7"
-  if patch --batch --forward --strip=1 --dry-run < "$delta" \
-      > "$LOGDIR/02-lru-marie-stable-delta.dry-run.log" 2>&1; then
-    patch --batch --forward --strip=1 < "$delta" \
-      | tee "$LOGDIR/02-lru-marie-stable-delta.apply.log"
-  else
-    cat "$LOGDIR/02-lru-marie-stable-delta.dry-run.log"
-    if git apply --3way --index "$delta" \
-        > "$LOGDIR/02-lru-marie-stable-delta.3way.log" 2>&1; then
-      git reset --quiet
-    else
-      status=$?
-      cat "$LOGDIR/02-lru-marie-stable-delta.3way.log"
+    if ((status != 0)) || find "$KERNELDIR" -name '*.rej' -print -quit | grep -q .; then
       {
-        git status --short
-        git diff --cc || true
-      } | tee "$LOGDIR/02-lru-marie-stable-delta-conflicts.log"
-      return "$status"
+        echo "==> Unresolved Marie port rejects"
+        find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort
+        echo
+        for reject in $(find "$KERNELDIR" -name '*.rej' -type f | sort); do
+          echo "### ${reject#$KERNELDIR/}"
+          cat "$reject"
+        done
+      } | tee "$LOGDIR/02-lru-marie-port-rejects.log"
+      return 1
     fi
   fi
 
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
-  git diff --check
-  grep -Fq '0.6.7' mm/lru_marie/version.h
+
+  if ! git diff --check > "$LOGDIR/02-lru-marie-diff-check.log" 2>&1; then
+    cat "$LOGDIR/02-lru-marie-diff-check.log"
+    echo "==> Normalizing whitespace introduced by patch offsets"
+    normalize_changed_whitespace
+    git diff --check | tee "$LOGDIR/02-lru-marie-diff-check-after-fix.log"
+  fi
+
+  grep -Fq '0.7.7' mm/lru_marie/version.h
   grep -Fq 'config LRU_MARIE' mm/Kconfig
-
-  {
-    echo "Marie source policy: stable"
-    echo "Stable target: firelzrd/lru_marie@fff3375dbd948072c1e64af6c0754aa0a4a00911"
-    echo "Stable patch: patches/stable/0001-linux6.12.74-lru_marie-0.6.7.patch"
-    echo "Port scaffold: Linux 7.1 patch at Marie 0.6.5"
-    echo "Transformation: interdiff(stable-0.6.5, stable-0.6.7) applied after the 7.1 scaffold"
-  } | tee "$LOGDIR/02-lru-marie-provenance.txt"
-
-  echo "==> Marie LRU 0.6.7 stable incremental port applied successfully"
+  grep -Fq 'CONFIG_LRU_MARIE' include/linux/lru_marie.h
+  echo "==> Marie LRU 0.7.7 testing patch applied successfully"
 }
 
 apply_bore_patch() {
@@ -224,18 +240,13 @@ assert_disabled_or_absent() {
 echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
 git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 
+fetch_marie_testing_patch
 download "$BORE_URL" "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
-download "$MARIE_PORT_BASE_URL" "$PATCHDIR/0002a-lru-marie-linux7.1-port-base-0.6.5.patch"
-download "$MARIE_STABLE_BASE_URL" "$PATCHDIR/0002b-lru-marie-stable-base-0.6.5.patch"
-download "$MARIE_STABLE_URL" "$PATCHDIR/0002c-lru-marie-stable-target-0.6.7.patch"
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
 download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
-apply_marie_stable_patch \
-  "$PATCHDIR/0002a-lru-marie-linux7.1-port-base-0.6.5.patch" \
-  "$PATCHDIR/0002b-lru-marie-stable-base-0.6.5.patch" \
-  "$PATCHDIR/0002c-lru-marie-stable-target-0.6.7.patch"
+apply_marie_testing_patch "$MARIE_PATCH"
 apply_bore_patch "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
