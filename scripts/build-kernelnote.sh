@@ -25,6 +25,14 @@ MARIE_COMMIT="4d57ede4ab9b2000ae9ddc25714b8ac219671d35"
 MARIE_PATCH_PATH="patches/testing/0001-linux7.1-rc5-lru_marie-0.7.7.patch"
 MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"
 
+# Keep the existing Liquorix built-in arguments and append these canonical
+# kernel parameters. CMDLINE_OVERRIDE stays disabled so bootloader parameters
+# such as root=, resume= and console= are preserved.
+KERNEL_DEFAULT_CMDLINE=(
+  "mitigations=off"
+  "nowatchdog"
+)
+
 case "$MODE" in
   validate|package) ;;
   *) echo "Usage: $0 [validate|package]" >&2; exit 2 ;;
@@ -237,6 +245,41 @@ assert_disabled_or_absent() {
   fi
 }
 
+configure_builtin_cmdline() {
+  local configured token
+
+  configured="$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' .config)"
+  configured="${configured% }"
+
+  for token in "${KERNEL_DEFAULT_CMDLINE[@]}"; do
+    case " $configured " in
+      *" $token "*) ;;
+      *) configured="${configured:+$configured }$token" ;;
+    esac
+  done
+
+  scripts/config --enable CPU_MITIGATIONS
+  scripts/config --enable CMDLINE_BOOL
+  scripts/config --set-str CMDLINE "$configured"
+  scripts/config --disable CMDLINE_OVERRIDE
+
+  printf '%s\n' "$configured" | tee "$LOGDIR/kernel-command-line.txt"
+}
+
+assert_cmdline_token() {
+  local token="$1" configured
+  configured="$(sed -n 's/^CONFIG_CMDLINE="\(.*\)"$/\1/p' .config)"
+
+  case " $configured " in
+    *" $token "*) ;;
+    *)
+      echo "Required built-in kernel argument is missing: $token" >&2
+      echo "CONFIG_CMDLINE=$configured" >&2
+      return 1
+      ;;
+  esac
+}
+
 echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
 git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 
@@ -281,6 +324,7 @@ scripts/config --disable LOCALVERSION_AUTO
 scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
 scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
 scripts/config --disable RUST
+configure_builtin_cmdline
 
 # PR validation exercises the complete built-in kernel and ThinLTO link, but
 # omits DWARF/BTF generation and loadable modules. Full package mode keeps the
@@ -302,6 +346,7 @@ assert_disabled_or_absent SCHED_PDS
 assert_disabled_or_absent SCHED_BMQ
 assert_disabled_or_absent LTO_NONE
 assert_disabled_or_absent LTO_CLANG_FULL
+assert_disabled_or_absent CMDLINE_OVERRIDE
 assert_config "CONFIG_CC_IS_CLANG=y"
 assert_config "CONFIG_LD_IS_LLD=y"
 assert_config "CONFIG_AS_IS_LLVM=y"
@@ -312,6 +357,10 @@ assert_config "CONFIG_SCHED_BORE=y"
 assert_config "CONFIG_LRU_MARIE=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
+assert_config "CONFIG_CPU_MITIGATIONS=y"
+assert_config "CONFIG_CMDLINE_BOOL=y"
+assert_cmdline_token "mitigations=off"
+assert_cmdline_token "nowatchdog"
 
 if [[ "$MODE" == "validate" ]]; then
   assert_config "CONFIG_DEBUG_INFO_NONE=y"
