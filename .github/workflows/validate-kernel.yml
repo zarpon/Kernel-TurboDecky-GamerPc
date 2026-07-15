@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: kernelnote-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -26,11 +30,16 @@ jobs:
       BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'validate' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 8G
+      CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPILERCHECK: content
       CCACHE_NOHASHDIR: "true"
       KBUILD_BUILD_USER: kernelnote
       KBUILD_BUILD_HOST: github-actions
       KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
+      KBUILD_BUILD_VERSION: "1"
+      SOURCE_DATE_EPOCH: "1767225600"
+      LC_ALL: C
+      TZ: UTC
     steps:
       - name: Check out project
         uses: actions/checkout@v4
@@ -39,52 +48,97 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          mkdir -p logs
+          exec > >(tee -a logs/ci-resources.log) 2>&1
 
           JOBS="$(nproc --all)"
           echo "JOBS=$JOBS" >> "$GITHUB_ENV"
           echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
 
-          sudo fallocate -l 16G /swapfile
-          sudo chmod 600 /swapfile
-          sudo mkswap /swapfile
-          sudo swapon /swapfile
+          SWAPFILE=/mnt/kernelnote-swapfile
+          SWAP_SIZE_BYTES=$((16 * 1024 * 1024 * 1024))
+          SWAP_RESERVE_BYTES=$((2 * 1024 * 1024 * 1024))
 
-          if [[ ! -d /sys/module/zswap/parameters ]]; then
-            echo "The host kernel does not expose runtime zswap parameters" >&2
-            exit 1
+          if ! swapon --noheadings --raw --output NAME | grep -Fxq "$SWAPFILE"; then
+            AVAILABLE_BYTES="$(df --output=avail -B1 /mnt | tail -n 1 | tr -d ' ')"
+            if (( AVAILABLE_BYTES < SWAP_SIZE_BYTES + SWAP_RESERVE_BYTES )); then
+              echo "Insufficient disk space for a 16 GiB swapfile: $AVAILABLE_BYTES bytes available" >&2
+              exit 1
+            fi
+
+            sudo rm -f "$SWAPFILE"
+            sudo fallocate -l 16G "$SWAPFILE"
+            sudo chmod 600 "$SWAPFILE"
+            sudo mkswap "$SWAPFILE"
+            sudo swapon --priority 100 "$SWAPFILE"
           fi
 
-          echo zstd | sudo tee /sys/module/zswap/parameters/compressor
-          echo 30 | sudo tee /sys/module/zswap/parameters/max_pool_percent
-          echo Y | sudo tee /sys/module/zswap/parameters/enabled
+          configure_zswap() {
+            local parameters=/sys/module/zswap/parameters
+
+            sudo modprobe zswap 2>/dev/null || true
+            sudo modprobe zstd_compress 2>/dev/null || true
+            sudo modprobe crypto_zstd 2>/dev/null || true
+            sudo modprobe zstd 2>/dev/null || true
+
+            if [[ ! -d "$parameters" ]]; then
+              echo "::warning::The host kernel does not expose runtime zswap parameters; continuing with disk swap only"
+              return 0
+            fi
+
+            if ! printf '%s\n' zstd | sudo tee "$parameters/compressor" >/dev/null; then
+              printf '%s\n' N | sudo tee "$parameters/enabled" >/dev/null || true
+              printf '%s\n' zstd | sudo tee "$parameters/compressor" >/dev/null || true
+            fi
+            printf '%s\n' 30 | sudo tee "$parameters/max_pool_percent" >/dev/null || true
+            printf '%s\n' Y | sudo tee "$parameters/enabled" >/dev/null || true
+
+            local enabled compressor pool
+            enabled="$(cat "$parameters/enabled")"
+            compressor="$(cat "$parameters/compressor")"
+            pool="$(cat "$parameters/max_pool_percent")"
+
+            if [[ "$enabled" != "Y" || "$compressor" != "zstd" || "$pool" != "30" ]]; then
+              echo "::warning::Requested zswap settings were not fully accepted by the host kernel: enabled=$enabled compressor=$compressor pool=$pool"
+            fi
+          }
+
+          configure_zswap
 
           echo "Detected logical CPUs: $JOBS"
           echo "Configured MAKEFLAGS: -j$JOBS"
-          swapon --show
+          swapon --show --bytes
           free -h
-          printf 'zswap enabled: '
-          cat /sys/module/zswap/parameters/enabled
-          printf 'zswap compressor: '
-          cat /sys/module/zswap/parameters/compressor
-          printf 'zswap maximum pool: '
-          cat /sys/module/zswap/parameters/max_pool_percent
+          if [[ -d /sys/module/zswap/parameters ]]; then
+            printf 'zswap enabled: '
+            cat /sys/module/zswap/parameters/enabled
+            printf 'zswap compressor: '
+            cat /sys/module/zswap/parameters/compressor
+            printf 'zswap maximum pool: '
+            cat /sys/module/zswap/parameters/max_pool_percent
+          fi
 
       - name: Restore compiler cache
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: kernelnote-thinlto-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
+          key: kernelnote-thinlto-v3-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
           restore-keys: |
-            kernelnote-thinlto-${{ runner.os }}-${{ runner.arch }}-
+            kernelnote-thinlto-v3-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
+          sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential ccache clang cpio curl dpkg-dev fakeroot flex git \
             kmod libelf-dev libssl-dev lld llvm pahole python3 rsync xz-utils zstd
           ccache --set-config=max_size="$CCACHE_MAXSIZE"
           ccache --set-config=compression=true
+          ccache --set-config=compiler_check=content
+          ccache --set-config=base_dir="$CCACHE_BASEDIR"
+          ccache --set-config=hash_dir=false
           ccache --zero-stats
           clang --version
           ld.lld --version
@@ -102,21 +156,7 @@ jobs:
           exec ccache /usr/bin/clang "$@"
           EOF
 
-          cat > "$GITHUB_WORKSPACE/.ci-bin/make" <<'EOF'
-          #!/usr/bin/env bash
-          set -Eeuo pipefail
-          args=()
-          for arg in "$@"; do
-            if [[ "${BUILD_MODE:-validate}" == "validate" && "$arg" == "modules" ]]; then
-              echo "CI validation: skipping the complete external module target"
-              continue
-            fi
-            args+=("$arg")
-          done
-          exec /usr/bin/make "${args[@]}"
-          EOF
-
-          chmod +x "$GITHUB_WORKSPACE/.ci-bin/clang" "$GITHUB_WORKSPACE/.ci-bin/make"
+          chmod +x "$GITHUB_WORKSPACE/.ci-bin/clang"
           echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
 
       - name: Prepare and build ThinLTO kernel
