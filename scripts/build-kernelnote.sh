@@ -3,7 +3,10 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CORE="$ROOT/scripts/build-kernelnote-core.sh"
-GENERATED="${TMPDIR:-/tmp}/kernelnote-build-zram-ir-$$.sh"
+# The generated script must remain in scripts/. build-kernelnote-core.sh derives
+# the repository root from BASH_SOURCE[0]/..; placing it in /tmp incorrectly
+# resolves ROOT=/ and makes the build try to create /work, /logs and /artifacts.
+GENERATED="$ROOT/scripts/.build-kernelnote-zram-ir-$$.sh"
 trap 'rm -f "$GENERATED"' EXIT
 
 python3 - "$CORE" "$GENERATED" <<'PY'
@@ -150,4 +153,5 @@ output.write_text(source, encoding="utf-8")
 PY
 
 chmod 0755 "$GENERATED"
+bash -n "$GENERATED"
 "$GENERATED" "$@"
