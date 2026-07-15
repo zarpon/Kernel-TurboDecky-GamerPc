@@ -138,8 +138,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: kernelnote-thinlto-v3-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
+          key: kernelnote-thinlto-v4-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
           restore-keys: |
+            kernelnote-thinlto-v4-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v3-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install build dependencies
@@ -148,8 +149,8 @@ jobs:
         run: |
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential ccache clang cpio curl dpkg-dev fakeroot flex git \
-            kmod libelf-dev libssl-dev lld llvm pahole python3 rsync xz-utils zstd
+            bc bison build-essential ccache clang cpio curl diffstat dpkg-dev fakeroot flex git \
+            kmod libelf-dev libssl-dev lld llvm pahole patchutils python3 rsync xz-utils zstd
           ccache --set-config=max_size="$CCACHE_MAXSIZE"
           ccache --set-config=compression=true
           ccache --set-config=compiler_check=content
@@ -160,6 +161,7 @@ jobs:
           ld.lld --version
           llvm-ar --version | head -n 1
           ccache --version | head -n 1
+          interdiff --version | head -n 1
 
       - name: Configure cached CI toolchain
         shell: bash
