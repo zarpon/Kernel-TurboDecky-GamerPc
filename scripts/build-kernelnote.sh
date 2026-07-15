@@ -126,6 +126,15 @@ assert_config() {
   fi
 }
 
+assert_disabled_or_absent() {
+  local symbol="$1"
+  if grep -Eq "^CONFIG_${symbol}=[ym]$" .config; then
+    echo "Kernel configuration unexpectedly enables CONFIG_${symbol}:" >&2
+    grep -E "^CONFIG_${symbol}=" .config >&2 || true
+    return 1
+  fi
+}
+
 echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
 git clone --depth 1 --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 
@@ -168,8 +177,9 @@ scripts/config --disable RUST
 make olddefconfig
 make -s kernelrelease | tee "$LOGDIR/kernelrelease.txt"
 
-assert_config "# CONFIG_SCHED_ALT is not set"
-assert_config "# CONFIG_SCHED_PDS is not set"
+assert_disabled_or_absent SCHED_ALT
+assert_disabled_or_absent SCHED_PDS
+assert_disabled_or_absent SCHED_BMQ
 assert_config "CONFIG_SCHED_BORE=y"
 assert_config "CONFIG_LRU_MARIE=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
