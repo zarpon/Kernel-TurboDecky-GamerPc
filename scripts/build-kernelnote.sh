@@ -13,9 +13,11 @@ MAKE=(make LLVM=1 LLVM_IAS=1)
 
 KERNEL_TAG="v7.1.3-lqx1"
 KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
+LINUX_STABLE_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+MARIE_BASE_TAG="v6.12.74"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 BORE_URL="https://raw.githubusercontent.com/firelzrd/bore-scheduler/16bf5baebbb42cdba393c501ba9c2af5f84e4749/patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
-MARIE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/4d57ede4ab9b2000ae9ddc25714b8ac219671d35/patches/testing/0001-linux7.1-rc5-lru-marie-0.7.7.patch"
+MARIE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/fff3375dbd948072c1e64af6c0754aa0a4a00911/patches/stable/0001-linux6.12.74-lru_marie-0.6.7.patch"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
 
 case "$MODE" in
@@ -31,7 +33,9 @@ trap 'status=$?; echo "Build failed with status $status at line $LINENO"; find "
 
 download() {
   local url="$1" output="$2"
-  curl --fail --location --retry 4 --retry-delay 3 --connect-timeout 30 "$url" -o "$output"
+  curl --fail --location --retry 4 --retry-all-errors --retry-delay 3 \
+    --connect-timeout 30 --max-time 600 "$url" -o "$output"
+  test -s "$output"
   sha256sum "$output" | tee -a "$LOGDIR/downloads.sha256"
 }
 
@@ -45,6 +49,51 @@ apply_patch_file() {
   echo "==> Applying $label"
   patch --batch --forward --strip=1 < "$file" | tee "$LOGDIR/${label}.apply.log"
   find "$KERNELDIR" -name '*.orig' -delete
+}
+
+apply_marie_stable_patch() {
+  local file="$1" status=0
+
+  echo "==> Porting Marie LRU 0.6.7 stable from Linux $MARIE_BASE_TAG to $KERNEL_TAG"
+  grep -Fq 'Subject: [PATCH] linux6.12.74-lru_marie-0.6.7' "$file"
+
+  git remote remove marie-base 2>/dev/null || true
+  git remote add marie-base "$LINUX_STABLE_REPO"
+  git config remote.marie-base.promisor true
+  git config remote.marie-base.partialclonefilter blob:none
+
+  # Fetch the exact base tree used by the stable patch. Keeping it as a
+  # promisor/partial remote lets git obtain only the base blobs referenced by
+  # the patch, instead of downloading an entire historical kernel checkout.
+  git fetch --no-tags --filter=blob:none --depth=1 marie-base \
+    "refs/tags/$MARIE_BASE_TAG:refs/tags/$MARIE_BASE_TAG" \
+    2>&1 | tee "$LOGDIR/02-lru-marie-base-fetch.log"
+
+  if git apply --3way --index "$file" > "$LOGDIR/02-lru-marie-3way.log" 2>&1; then
+    status=0
+  else
+    status=$?
+  fi
+  cat "$LOGDIR/02-lru-marie-3way.log"
+
+  if [[ $status -ne 0 ]]; then
+    {
+      echo "==> Marie stable port conflicts"
+      git status --short
+      echo
+      git diff --cc || true
+    } | tee "$LOGDIR/02-lru-marie-port-conflicts.log"
+    return "$status"
+  fi
+
+  git diff --cached --check
+  grep -Fq '0.6.7' mm/lru_marie/version.h
+  grep -Fq 'config LRU_MARIE' mm/Kconfig
+
+  # Leave the source changes unstaged so the later compatibility handlers can
+  # inspect and modify the same working tree normally.
+  git reset --quiet
+  echo "==> Marie LRU 0.6.7 stable three-way port applied successfully"
 }
 
 apply_bore_patch() {
@@ -140,13 +189,13 @@ echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
 git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 
 download "$BORE_URL" "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
-download "$MARIE_URL" "$PATCHDIR/0002-lru-marie-0.7.7.patch"
+download "$MARIE_URL" "$PATCHDIR/0002-lru-marie-0.6.7-stable.patch"
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
 download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
+apply_marie_stable_patch "$PATCHDIR/0002-lru-marie-0.6.7-stable.patch"
 apply_bore_patch "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
-apply_patch_file "02-lru-marie" "$PATCHDIR/0002-lru-marie-0.7.7.patch"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
 cp "$WORKDIR/liquorix-amd64.config" .config
