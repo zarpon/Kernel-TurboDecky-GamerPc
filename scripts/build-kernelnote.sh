@@ -50,10 +50,11 @@ apply_bore_patch() {
   local -a rejects expected
 
   echo "==> Applying BORE with Liquorix compatibility handling"
-  set +e
-  patch --batch --forward --strip=1 < "$file" > "$LOGDIR/01-bore.apply.log" 2>&1
-  status=$?
-  set -e
+  if patch --batch --forward --strip=1 < "$file" > "$LOGDIR/01-bore.apply.log" 2>&1; then
+    status=0
+  else
+    status=$?
+  fi
   cat "$LOGDIR/01-bore.apply.log"
 
   if [[ $status -eq 0 ]]; then
