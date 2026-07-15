@@ -26,7 +26,7 @@ rm -rf "$WORKDIR" "$LOGDIR" "$ARTIFACTS"
 mkdir -p "$PATCHDIR" "$LOGDIR" "$ARTIFACTS"
 exec > >(tee "$LOGDIR/build.log") 2>&1
 
-trap 'status=$?; echo "Build failed with status $status at line $LINENO"; find "$KERNELDIR" -name "*.rej" -o -name "*.orig" 2>/dev/null | sort || true; exit $status' ERR
+trap 'status=$?; echo "Build failed with status $status at line $LINENO"; find "$KERNELDIR" \( -name "*.rej" -o -name "*.orig" \) 2>/dev/null | sort || true; exit $status' ERR
 
 download() {
   local url="$1" output="$2"
@@ -43,6 +43,41 @@ apply_patch_file() {
   fi
   echo "==> Applying $label"
   patch --batch --forward --strip=1 < "$file" | tee "$LOGDIR/${label}.apply.log"
+}
+
+apply_bore_patch() {
+  local file="$1" status
+  local -a rejects expected
+
+  echo "==> Applying BORE with Liquorix compatibility handling"
+  set +e
+  patch --batch --forward --strip=1 < "$file" > "$LOGDIR/01-bore.apply.log" 2>&1
+  status=$?
+  set -e
+  cat "$LOGDIR/01-bore.apply.log"
+
+  if [[ $status -eq 0 ]]; then
+    return 0
+  fi
+
+  mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort)
+  expected=(
+    "kernel/sched/debug.c.rej"
+    "kernel/sched/fair.c.rej"
+  )
+
+  if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
+    echo "Unexpected BORE rejects: ${rejects[*]:-none}" >&2
+    return 1
+  fi
+
+  python3 "$ROOT/scripts/apply-bore-liquorix.py" "$KERNELDIR"
+  find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
+  git diff --check
+
+  grep -Fq 'CONFIG_SCHED_BORE' kernel/sched/fair.c
+  grep -Fq 'sched_min_base_slice_fops' kernel/sched/debug.c
+  echo "==> BORE compatibility layer applied successfully"
 }
 
 assert_config() {
@@ -63,7 +98,7 @@ download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
 download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
-apply_patch_file "01-bore" "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
+apply_bore_patch "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
 apply_patch_file "02-lru-marie" "$PATCHDIR/0002-lru-marie-0.7.7.patch"
 apply_patch_file "03-adios" "$PATCHDIR/0003-adios-3.2.0.patch"
 
