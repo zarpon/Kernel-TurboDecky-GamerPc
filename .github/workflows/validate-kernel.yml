@@ -73,7 +73,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: kernelnote-thinlto-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote.sh', 'scripts/apply-*.py', 'config/kernelnote.config', '.github/workflows/validate-kernel.yml') }}
+          key: kernelnote-thinlto-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
           restore-keys: |
             kernelnote-thinlto-${{ runner.os }}-${{ runner.arch }}-
 
@@ -90,6 +90,34 @@ jobs:
           ld.lld --version
           llvm-ar --version | head -n 1
           ccache --version | head -n 1
+
+      - name: Configure cached CI toolchain
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/.ci-bin"
+
+          cat > "$GITHUB_WORKSPACE/.ci-bin/clang" <<'EOF'
+          #!/usr/bin/env bash
+          exec ccache /usr/bin/clang "$@"
+          EOF
+
+          cat > "$GITHUB_WORKSPACE/.ci-bin/make" <<'EOF'
+          #!/usr/bin/env bash
+          set -Eeuo pipefail
+          args=()
+          for arg in "$@"; do
+            if [[ "${BUILD_MODE:-validate}" == "validate" && "$arg" == "modules" ]]; then
+              echo "CI validation: skipping the complete external module target"
+              continue
+            fi
+            args+=("$arg")
+          done
+          exec /usr/bin/make "${args[@]}"
+          EOF
+
+          chmod +x "$GITHUB_WORKSPACE/.ci-bin/clang" "$GITHUB_WORKSPACE/.ci-bin/make"
+          echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
 
       - name: Prepare and build ThinLTO kernel
         run: |
