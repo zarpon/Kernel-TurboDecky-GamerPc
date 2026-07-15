@@ -8,14 +8,14 @@ LOGDIR="$ROOT/logs"
 ARTIFACTS="$ROOT/artifacts"
 PATCHDIR="$WORKDIR/patches"
 KERNELDIR="$WORKDIR/linux"
-JOBS="${JOBS:-$(nproc)}"
+JOBS="${JOBS:-$(nproc --all)}"
 MAKE=(make LLVM=1 LLVM_IAS=1)
 
 KERNEL_TAG="v7.1.3-lqx1"
 KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 BORE_URL="https://raw.githubusercontent.com/firelzrd/bore-scheduler/16bf5baebbb42cdba393c501ba9c2af5f84e4749/patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
-MARIE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/4d57ede4ab9b2000ae9ddc25714b8ac219671d35/patches/testing/0001-linux7.1-rc5-lru_marie-0.7.7.patch"
+MARIE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/4d57ede4ab9b2000ae9ddc25714b8ac219671d35/patches/testing/0001-linux7.1-rc5-lru-marie-0.7.7.patch"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
 
 case "$MODE" in
@@ -137,7 +137,7 @@ assert_disabled_or_absent() {
 }
 
 echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
-git clone --depth 1 --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
+git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 
 download "$BORE_URL" "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
 download "$MARIE_URL" "$PATCHDIR/0002-lru-marie-0.7.7.patch"
@@ -181,6 +181,18 @@ scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
 scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
 scripts/config --disable RUST
 
+# PR validation exercises the complete built-in kernel and ThinLTO link, but
+# omits DWARF/BTF generation and loadable modules. Full package mode keeps the
+# production configuration and builds every configured module.
+if [[ "$MODE" == "validate" ]]; then
+  scripts/config --disable DEBUG_INFO
+  scripts/config --enable DEBUG_INFO_NONE
+  scripts/config --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
+  scripts/config --disable DEBUG_INFO_DWARF4
+  scripts/config --disable DEBUG_INFO_DWARF5
+  scripts/config --disable DEBUG_INFO_BTF
+fi
+
 "${MAKE[@]}" olddefconfig
 "${MAKE[@]}" -s kernelrelease | tee "$LOGDIR/kernelrelease.txt"
 
@@ -200,6 +212,12 @@ assert_config "CONFIG_LRU_MARIE=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
 
+if [[ "$MODE" == "validate" ]]; then
+  assert_config "CONFIG_DEBUG_INFO_NONE=y"
+  assert_disabled_or_absent DEBUG_INFO
+  assert_disabled_or_absent DEBUG_INFO_BTF
+fi
+
 cp .config "$LOGDIR/final.config"
 {
   clang --version | head -n 1
@@ -207,13 +225,17 @@ cp .config "$LOGDIR/final.config"
   llvm-ar --version | head -n 1
 } | tee "$LOGDIR/llvm-toolchain.txt"
 
-echo "==> Building with Clang ThinLTO and $JOBS parallel jobs"
 if [[ "$MODE" == "package" ]]; then
+  echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"
   "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.3-1kernelnote1"
   find "$WORKDIR" -maxdepth 1 -type f -name '*.deb' -exec cp -v {} "$ARTIFACTS/" \;
   "$ROOT/scripts/build-tuning-package.sh"
 else
-  "${MAKE[@]}" -j"$JOBS" bzImage modules
+  echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"
+  "${MAKE[@]}" -j"$JOBS" bzImage
+  test -s arch/x86/boot/bzImage
+  test -s vmlinux
+  file arch/x86/boot/bzImage vmlinux | tee "$LOGDIR/build-products.txt"
 fi
 
 echo "==> Kernelnote ThinLTO build completed successfully"
