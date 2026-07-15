@@ -7,7 +7,7 @@ Kernel experimental para o notebook HP 240 G4 com Intel Core i3-5005U, destinado
 - Base oficial: Linux 7.1.3 stable
 - Fonte Liquorix: tag `v7.1.3-lqx1`
 - Scheduler interativo: BORE 6.8.0-rc1
-- Gerenciamento de memória: Marie LRU 0.6.7 stable, portado do Linux 6.12.74 para o Liquorix 7.1.3
+- Gerenciamento de memória: Marie LRU 0.7.7 `testing`, patch nativo para Linux 7.1
 - Scheduler de disco: ADIOS 3.2.0
 - Compilador: Clang/LLVM
 - Otimização de link: ThinLTO
@@ -42,12 +42,14 @@ Dispositivos `loop`, `ram` e `zram` são excluídos da regra. Dispositivos que n
 O workflow aplica os patches na seguinte ordem:
 
 1. fonte oficial Liquorix `v7.1.3-lqx1`
-2. Marie LRU 0.6.7 da árvore `stable`, portado por merge de três vias usando a árvore-base Linux `v6.12.74`
+2. Marie LRU 0.7.7 `testing`, revisão `4d57ede4ab9b2000ae9ddc25714b8ac219671d35`, patch nativo `linux7.1-rc5`
 3. BORE 6.8.0-rc1
 4. ADIOS 3.2.0
 
+O repositório do Marie é obtido por checkout Git parcial e fixado no commit acima. O patch é extraído para o workspace e aplicado como arquivo local; o build não depende de uma URL `raw` para o patch do Marie. O workflow registra o caminho, commit e SHA-256 usados.
+
+A aplicação tenta primeiro sem fuzz. Em caso de diferenças pequenas da árvore Liquorix, repete com fuzz limitado, registra todos os rejeitos e normaliza somente problemas de whitespace introduzidos por deslocamentos do patch. Rejeitos de código permanecem fatais.
+
 Depois executa `olddefconfig` com LLVM, confirma ThinLTO e, no modo de validação, compila e verifica `vmlinux` e `bzImage`. O modo manual `package` mantém a configuração completa e gera os pacotes Debian e todos os módulos.
 
-O workflow não usa patches Marie da árvore `testing`. Caso a versão `stable` não tenha patch nativo para Linux 7.1, o port é realizado sobre a árvore Liquorix e qualquer conflito é registrado nos artefatos de validação.
-
-> BORE 6.8.0-rc1 é a revisão mais recente para Linux 7.1, mas ainda pertence à árvore `testing`. Esta branch não deve ser mesclada na `main` antes da compilação e dos testes de inicialização no notebook.
+> Marie LRU 0.7.7 e BORE 6.8.0-rc1 pertencem às respectivas árvores `testing`. Esta branch não deve ser mesclada na `main` antes da compilação e dos testes de inicialização no notebook.
