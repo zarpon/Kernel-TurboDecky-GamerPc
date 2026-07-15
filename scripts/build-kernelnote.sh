@@ -43,6 +43,7 @@ apply_patch_file() {
   fi
   echo "==> Applying $label"
   patch --batch --forward --strip=1 < "$file" | tee "$LOGDIR/${label}.apply.log"
+  find "$KERNELDIR" -name '*.orig' -delete
 }
 
 apply_bore_patch() {
@@ -58,6 +59,7 @@ apply_bore_patch() {
   cat "$LOGDIR/01-bore.apply.log"
 
   if [[ $status -eq 0 ]]; then
+    find "$KERNELDIR" -name '*.orig' -delete
     return 0
   fi
 
@@ -81,6 +83,40 @@ apply_bore_patch() {
   echo "==> BORE compatibility layer applied successfully"
 }
 
+apply_adios_patch() {
+  local file="$1" status
+  local -a rejects expected
+
+  echo "==> Applying ADIOS with Liquorix compatibility handling"
+  if patch --batch --forward --strip=1 < "$file" > "$LOGDIR/03-adios.apply.log" 2>&1; then
+    status=0
+  else
+    status=$?
+  fi
+  cat "$LOGDIR/03-adios.apply.log"
+
+  if [[ $status -eq 0 ]]; then
+    find "$KERNELDIR" -name '*.orig' -delete
+    return 0
+  fi
+
+  mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort)
+  expected=("block/elevator.c.rej")
+
+  if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
+    echo "Unexpected ADIOS rejects: ${rejects[*]:-none}" >&2
+    return 1
+  fi
+
+  python3 "$ROOT/scripts/apply-adios-liquorix.py" "$KERNELDIR"
+  find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
+  git diff --check -- block/elevator.c
+
+  grep -Fq 'CONFIG_MQ_IOSCHED_DEFAULT_ADIOS' block/elevator.c
+  grep -Fq 'ctx.name = "adios"' block/elevator.c
+  echo "==> ADIOS compatibility layer applied successfully"
+}
+
 assert_config() {
   local expected="$1"
   if ! grep -Fqx "$expected" .config; then
@@ -101,7 +137,7 @@ download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 cd "$KERNELDIR"
 apply_bore_patch "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
 apply_patch_file "02-lru-marie" "$PATCHDIR/0002-lru-marie-0.7.7.patch"
-apply_patch_file "03-adios" "$PATCHDIR/0003-adios-3.2.0.patch"
+apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
 cp "$WORKDIR/liquorix-amd64.config" .config
 
