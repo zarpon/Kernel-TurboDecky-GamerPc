@@ -13,11 +13,11 @@ MAKE=(make LLVM=1 LLVM_IAS=1)
 
 KERNEL_TAG="v7.1.3-lqx1"
 KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
-LINUX_STABLE_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
-MARIE_BASE_TAG="v6.12.74"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 BORE_URL="https://raw.githubusercontent.com/firelzrd/bore-scheduler/16bf5baebbb42cdba393c501ba9c2af5f84e4749/patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
-MARIE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/fff3375dbd948072c1e64af6c0754aa0a4a00911/patches/stable/0001-linux6.12.74-lru_marie-0.6.7.patch"
+MARIE_PORT_BASE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/7faf2e78aba6842e9b76a1b05fa51ed8001017d1/patches/testing/0001-linux7.1-rc5-lru_marie-7.1-marie.patch"
+MARIE_STABLE_BASE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/7faf2e78aba6842e9b76a1b05fa51ed8001017d1/patches/stable/0001-linux6.12.74-lru_marie-0.6.5.patch"
+MARIE_STABLE_URL="https://raw.githubusercontent.com/firelzrd/lru_marie/fff3375dbd948072c1e64af6c0754aa0a4a00911/patches/stable/0001-linux6.12.74-lru_marie-0.6.7.patch"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
 
 case "$MODE" in
@@ -52,48 +52,84 @@ apply_patch_file() {
 }
 
 apply_marie_stable_patch() {
-  local file="$1" status=0
+  local port_base="$1" stable_base="$2" stable_target="$3"
+  local delta="$PATCHDIR/0002b-lru-marie-stable-0.6.5-to-0.6.7.patch"
+  local status=0
 
-  echo "==> Porting Marie LRU 0.6.7 stable from Linux $MARIE_BASE_TAG to $KERNEL_TAG"
-  grep -Fq 'Subject: [PATCH] linux6.12.74-lru_marie-0.6.7' "$file"
+  echo "==> Porting Marie LRU 0.6.7 stable to $KERNEL_TAG through the Linux 7.1 0.6.5 port base"
+  grep -Fq 'Subject: [PATCH] linux7.1-rc5-lru_marie-7.1-marie' "$port_base"
+  grep -Fq 'Subject: [PATCH] linux6.12.74-lru_marie-0.6.5' "$stable_base"
+  grep -Fq 'Subject: [PATCH] linux6.12.74-lru_marie-0.6.7' "$stable_target"
 
-  git remote remove marie-base 2>/dev/null || true
-  git remote add marie-base "$LINUX_STABLE_REPO"
-  git config remote.marie-base.promisor true
-  git config remote.marie-base.partialclonefilter blob:none
+  {
+    echo "port-base-7.1-0.6.5 $(sha256sum "$port_base" | awk '{print $1}')"
+    echo "stable-base-6.12-0.6.5 $(sha256sum "$stable_base" | awk '{print $1}')"
+    echo "stable-target-6.12-0.6.7 $(sha256sum "$stable_target" | awk '{print $1}')"
+  } | tee "$LOGDIR/02-lru-marie-port-inputs.txt"
 
-  # Fetch the exact base tree used by the stable patch. Keeping it as a
-  # promisor/partial remote lets git obtain only the base blobs referenced by
-  # the patch, instead of downloading an entire historical kernel checkout.
-  git fetch --no-tags --filter=blob:none --depth=1 marie-base \
-    "refs/tags/$MARIE_BASE_TAG:refs/tags/$MARIE_BASE_TAG" \
-    2>&1 | tee "$LOGDIR/02-lru-marie-base-fetch.log"
+  interdiff "$stable_base" "$stable_target" > "$delta"
+  test -s "$delta"
+  {
+    echo "==> Marie stable delta summary"
+    diffstat "$delta"
+  } | tee "$LOGDIR/02-lru-marie-stable-delta.log"
 
-  if git apply --3way --index "$file" > "$LOGDIR/02-lru-marie-3way.log" 2>&1; then
-    status=0
+  echo "==> Applying Linux 7.1 Marie 0.6.5 port scaffold"
+  if patch --batch --forward --strip=1 --dry-run < "$port_base" \
+      > "$LOGDIR/02-lru-marie-port-base.dry-run.log" 2>&1; then
+    patch --batch --forward --strip=1 < "$port_base" \
+      | tee "$LOGDIR/02-lru-marie-port-base.apply.log"
   else
-    status=$?
+    cat "$LOGDIR/02-lru-marie-port-base.dry-run.log"
+    if git apply --3way --index "$port_base" \
+        > "$LOGDIR/02-lru-marie-port-base.3way.log" 2>&1; then
+      git reset --quiet
+    else
+      status=$?
+      cat "$LOGDIR/02-lru-marie-port-base.3way.log"
+      {
+        git status --short
+        git diff --cc || true
+      } | tee "$LOGDIR/02-lru-marie-port-base-conflicts.log"
+      return "$status"
+    fi
   fi
-  cat "$LOGDIR/02-lru-marie-3way.log"
 
-  if [[ $status -ne 0 ]]; then
-    {
-      echo "==> Marie stable port conflicts"
-      git status --short
-      echo
-      git diff --cc || true
-    } | tee "$LOGDIR/02-lru-marie-port-conflicts.log"
-    return "$status"
+  echo "==> Applying official stable delta Marie 0.6.5 -> 0.6.7"
+  if patch --batch --forward --strip=1 --dry-run < "$delta" \
+      > "$LOGDIR/02-lru-marie-stable-delta.dry-run.log" 2>&1; then
+    patch --batch --forward --strip=1 < "$delta" \
+      | tee "$LOGDIR/02-lru-marie-stable-delta.apply.log"
+  else
+    cat "$LOGDIR/02-lru-marie-stable-delta.dry-run.log"
+    if git apply --3way --index "$delta" \
+        > "$LOGDIR/02-lru-marie-stable-delta.3way.log" 2>&1; then
+      git reset --quiet
+    else
+      status=$?
+      cat "$LOGDIR/02-lru-marie-stable-delta.3way.log"
+      {
+        git status --short
+        git diff --cc || true
+      } | tee "$LOGDIR/02-lru-marie-stable-delta-conflicts.log"
+      return "$status"
+    fi
   fi
 
-  git diff --cached --check
+  find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
+  git diff --check
   grep -Fq '0.6.7' mm/lru_marie/version.h
   grep -Fq 'config LRU_MARIE' mm/Kconfig
 
-  # Leave the source changes unstaged so the later compatibility handlers can
-  # inspect and modify the same working tree normally.
-  git reset --quiet
-  echo "==> Marie LRU 0.6.7 stable three-way port applied successfully"
+  {
+    echo "Marie source policy: stable"
+    echo "Stable target: firelzrd/lru_marie@fff3375dbd948072c1e64af6c0754aa0a4a00911"
+    echo "Stable patch: patches/stable/0001-linux6.12.74-lru_marie-0.6.7.patch"
+    echo "Port scaffold: Linux 7.1 patch at Marie 0.6.5"
+    echo "Transformation: interdiff(stable-0.6.5, stable-0.6.7) applied after the 7.1 scaffold"
+  } | tee "$LOGDIR/02-lru-marie-provenance.txt"
+
+  echo "==> Marie LRU 0.6.7 stable incremental port applied successfully"
 }
 
 apply_bore_patch() {
@@ -189,12 +225,17 @@ echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
 git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 
 download "$BORE_URL" "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
-download "$MARIE_URL" "$PATCHDIR/0002-lru-marie-0.6.7-stable.patch"
+download "$MARIE_PORT_BASE_URL" "$PATCHDIR/0002a-lru-marie-linux7.1-port-base-0.6.5.patch"
+download "$MARIE_STABLE_BASE_URL" "$PATCHDIR/0002b-lru-marie-stable-base-0.6.5.patch"
+download "$MARIE_STABLE_URL" "$PATCHDIR/0002c-lru-marie-stable-target-0.6.7.patch"
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
 download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
-apply_marie_stable_patch "$PATCHDIR/0002-lru-marie-0.6.7-stable.patch"
+apply_marie_stable_patch \
+  "$PATCHDIR/0002a-lru-marie-linux7.1-port-base-0.6.5.patch" \
+  "$PATCHDIR/0002b-lru-marie-stable-base-0.6.5.patch" \
+  "$PATCHDIR/0002c-lru-marie-stable-target-0.6.7.patch"
 apply_bore_patch "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
