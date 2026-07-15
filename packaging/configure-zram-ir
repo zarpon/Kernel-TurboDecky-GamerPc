@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+name="${1:-}"
+case "$name" in
+  zram[0-9]*) ;;
+  *) exit 0 ;;
+esac
+
+sys="/sys/block/$name"
+[ -d "$sys" ] || exit 0
+
+log_notice() {
+  if command -v logger >/dev/null 2>&1; then
+    logger -t kernelnote-zram-ir -- "$*"
+  fi
+}
+
+# The patch defaults this sysctl to 1. Reassert it whenever zram appears so
+# priority 0 and priority 1 are tried for every initial page write.
+if [ -w /proc/sys/vm/zram_recomp_immediate ]; then
+  printf '%s\n' 1 > /proc/sys/vm/zram_recomp_immediate
+fi
+
+# Compressor selection is immutable after disksize initializes the device.
+# The udev add rule runs before device-dependent services are released, but a
+# change event for an already active device must never reset or disrupt swap.
+if [ "$(cat "$sys/initstate" 2>/dev/null || printf 1)" != 0 ]; then
+  log_notice "$name already initialized; keeping its active compressor setup"
+  exit 0
+fi
+
+if ! grep -qw lz4 "$sys/comp_algorithm"; then
+  log_notice "$name does not expose lz4; ZRAM-IR setup skipped"
+  exit 0
+fi
+
+if [ ! -w "$sys/recomp_algorithm" ] || ! grep -qw zstd "$sys/recomp_algorithm"; then
+  log_notice "$name does not expose zstd recompression; ZRAM-IR setup skipped"
+  exit 0
+fi
+
+printf '%s\n' lz4 > "$sys/comp_algorithm"
+printf '%s\n' 'algo=zstd priority=1' > "$sys/recomp_algorithm"
+
+grep -q '\[lz4\]' "$sys/comp_algorithm"
+grep -q '\[zstd\]' "$sys/recomp_algorithm"
+
+log_notice "$name configured for immediate recompression: lz4 priority 0 -> zstd priority 1"

@@ -121,17 +121,28 @@ replace_once(
 
 replace_once(
     'scripts/config --module BLK_DEV_ZRAM\n',
-    '''scripts/config --module BLK_DEV_ZRAM
+    '''scripts/config --module ZRAM
 scripts/config --enable ZRAM_MULTI_COMP
+scripts/config --enable ZRAM_BACKEND_LZ4
 scripts/config --enable ZRAM_BACKEND_ZSTD
+scripts/config --disable ZRAM_DEF_COMP_LZORLE
+scripts/config --disable ZRAM_DEF_COMP_LZO
+scripts/config --disable ZRAM_DEF_COMP_LZ4HC
+scripts/config --disable ZRAM_DEF_COMP_ZSTD
+scripts/config --disable ZRAM_DEF_COMP_DEFLATE
+scripts/config --disable ZRAM_DEF_COMP_842
+scripts/config --enable ZRAM_DEF_COMP_LZ4
 '''
 )
 
 replace_once(
     'assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"\n',
     '''assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
+assert_config "CONFIG_ZRAM=m"
 assert_config "CONFIG_ZRAM_MULTI_COMP=y"
+assert_config "CONFIG_ZRAM_BACKEND_LZ4=y"
 assert_config "CONFIG_ZRAM_BACKEND_ZSTD=y"
+assert_config "CONFIG_ZRAM_DEF_COMP_LZ4=y"
 '''
 )
 
