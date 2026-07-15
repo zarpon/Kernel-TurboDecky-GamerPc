@@ -351,7 +351,18 @@ assert_disabled_or_absent GDB_SCRIPTS
 
 replace_once(
     'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"\n',
-    'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-poc-nap-adios-zramir-thinlto"\n'
+    'scripts/config --set-str LOCALVERSION "-kn-marie-bore-poc-nap-adios-zir-lto"\n'
+)
+
+replace_once(
+    '"${MAKE[@]}" -s kernelrelease | tee "$LOGDIR/kernelrelease.txt"\n',
+    '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
+printf '%s\n' "$kernel_release" | tee "$LOGDIR/kernelrelease.txt"
+if ((${#kernel_release} > 64)); then
+  echo "Kernel release exceeds the 64-character UTS_RELEASE limit: ${#kernel_release}" >&2
+  exit 1
+fi
+'''
 )
 
 output.write_text(source, encoding="utf-8")
