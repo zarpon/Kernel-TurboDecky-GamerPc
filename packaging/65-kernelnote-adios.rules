@@ -1,0 +1,3 @@
+# Select ADIOS on every disk whose queue exposes the scheduler.
+# Virtual RAM-backed devices are excluded; unsupported devices are ignored.
+ACTION=="add|change", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", KERNEL!="loop*", KERNEL!="ram*", KERNEL!="zram*", TEST=="queue/scheduler", ATTR{queue/scheduler}=="*adios*", ATTR{queue/scheduler}="adios"
