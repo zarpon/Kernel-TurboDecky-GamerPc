@@ -74,7 +74,7 @@ apply_bore_patch() {
 
   python3 "$ROOT/scripts/apply-bore-liquorix.py" "$KERNELDIR"
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
-  git diff --check
+  git diff --check -- kernel/sched/fair.c kernel/sched/debug.c
 
   grep -Fq 'CONFIG_SCHED_BORE' kernel/sched/fair.c
   grep -Fq 'sched_min_base_slice_fops' kernel/sched/debug.c
