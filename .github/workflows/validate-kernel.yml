@@ -33,7 +33,6 @@ jobs:
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPILERCHECK: content
       CCACHE_NOHASHDIR: "true"
-      CCACHE_DEPEND: "true"
       CCACHE_SLOPPINESS: include_file_ctime,include_file_mtime,time_macros
       KBUILD_BUILD_USER: kernelnote
       KBUILD_BUILD_HOST: github-actions
@@ -82,10 +81,10 @@ jobs:
           # created. GitHub's host kernel exposes these as runtime parameters.
           parameters=/sys/module/zswap/parameters
           test -d "$parameters"
-          test -w "$parameters/compressor"
-          test -w "$parameters/max_pool_percent"
-          test -w "$parameters/shrinker_enabled"
-          test -w "$parameters/enabled"
+          test -e "$parameters/compressor"
+          test -e "$parameters/max_pool_percent"
+          test -e "$parameters/shrinker_enabled"
+          test -e "$parameters/enabled"
 
           echo zstd | sudo tee "$parameters/compressor"
           echo 90   | sudo tee "$parameters/max_pool_percent"
