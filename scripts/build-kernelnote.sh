@@ -9,6 +9,7 @@ ARTIFACTS="$ROOT/artifacts"
 PATCHDIR="$WORKDIR/patches"
 KERNELDIR="$WORKDIR/linux"
 JOBS="${JOBS:-$(nproc)}"
+MAKE=(make LLVM=1 LLVM_IAS=1)
 
 KERNEL_TAG="v7.1.3-lqx1"
 KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
@@ -166,34 +167,53 @@ scripts/config --enable MQ_IOSCHED_ADIOS
 scripts/config --enable MQ_IOSCHED_DEFAULT_ADIOS
 scripts/config --module BLK_DEV_ZRAM
 
+# ThinLTO is mandatory for the final kernel. These symbols only survive
+# olddefconfig when Clang, LLD and the LLVM integrated assembler are active.
+scripts/config --disable LTO_NONE
+scripts/config --disable LTO_CLANG_FULL
+scripts/config --enable LTO_CLANG_THIN
+
 # Reproducible generic AMD64 build for LMDE. Avoid distro certificate paths and
 # Rust toolchain coupling from the upstream Liquorix generated configuration.
-scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios"
+scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"
 scripts/config --disable LOCALVERSION_AUTO
 scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
 scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
 scripts/config --disable RUST
 
-make olddefconfig
-make -s kernelrelease | tee "$LOGDIR/kernelrelease.txt"
+"${MAKE[@]}" olddefconfig
+"${MAKE[@]}" -s kernelrelease | tee "$LOGDIR/kernelrelease.txt"
 
 assert_disabled_or_absent SCHED_ALT
 assert_disabled_or_absent SCHED_PDS
 assert_disabled_or_absent SCHED_BMQ
+assert_disabled_or_absent LTO_NONE
+assert_disabled_or_absent LTO_CLANG_FULL
+assert_config "CONFIG_CC_IS_CLANG=y"
+assert_config "CONFIG_LD_IS_LLD=y"
+assert_config "CONFIG_AS_IS_LLVM=y"
+assert_config "CONFIG_LTO=y"
+assert_config "CONFIG_LTO_CLANG=y"
+assert_config "CONFIG_LTO_CLANG_THIN=y"
 assert_config "CONFIG_SCHED_BORE=y"
 assert_config "CONFIG_LRU_MARIE=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
 
 cp .config "$LOGDIR/final.config"
+{
+  clang --version | head -n 1
+  ld.lld --version | head -n 1
+  llvm-ar --version | head -n 1
+} | tee "$LOGDIR/llvm-toolchain.txt"
 
-echo "==> Building with $JOBS parallel jobs"
+echo "==> Building with Clang ThinLTO and $JOBS parallel jobs"
 if [[ "$MODE" == "package" ]]; then
-  make -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.3-1kernelnote1"
+  "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.3-1kernelnote1"
   find "$WORKDIR" -maxdepth 1 -type f -name '*.deb' -exec cp -v {} "$ARTIFACTS/" \;
   "$ROOT/scripts/build-tuning-package.sh"
 else
-  make -j"$JOBS" bzImage modules
+  "${MAKE[@]}" -j"$JOBS" bzImage modules
 fi
 
-echo "==> Kernelnote build completed successfully"
+echo "==> Kernelnote ThinLTO build completed successfully"
