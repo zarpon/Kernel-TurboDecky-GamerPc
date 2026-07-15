@@ -41,10 +41,21 @@ jobs:
       LC_ALL: C
       TZ: UTC
     steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - name: Check out project
         uses: actions/checkout@v4
 
-      - name: Configure build resources
+      - name: Configure CPU and zswap
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -54,24 +65,6 @@ jobs:
           JOBS="$(nproc --all)"
           echo "JOBS=$JOBS" >> "$GITHUB_ENV"
           echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
-
-          SWAPFILE=/mnt/kernelnote-swapfile
-          SWAP_SIZE_BYTES=$((16 * 1024 * 1024 * 1024))
-          SWAP_RESERVE_BYTES=$((2 * 1024 * 1024 * 1024))
-
-          if ! swapon --noheadings --raw --output NAME | grep -Fxq "$SWAPFILE"; then
-            AVAILABLE_BYTES="$(df --output=avail -B1 /mnt | tail -n 1 | tr -d ' ')"
-            if (( AVAILABLE_BYTES < SWAP_SIZE_BYTES + SWAP_RESERVE_BYTES )); then
-              echo "Insufficient disk space for a 16 GiB swapfile: $AVAILABLE_BYTES bytes available" >&2
-              exit 1
-            fi
-
-            sudo rm -f "$SWAPFILE"
-            sudo fallocate -l 16G "$SWAPFILE"
-            sudo chmod 600 "$SWAPFILE"
-            sudo mkswap "$SWAPFILE"
-            sudo swapon --priority 100 "$SWAPFILE"
-          fi
 
           configure_zswap() {
             local parameters=/sys/module/zswap/parameters
@@ -104,11 +97,34 @@ jobs:
           }
 
           configure_zswap
-
           echo "Detected logical CPUs: $JOBS"
           echo "Configured MAKEFLAGS: -j$JOBS"
-          swapon --show --bytes
+
+      - name: Configure 16 GiB swap
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+        with:
+          swap-size-gb: 16
+
+      - name: Verify build resources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          exec > >(tee -a logs/ci-resources.log) 2>&1
+
+          echo "Memory and swap:"
           free -h
+          echo
+          swapon --show
+          echo
+          df -h /
+
+          SWAP_BYTES="$(swapon --noheadings --show=SIZE --bytes | awk '{total += $1} END {print total + 0}')"
+          MIN_SWAP_BYTES=$((15 * 1024 * 1024 * 1024))
+          if (( SWAP_BYTES < MIN_SWAP_BYTES )); then
+            echo "Configured swap is smaller than expected: $SWAP_BYTES bytes" >&2
+            exit 1
+          fi
+
           if [[ -d /sys/module/zswap/parameters ]]; then
             printf 'zswap enabled: '
             cat /sys/module/zswap/parameters/enabled
