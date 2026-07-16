@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""Set the exact generic Zarpon kernel identity and Polly plugin path."""
+"""Set the dynamic generic Zarpon kernel identity and Polly plugin path."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-KERNEL_RELEASE = "linux.7.1.3.zarpon.r1"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -21,14 +19,14 @@ def patch_core(path: Path) -> None:
     source = replace_once(
         source,
         'MAKE=(make LLVM=1 LLVM_IAS=1)\n',
-        f'''KERNEL_RELEASE_NAME="{KERNEL_RELEASE}"
+        ''': "${KERNEL_RELEASE_NAME:?latest stable kernel identity was not resolved}"
 # The universal CPU-optimization patch selects -march=broadwell through
 # CONFIG_MBROADWELL. Never use -march=native, which would target the GitHub
 # runner. KERNELRELEASE controls uname -r, module paths, vermagic, installed
 # image names and Debian package names.
 MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
 ''',
-        "generic Zarpon KERNELRELEASE",
+        "dynamic Zarpon KERNELRELEASE",
     )
 
     source = replace_once(
