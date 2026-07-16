@@ -99,3 +99,26 @@ Release:  linux.<versão-estável>.zarpon.r1
 ```
 
 O monitor permanece ativo após falhas e também verifica periodicamente se o kernel.org publicou uma versão estável mais nova. Quando isso ocorre, ele atualiza a referência observada, dispara uma nova compilação e repete os ports necessários até a nova Release ser validada.
+
+## Instalação automática da última Release
+
+A última Release pode ser instalada pelo script versionado em
+[`scripts/install-latest-release.sh`](scripts/install-latest-release.sh). Como
+este repositório é privado, exporte um token GitHub com permissão de leitura
+antes de executar:
+
+```bash
+export GITHUB_TOKEN='SEU_TOKEN_COM_LEITURA_DO_REPOSITORIO'
+curl -fsSL \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  -H "Accept: application/vnd.github.raw+json" \
+  "https://raw.githubusercontent.com/zarpon/Kernelnote/experimental/linux-7.1.3-generic-zarpon/scripts/install-latest-release.sh" \
+  | sh
+```
+
+O script consulta `/releases/latest`, escolhe o asset
+`kernelnote-linux-*.zip`, descompacta todos os `.deb`, instala-os com
+`dpkg`, corrige dependências com `apt-get -f install` e atualiza o GRUB.
+As instruções completas, incluindo o caso de repositório público ou fork, estão
+em [INSTALL.md](INSTALL.md).
+
