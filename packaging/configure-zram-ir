@@ -12,7 +12,7 @@ sys="/sys/block/$name"
 
 log_notice() {
   if command -v logger >/dev/null 2>&1; then
-    logger -t kernelnote-zram-ir -- "$*"
+    logger -t turbodecky-zram-ir -- "$*"
   fi
 }
 
