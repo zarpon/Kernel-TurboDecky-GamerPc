@@ -125,6 +125,10 @@ jobs:
         run: |
           set -Eeuo pipefail
           sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get install -y --no-install-recommends software-properties-common
+          sudo add-apt-repository -y universe
+          sudo apt-get -o Acquire::Retries=3 update
+          apt-cache policy clang-18 llvm-18-dev libpolly-18-dev | tee logs/llvm-apt-policy.txt
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential ccache clang-18 cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
             kmod libdw-dev libelf-dev libpolly-18-dev libssl-dev lld-18 llvm-18 llvm-18-dev \
