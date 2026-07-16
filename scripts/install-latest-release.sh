@@ -53,7 +53,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
 
 RELEASE_JSON="$TMP_DIR/release.json"
 if ! curl_download "$RELEASE_API" "$RELEASE_JSON"; then
-  die "não foi possível consultar a última Release de $REPOSITORY; para repositório privado, exporte GITHUB_TOKEN ou GH_TOKEN"
+  die "não foi possível consultar a última Release de $REPOSITORY; confira a conexão ou, em um fork privado, exporte GITHUB_TOKEN ou GH_TOKEN"
 fi
 
 if ! RELEASE_INFO="$(python3 - "$RELEASE_JSON" <<'PY'
