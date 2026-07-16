@@ -2,6 +2,24 @@
 
 Kernel experimental para o notebook HP 240 G4 com Intel Core i3-5005U, destinado ao Linux Mint Debian Edition.
 
+## Identidade final do kernel
+
+O kernel compilado usa exatamente o identificador solicitado:
+
+```text
+Linux.7.1.3.KernelZarpon
+```
+
+Esse valor é passado diretamente ao Kbuild como `KERNELRELEASE` e será usado em:
+
+- `uname -r`;
+- `/boot/vmlinuz-Linux.7.1.3.KernelZarpon`;
+- `/lib/modules/Linux.7.1.3.KernelZarpon`;
+- `vermagic` dos módulos;
+- descrições e metadados da compilação.
+
+Os nomes internos dos pacotes Debian são normalizados para minúsculas, por exemplo `linux-image-linux.7.1.3.kernelzarpon`, porque identificadores de pacotes `.deb` não aceitam letras maiúsculas. Isso não altera o nome instalado nem o resultado de `uname -r`.
+
 ## Composição atual
 
 - Linux 7.1.3 / Liquorix `v7.1.3-lqx1`
@@ -17,6 +35,8 @@ Kernel experimental para o notebook HP 240 G4 com Intel Core i3-5005U, destinado
 
 ## Padrões do kernel
 
+- `KERNELRELEASE=Linux.7.1.3.KernelZarpon`
+- `CONFIG_LOCALVERSION=""`
 - `CONFIG_SCHED_BORE=y`
 - `CONFIG_SCHED_POC_SELECTOR=y`
 - `CONFIG_CPU_IDLE_GOV_NAP=y`
@@ -123,6 +143,7 @@ Para evitar que o pacote ultrapasse o limite do runner:
 6. ZRAM-IR 1.2
 7. port do NAP 0.5.0
 8. REFLEX CPUFreq 0.3.1 para Linux 7.1, seguido pela integração da escolha Kconfig padrão
+9. política de nome `Linux.7.1.3.KernelZarpon` e normalização dos identificadores Debian
 
 Todos os patches de terceiros obtidos por checkout Git local são fixados por commit, caminho e SHA-256. O workflow registra rejeitos completos e interrompe antes da compilação quando um port não pode ser resolvido com segurança.
 
