@@ -1,13 +1,13 @@
 #!/bin/sh
-# Download and install every Debian package from the latest Kernelnote release.
+# Download and install every Debian package from the latest TurboDecky release.
 set -eu
 
-REPOSITORY="${KERNELNOTE_REPOSITORY:-zarpon/Kernelnote}"
-RELEASE_API="${KERNELNOTE_RELEASE_API:-https://api.github.com/repos/${REPOSITORY}/releases/latest}"
+REPOSITORY="${TURBODECKY_REPOSITORY:-${KERNELNOTE_REPOSITORY:-zarpon/Kernel-TurboDecky-GamerPc}}"
+RELEASE_API="${TURBODECKY_RELEASE_API:-${KERNELNOTE_RELEASE_API:-https://api.github.com/repos/${REPOSITORY}/releases/latest}}"
 TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 die() {
-  echo "kernelnote: $*" >&2
+  echo "turbodecky: $*" >&2
   exit 1
 }
 
@@ -53,7 +53,7 @@ else
   run_privileged() { sudo "$@"; }
 fi
 
-TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kernelnote-install.XXXXXX")"
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/turbodecky-install.XXXXXX")"
 trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
 
 RELEASE_JSON="$TMP_DIR/release.json"
@@ -71,7 +71,7 @@ with open(sys.argv[1], encoding="utf-8") as stream:
 assets = release.get("assets", [])
 preferred = [
     item for item in assets
-    if item.get("name", "").startswith("kernelnote-linux-")
+    if item.get("name", "").startswith("turbodecky-linux-")
     and item.get("name", "").endswith(".zip")
 ]
 candidates = preferred or [
