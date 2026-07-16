@@ -118,8 +118,39 @@ scripts/config --disable X86_VSMP
 scripts/config --disable X86_UV
 scripts/config --disable X86_GOLDFISH
 scripts/config --disable X86_INTEL_MID
+
+# Fixed-notebook media profile. Preserve only the V4L2 path needed by the HP
+# 240 G4 USB UVC webcam. Do not compile external broadcast/capture hardware:
+# analog TV, DVB, radio, SDR, PCI/platform capture, camera sensor farms, legacy
+# USB webcam families, infrared remotes or synthetic media test devices.
+scripts/config --module MEDIA_SUPPORT
+scripts/config --enable MEDIA_SUPPORT_FILTER
+scripts/config --disable MEDIA_SUBDRV_AUTOSELECT
+scripts/config --enable MEDIA_CAMERA_SUPPORT
+scripts/config --enable MEDIA_USB_SUPPORT
+scripts/config --module VIDEO_DEV
+scripts/config --module USB_VIDEO_CLASS
+scripts/config --enable MEDIA_CONTROLLER
+scripts/config --disable MEDIA_ANALOG_TV_SUPPORT
+scripts/config --disable MEDIA_DIGITAL_TV_SUPPORT
+scripts/config --disable MEDIA_RADIO_SUPPORT
+scripts/config --disable MEDIA_SDR_SUPPORT
+scripts/config --disable MEDIA_PLATFORM_SUPPORT
+scripts/config --disable MEDIA_PCI_SUPPORT
+scripts/config --disable MEDIA_TEST_SUPPORT
+scripts/config --disable VIDEO_CAMERA_SENSOR
+scripts/config --disable USB_GSPCA
+scripts/config --disable USB_PWC
+scripts/config --disable VIDEO_S2255
+scripts/config --disable VIDEO_USBTV
+scripts/config --disable VIDEO_EM28XX
+scripts/config --disable MEDIA_CEC_RC
+scripts/config --disable RC_CORE
+scripts/config --disable RC_MAP
+scripts/config --disable RC_DECODERS
+scripts/config --disable RC_DEVICES
 '''
-    source = replace_once(source, config_anchor, config_block, "Broadwell profile")
+    source = replace_once(source, config_anchor, config_block, "Broadwell and media profile")
 
     assertion_anchor = 'assert_config "CONFIG_CPU_MITIGATIONS=y"\n'
     assertion_block = r'''assert_config "CONFIG_64BIT=y"
@@ -145,9 +176,50 @@ assert_disabled_or_absent X86_VSMP
 assert_disabled_or_absent X86_UV
 assert_disabled_or_absent X86_GOLDFISH
 assert_disabled_or_absent X86_INTEL_MID
+assert_config "CONFIG_MEDIA_SUPPORT=m"
+assert_config "CONFIG_MEDIA_SUPPORT_FILTER=y"
+assert_config "CONFIG_MEDIA_CAMERA_SUPPORT=y"
+assert_config "CONFIG_MEDIA_USB_SUPPORT=y"
+assert_config "CONFIG_VIDEO_DEV=m"
+assert_config "CONFIG_USB_VIDEO_CLASS=m"
+assert_config "CONFIG_MEDIA_CONTROLLER=y"
+assert_disabled_or_absent MEDIA_SUBDRV_AUTOSELECT
+assert_disabled_or_absent MEDIA_ANALOG_TV_SUPPORT
+assert_disabled_or_absent MEDIA_DIGITAL_TV_SUPPORT
+assert_disabled_or_absent MEDIA_RADIO_SUPPORT
+assert_disabled_or_absent MEDIA_SDR_SUPPORT
+assert_disabled_or_absent MEDIA_PLATFORM_SUPPORT
+assert_disabled_or_absent MEDIA_PCI_SUPPORT
+assert_disabled_or_absent MEDIA_TEST_SUPPORT
+assert_disabled_or_absent VIDEO_CAMERA_SENSOR
+assert_disabled_or_absent USB_GSPCA
+assert_disabled_or_absent USB_PWC
+assert_disabled_or_absent VIDEO_S2255
+assert_disabled_or_absent VIDEO_USBTV
+assert_disabled_or_absent VIDEO_EM28XX
+assert_disabled_or_absent MEDIA_CEC_RC
+assert_disabled_or_absent RC_CORE
+assert_disabled_or_absent RC_MAP
+assert_disabled_or_absent RC_DECODERS
+assert_disabled_or_absent RC_DEVICES
 assert_config "CONFIG_CPU_MITIGATIONS=y"
 '''
-    source = replace_once(source, assertion_anchor, assertion_block, "Broadwell assertions")
+    source = replace_once(source, assertion_anchor, assertion_block, "Broadwell and media assertions")
+
+    source = replace_once(
+        source,
+        'cp .config "$LOGDIR/final.config"\n',
+        '''{
+  echo "Target: HP 240 G4 notebook"
+  echo "Preserved: V4L2 core, media controller and USB UVC webcam"
+  echo "Disabled: TV/DVB/radio/SDR, PCI/platform capture, sensor farm, legacy USB webcams, media tests and IR remotes"
+  echo "Reason: avoid compiling external media hardware that cannot exist in the fixed notebook target"
+} | tee "$LOGDIR/media-profile.txt"
+
+cp .config "$LOGDIR/final.config"
+''',
+        "media profile provenance",
+    )
 
     source = source.replace(
         'KDEB_PKGVERSION="7.1.3-1kernelnote1"',
