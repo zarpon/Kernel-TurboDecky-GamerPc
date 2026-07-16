@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve the current stable Linux release from kernel.org.
-
-The generic Zarpon branch intentionally follows kernel.org's latest_stable
-field. Mainline release candidates and EOL stable lines are never selected.
-"""
+"""Resolve the current stable Linux release for TurboDecky GamerPc."""
 
 from __future__ import annotations
 
@@ -34,7 +30,7 @@ def main() -> None:
 
     request = urllib.request.Request(
         RELEASES_URL,
-        headers={"User-Agent": "Kernelnote-latest-stable-resolver/1.0"},
+        headers={"User-Agent": "TurboDecky-GamerPc-stable-resolver/1.0"},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         raw = response.read()
@@ -58,14 +54,14 @@ def main() -> None:
 
     release = matching[0]
     series = ".".join(version.split(".")[:2])
-    release_name = f"linux.{version}.zarpon.r1"
+    release_name = f"linux.{version}.turbodecky.release"
     values = {
         "KERNEL_VERSION": version,
         "KERNEL_SERIES": series,
         "KERNEL_TAG": f"v{version}",
         "KERNEL_RELEASE_NAME": release_name,
         "KERNEL_ARTIFACT_NAME": f"{release_name}-debs",
-        "KERNEL_DEB_VERSION": f"{version}-1zarpon1",
+        "KERNEL_DEB_VERSION": f"{version}-1turbodecky1",
         "KERNEL_SOURCE_URL": str(release.get("source") or ""),
         "KERNEL_GITWEB_URL": str(release.get("gitweb") or ""),
         "KERNEL_RELEASE_DATE": str(release.get("released", {}).get("isodate") or ""),
