@@ -282,7 +282,7 @@ assert_cmdline_token() {
 
 echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
 git clone --no-checkout --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
-git -C "$KERNELDIR" checkout --detach "$KERNEL_TAG"
+git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 
 fetch_marie_testing_patch
 download "$BORE_URL" "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
