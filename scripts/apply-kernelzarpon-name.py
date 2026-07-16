@@ -42,21 +42,18 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
   python3 - <<'PY'
 from pathlib import Path
 
-kernel_release = "{KERNEL_RELEASE}"
-package_release = "{PACKAGE_RELEASE}"
-
 mkdebian = Path("scripts/package/mkdebian")
 text = mkdebian.read_text(encoding="utf-8")
 
-anchor = "packagename=linux-image\\nfi\\n"
+anchor = "packagename=linux-image\nfi\n"
 if text.count(anchor) != 1:
     raise SystemExit("mkdebian package-name anchor not found exactly once")
 text = text.replace(
     anchor,
     anchor
-    + "\\n# Debian binary package names must be lowercase even when the kernel's\\n"
-    + "# UTS release intentionally contains branding capitals.\\n"
-    + "packagerelease=$(printf '%s' \\\"$KERNELRELEASE\\\" | tr '[:upper:]' '[:lower:]')\\n",
+    + "\n# Debian binary package names must be lowercase even when the kernel's\n"
+    + "# UTS release intentionally contains branding capitals.\n"
+    + "packagerelease=$(printf '%s' \"$KERNELRELEASE\" | tr '[:upper:]' '[:lower:]')\n",
     1,
 )
 
@@ -83,14 +80,15 @@ if text.count(old) != 1:
     raise SystemExit("builddeb header-version anchor not found exactly once")
 text = text.replace(old, new, 1)
 builddeb.write_text(text, encoding="utf-8")
-
-Path("{0}/kernel-name-policy.txt".format("$LOGDIR")).write_text(
-    "Kernel UTS release: " + kernel_release + "\\n"
-    "Debian package release: " + package_release + "\\n"
-    "Reason: Debian package names permit only lowercase ASCII letters.\\n",
-    encoding="utf-8",
-)
 PY
+
+  {{
+    echo "Kernel UTS release: $KERNEL_RELEASE_NAME"
+    echo "Debian package release: {PACKAGE_RELEASE}"
+    echo "Image package: linux-image-{PACKAGE_RELEASE}"
+    echo "Headers package: linux-headers-{PACKAGE_RELEASE}"
+    echo "Reason: Debian package names permit only lowercase ASCII letters."
+  }} | tee "$LOGDIR/kernel-name-policy.txt"
 
   git diff --check -- scripts/package/mkdebian scripts/package/builddeb \\
     | tee "$LOGDIR/08-kernelzarpon-package-diff-check.log"
@@ -128,11 +126,6 @@ def patch_wrapper(path: Path) -> None:
         )
     source = source.replace(old_local, "", 1)
 
-    old_check = '''kernel_release="$(("${MAKE[@]}" -s kernelrelease))"
-'''
-    # The actual wrapper uses command substitution without an arithmetic layer;
-    # replace the complete emitted validation block instead of relying on this
-    # sentinel if it is absent.
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
 printf '%s\\n' "$kernel_release" | tee "$LOGDIR/kernelrelease.txt"
 if ((${#kernel_release} > 64)); then
