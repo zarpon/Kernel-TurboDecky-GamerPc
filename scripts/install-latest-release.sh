@@ -38,6 +38,8 @@ need unzip
 need find
 need dpkg
 need apt-get
+need sed
+need mktemp
 
 if [ "$(id -u)" -eq 0 ]; then
   run_privileged() { "$@"; }
