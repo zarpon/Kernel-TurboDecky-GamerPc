@@ -1,3 +1,3 @@
 # Configure ZRAM-IR before userspace initializes the zram device size.
-ACTION=="add", SUBSYSTEM=="block", KERNEL=="zram[0-9]*", RUN+="/usr/lib/kernelnote/configure-zram-ir %k"
-ACTION=="change", SUBSYSTEM=="block", KERNEL=="zram[0-9]*", RUN+="/usr/lib/kernelnote/configure-zram-ir %k"
+ACTION=="add", SUBSYSTEM=="block", KERNEL=="zram[0-9]*", RUN+="/usr/lib/turbodecky/configure-zram-ir %k"
+ACTION=="change", SUBSYSTEM=="block", KERNEL=="zram[0-9]*", RUN+="/usr/lib/turbodecky/configure-zram-ir %k"
