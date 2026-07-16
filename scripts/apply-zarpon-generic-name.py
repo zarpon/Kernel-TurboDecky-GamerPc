@@ -33,7 +33,8 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
         source,
         '''apply_requested_patch_series
 
-# Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
+# Generic amd64 profile: keep the upstream platform, topology and driver
+# choices instead of pruning the build for one computer model.
 ''',
         r'''apply_requested_patch_series
 
@@ -94,36 +95,9 @@ fi
 
 git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-check.log"
 
-# Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
+# Generic x86-64 target with the upstream platform and driver matrix,
 ''',
         "Polly toolchain selection",
-    )
-
-    source = replace_once(
-        source,
-        '# ThinLTO is mandatory for the final kernel. These symbols only survive\n',
-        '''source "$ROOT/scripts/notebook-prune-profile.sh"
-apply_notebook_prune_profile
-
-# ThinLTO is mandatory for the final kernel. These symbols only survive
-''',
-        "shared notebook pruning apply call",
-    )
-    source = replace_once(
-        source,
-        'assert_config "CONFIG_CPU_MITIGATIONS=y"\n',
-        '''verify_notebook_prune_profile
-assert_config "CONFIG_CPU_MITIGATIONS=y"
-''',
-        "shared notebook pruning verification call",
-    )
-    source = replace_once(
-        source,
-        'cp .config "$LOGDIR/final.config"\n',
-        '''write_notebook_prune_profile
-cp .config "$LOGDIR/final.config"
-''',
-        "shared notebook pruning log call",
     )
 
     # git.openwrt.org can intermittently return 502 from hosted runners. Keep
