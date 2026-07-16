@@ -227,7 +227,6 @@ apply_requested_patch_series() {
   grep -Fq 'const char *res;' tools/lib/bpf/libbpf.c
   grep -Fq '#define FUTEX_WAIT_MULTIPLE' include/uapi/linux/futex.h
   grep -Fq 'config CC_OPTIMIZE_FOR_PERFORMANCE_O3' init/Kconfig
-  grep -Fq 'config MBROADWELL' arch/x86/Kconfig.cpu
   grep -Fq 'config POLLY_CLANG' init/Kconfig
   echo "==> Requested patch series applied or confirmed integrated"
 }
@@ -267,8 +266,10 @@ fetch_requested_patch_series
 scripts/config --disable CC_OPTIMIZE_FOR_PERFORMANCE
 scripts/config --disable CC_OPTIMIZE_FOR_SIZE
 scripts/config --enable CC_OPTIMIZE_FOR_PERFORMANCE_O3
-scripts/config --enable MBROADWELL
-scripts/config --disable GENERIC_CPU
+# Keep the generic x86-64 Kconfig choice. The optional universal CPU patch is
+# still applied for its other fixes, but it must not select one vendor/model.
+scripts/config --disable MBROADWELL
+scripts/config --enable GENERIC_CPU
 scripts/config --enable POLLY_CLANG
 
 # ThinLTO is mandatory for the final kernel. These symbols only survive
@@ -280,11 +281,11 @@ scripts/config --enable POLLY_CLANG
         source,
         'assert_config "CONFIG_64BIT=y"\n',
         '''assert_config "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y"
-assert_config "CONFIG_MBROADWELL=y"
 assert_config "CONFIG_POLLY_CLANG=y"
 assert_disabled_or_absent CC_OPTIMIZE_FOR_PERFORMANCE
 assert_disabled_or_absent CC_OPTIMIZE_FOR_SIZE
-assert_disabled_or_absent GENERIC_CPU
+assert_config "CONFIG_GENERIC_CPU=y"
+assert_disabled_or_absent MBROADWELL
 assert_config "CONFIG_64BIT=y"
 ''',
         "requested series assertions",
