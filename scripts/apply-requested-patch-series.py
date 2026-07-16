@@ -172,6 +172,7 @@ apply_requested_patch() {
       patch --batch --forward --strip="$strip" < "$file" \
         | tee "$LOGDIR/${prefix}.p${strip}.apply.log"
       find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
+      normalize_changed_whitespace
       git diff --check | tee "$LOGDIR/${prefix}-diff-check.log"
       echo "applied strip=$strip" | tee "$LOGDIR/${prefix}-result.txt"
       return 0
@@ -200,6 +201,7 @@ apply_requested_patch() {
   fi
 
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
+  normalize_changed_whitespace
   git diff --check | tee "$LOGDIR/${prefix}-diff-check.log"
   echo "ported strip=1 fuzz<=3" | tee "$LOGDIR/${prefix}-result.txt"
 }
