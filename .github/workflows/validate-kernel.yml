@@ -143,8 +143,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: kernelnote-thinlto-v6-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
+          key: kernelnote-thinlto-v7-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
           restore-keys: |
+            kernelnote-thinlto-v7-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v6-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v5-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v4-${{ runner.os }}-${{ runner.arch }}-
@@ -194,6 +195,7 @@ jobs:
       - name: Prepare and build ThinLTO kernel
         run: |
           python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 scripts/apply-kernelzarpon-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
 
@@ -206,6 +208,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          grep -Fx 'Linux.7.1.3.KernelZarpon' logs/kernelrelease.txt
+          grep -Fqx 'Kernel UTS release: Linux.7.1.3.KernelZarpon' logs/kernel-name-policy.txt
+
           shopt -s nullglob
           packages=(artifacts/*.deb)
           if (( ${#packages[@]} == 0 )); then
@@ -223,7 +228,7 @@ jobs:
         if: ${{ env.BUILD_MODE == 'package' }}
         uses: actions/upload-artifact@v4
         with:
-          name: linux-7.1.3-lqx-marie-bore-poc-nap-reflex-adios-zramir-thinlto-debs
+          name: Linux.7.1.3.KernelZarpon-debs
           path: |
             artifacts/*.deb
             artifacts/SHA256SUMS
@@ -241,11 +246,20 @@ jobs:
           shopt -s nullglob
           packages=(artifacts/*.deb)
           short_sha="${RELEASE_TARGET:0:7}"
-          tag="kernelnote-7.1.3-lqx1-poc-nap-reflex-${short_sha}"
-          title="Kernelnote Linux 7.1.3 Liquorix + POC + NAP + REFLEX"
+          tag="Linux.7.1.3.KernelZarpon-${short_sha}"
+          title="Linux.7.1.3.KernelZarpon"
 
           cat > release-notes.md <<EOF
           Experimental AMD64 kernel for LMDE 7 / Debian 13.
+
+          Final kernel identity:
+          - uname -r: Linux.7.1.3.KernelZarpon
+          - /boot/vmlinuz-Linux.7.1.3.KernelZarpon
+          - /lib/modules/Linux.7.1.3.KernelZarpon
+
+          Debian package names are lowercase because Debian package identifiers
+          do not accept uppercase letters. Their installed kernel identity remains
+          exactly Linux.7.1.3.KernelZarpon.
 
           Components:
           - Linux 7.1.3 / Liquorix v7.1.3-lqx1
