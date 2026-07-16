@@ -151,6 +151,18 @@ scripts/config --disable RC_DEVICES
 
     source = replace_once(
         source,
+        '''# BORE enhances the normal CFS/EEVDF path. Liquorix PDS/BMQ must be disabled,
+''',
+        '''source "$ROOT/scripts/notebook-prune-profile.sh"
+apply_notebook_prune_profile
+
+# BORE enhances the normal CFS/EEVDF path. Liquorix PDS/BMQ must be disabled,
+''',
+        "shared notebook pruning apply call",
+    )
+
+    source = replace_once(
+        source,
         'assert_config "CONFIG_CPU_MITIGATIONS=y"\n',
         '''assert_config "CONFIG_MEDIA_SUPPORT=m"
 assert_config "CONFIG_MEDIA_CAMERA_SUPPORT=y"
@@ -178,6 +190,15 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
 
     source = replace_once(
         source,
+        'assert_config "CONFIG_CPU_MITIGATIONS=y"\n',
+        '''verify_notebook_prune_profile
+assert_config "CONFIG_CPU_MITIGATIONS=y"
+''',
+        "shared notebook pruning verification call",
+    )
+
+    source = replace_once(
+        source,
         'cp .config "$LOGDIR/final.config"\n',
         '''{
   echo "Target: HP 240 G4 notebook"
@@ -189,6 +210,15 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
 cp .config "$LOGDIR/final.config"
 ''',
         "media profile provenance",
+    )
+
+    source = replace_once(
+        source,
+        'cp .config "$LOGDIR/final.config"\n',
+        '''write_notebook_prune_profile
+cp .config "$LOGDIR/final.config"
+''',
+        "shared notebook pruning log call",
     )
 
     path.write_text(source, encoding="utf-8")
