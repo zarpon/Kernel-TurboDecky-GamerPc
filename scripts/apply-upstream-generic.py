@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Switch the generated build from Liquorix source to upstream stable Linux."""
+"""Switch the generated build from Liquorix to kernel.org latest stable Linux."""
 
 from __future__ import annotations
 
@@ -24,8 +24,12 @@ def main() -> None:
     source = replace_once(
         source,
         'KERNEL_TAG="v7.1.3-lqx1"\n',
-        'KERNEL_TAG="v7.1.3"\n',
-        "upstream tag",
+        ''': "${KERNEL_VERSION:?latest stable version was not resolved}"
+: "${KERNEL_SERIES:?latest stable series was not resolved}"
+: "${KERNEL_TAG:?latest stable tag was not resolved}"
+: "${KERNEL_DEB_VERSION:?Debian package version was not resolved}"
+''',
+        "dynamic upstream tag",
     )
     source = replace_once(
         source,
@@ -36,17 +40,37 @@ def main() -> None:
     source = replace_once(
         source,
         'echo "==> Cloning official Liquorix source tag $KERNEL_TAG"\n',
-        'echo "==> Cloning official upstream stable source tag $KERNEL_TAG"\n',
+        'echo "==> Cloning kernel.org latest stable source tag $KERNEL_TAG"\n',
         "clone description",
+    )
+    source = replace_once(
+        source,
+        'git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"\n',
+        '''git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
+actual_kernel_version="$(make -s -C "$KERNELDIR" kernelversion)"
+if [[ "$actual_kernel_version" != "$KERNEL_VERSION" ]]; then
+  echo "Cloned kernel version mismatch: $actual_kernel_version != $KERNEL_VERSION" >&2
+  exit 1
+fi
+{
+  echo "Policy: kernel.org latest_stable"
+  echo "Resolved version: $KERNEL_VERSION"
+  echo "Resolved series: $KERNEL_SERIES"
+  echo "Source tag: $KERNEL_TAG"
+  echo "Repository: $KERNEL_REPO"
+  echo "Source URL: ${KERNEL_SOURCE_URL:-unknown}"
+  echo "Release date: ${KERNEL_RELEASE_DATE:-unknown}"
+} | tee "$LOGDIR/kernel-source-policy.txt"
+''',
+        "source version verification",
     )
 
     config_anchor = 'cp "$WORKDIR/liquorix-amd64.config" .config\n'
     config_block = config_anchor + r'''
 # Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
 # two physical cores, four threads, one socket and no NUMA topology.
-# Keep the Liquorix configuration baseline so all performance policy remains
-# aligned with the TurboLQX branch, then remove CPU families and platforms that
-# cannot exist on the target notebook.
+# Keep the established performance configuration baseline, then remove CPU
+# families and platforms that cannot exist on the target notebook.
 scripts/config --enable 64BIT
 scripts/config --enable X86_64
 scripts/config --enable SMP
@@ -103,11 +127,11 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
 
     source = source.replace(
         'KDEB_PKGVERSION="7.1.3-1kernelnote1"',
-        'KDEB_PKGVERSION="7.1.3-1zarpon1"',
+        'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"',
     )
     source = source.replace(
         'echo "==> Kernelnote ThinLTO build completed successfully"',
-        'echo "==> Upstream Zarpon ThinLTO build completed successfully"',
+        'echo "==> Latest-stable upstream Zarpon ThinLTO build completed successfully"',
     )
 
     path.write_text(source, encoding="utf-8")
