@@ -65,6 +65,23 @@ fi
         "source version verification",
     )
 
+    whitespace_anchor = '''    path.write_text("".join(output), encoding="utf-8")
+PY
+}
+'''
+    whitespace_block = '''    # Preserve exactly one final newline while removing extra blank lines at EOF.
+    normalized = "".join(output).rstrip("\\n") + "\\n"
+    path.write_text(normalized, encoding="utf-8")
+PY
+}
+'''
+    source = replace_once(
+        source,
+        whitespace_anchor,
+        whitespace_block,
+        "patched-file whitespace normalization",
+    )
+
     config_anchor = 'cp "$WORKDIR/liquorix-amd64.config" .config\n'
     config_block = config_anchor + r'''
 # Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
