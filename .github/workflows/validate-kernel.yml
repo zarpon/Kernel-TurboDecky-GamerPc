@@ -18,7 +18,7 @@ on:
 permissions:
   contents: write
 
-# Keep this branch independent from the TurboLQX PR and its running workflow.
+# Keep the generic kernel workflow independent from unrelated pull requests.
 concurrency:
   group: zarpon-generic-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -221,7 +221,8 @@ jobs:
           grep -Fx "$KERNEL_RELEASE_NAME" logs/kernelrelease.txt
           grep -Fqx "Resolved version: $KERNEL_VERSION" logs/kernel-source-policy.txt
           grep -Fq 'CONFIG_MBROADWELL=y' logs/final.config
-          grep -Fq 'CONFIG_NR_CPUS=4' logs/final.config
+          grep -Fq 'CONFIG_CPU_SUP_INTEL=y' logs/final.config
+          grep -Fq 'CONFIG_CPU_SUP_AMD=y' logs/final.config
           grep -Fq 'CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y' logs/final.config
           grep -Fq 'CONFIG_POLLY_CLANG=y' logs/final.config
           grep -Fq 'CONFIG_CPU_FREQ_DEFAULT_GOV_REFLEX=y' logs/final.config
@@ -263,7 +264,7 @@ jobs:
           title="$KERNEL_RELEASE_NAME"
 
           cat > release-notes.md <<EOF
-          Latest kernel.org stable Linux ${KERNEL_VERSION} for the HP 240 G4 / Intel Core i3-5005U.
+          Latest kernel.org stable Linux ${KERNEL_VERSION} for generic amd64 Debian and Ubuntu systems.
 
           Stable-source policy:
           - kernel.org latest_stable resolved at build time
@@ -277,10 +278,11 @@ jobs:
           - /boot/vmlinuz-${KERNEL_RELEASE_NAME}
           - /lib/modules/${KERNEL_RELEASE_NAME}
 
-          Target profile:
-          - Intel Broadwell-U, CONFIG_MBROADWELL=y
-          - 2 cores / 4 threads, CONFIG_NR_CPUS=4
-          - non-Intel CPU families, NUMA and five-level paging disabled
+          Hardware profile:
+          - x86-64 desktop, laptop and workstation hardware
+          - Intel and AMD CPU support retained from the upstream configuration
+          - CONFIG_MBROADWELL=y supplies the project's Broadwell-compatible optimization baseline
+          - upstream graphics, storage, networking, audio, camera and multimedia drivers retained
           - Clang 18, O3, Polly and ThinLTO
 
           Patch stack retained from TurboLQX:
