@@ -3,8 +3,7 @@
 Kernel Linux experimental otimizado para entusiastas que querem alto
 desempenho em multimídia e jogos nas distribuições Debian, Ubuntu e derivados.
 O repositório `Kernel-TurboDecky-GamerPc` acompanha a versão estável mais
-recente publicada pelo kernel.org e mantém uma configuração genérica para PCs
-gamers amd64, sem limitar a compilação a um modelo de CPU ou a quatro CPUs.
+recente publicada pelo kernel.org. 
 
 O projeto é experimental. O resultado varia conforme CPU, GPU, firmware,
 driver gráfico, temperatura, jogo e carga de trabalho. Mantenha um kernel
@@ -17,8 +16,7 @@ O pacote publicado é destinado a:
 - Debian, Ubuntu e derivados que usem `.deb`, `dpkg` e `apt`;
 - desktops, computadores portáteis e workstations x86-64/amd64;
 - CPUs Intel, AMD e demais famílias x86-64 habilitadas pela configuração
-  upstream, sem `CONFIG_NR_CPUS=4` e sem uma seleção de microarquitetura
-  Broadwell obrigatória;
+  upstream. 
 - máquinas com qualquer quantidade de núcleos e threads suportada pelo kernel
   upstream e pelos recursos disponíveis no sistema.
 
@@ -96,44 +94,6 @@ DKMS-Clang, Polly, diagnósticos de firmware, três correções minstrel_ht e
 correções ath11k. Cada patch tem fonte, commit ou URL, SHA-256, tentativa de
 aplicação, detecção de integração prévia e relatório de rejeitos.
 
-## Configurações relevantes
-
-```text
-CONFIG_64BIT=y
-CONFIG_X86_64=y
-CONFIG_SMP=y
-CONFIG_CPU_SUP_INTEL=y
-CONFIG_CPU_SUP_AMD=y
-CONFIG_GENERIC_CPU=y
-CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y
-CONFIG_POLLY_CLANG=y
-CONFIG_LTO_CLANG_THIN=y
-CONFIG_SCHED_BORE=y
-CONFIG_SCHED_POC_SELECTOR=y
-CONFIG_CPU_IDLE_GOV_NAP=y
-CONFIG_CPU_FREQ_DEFAULT_GOV_REFLEX=y
-CONFIG_LRU_MARIE=y
-CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y
-CONFIG_ZRAM_MULTI_COMP=y
-```
-
-Não há `CONFIG_NR_CPUS=4`, `CONFIG_MBROADWELL=y` ou desativação forçada de
-famílias AMD no perfil publicado.
-
-## CI e publicação
-
-O workflow compila a partir da branch `main`, usa Clang/LLD, cache de
-compilação e swap temporário no runner. O modo `package` gera imagem, headers,
-módulos, `turbodecky-tuning` e `SHA256SUMS`.
-
-```text
-identidade: linux.<versão>.turbodecky.release
-artefato:   linux.<versão>.turbodecky.release-debs
-Release:    linux.<versão>.turbodecky.release
-```
-
-O monitor verifica periodicamente se o kernel.org publicou uma versão estável
-mais nova, recompila e repete os ports necessários até a Release ser validada.
 
 ## Instalação automática da última Release
 
