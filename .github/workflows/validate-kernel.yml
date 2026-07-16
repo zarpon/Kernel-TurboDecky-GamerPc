@@ -1,4 +1,4 @@
-name: Build latest upstream Zarpon kernel
+name: Build latest upstream TurboDecky GamerPc kernel
 
 on:
   pull_request:
@@ -20,7 +20,7 @@ permissions:
 
 # Keep the generic kernel workflow independent from unrelated pull requests.
 concurrency:
-  group: zarpon-generic-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: turbodecky-generic-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -28,14 +28,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.head_ref == 'experimental/linux-7.1.3-generic-zarpon' && 'package' || 'validate' }}
+      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'validate' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 8G
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPILERCHECK: content
       CCACHE_NOHASHDIR: "true"
       CCACHE_SLOPPINESS: include_file_ctime,include_file_mtime,time_macros
-      KBUILD_BUILD_USER: zarpon
+      KBUILD_BUILD_USER: turbodecky
       KBUILD_BUILD_HOST: github-actions
       KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
       KBUILD_BUILD_VERSION: "1"
@@ -124,11 +124,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: zarpon-upstream-${{ steps.kernel.outputs.version }}-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
+          key: turbodecky-upstream-${{ steps.kernel.outputs.version }}-v3-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
           restore-keys: |
-            zarpon-upstream-${{ steps.kernel.outputs.version }}-v2-${{ runner.os }}-${{ runner.arch }}-
-            zarpon-upstream-${{ steps.kernel.outputs.series }}-v2-${{ runner.os }}-${{ runner.arch }}-
-            zarpon-upstream-
+            turbodecky-upstream-${{ steps.kernel.outputs.version }}-v3-${{ runner.os }}-${{ runner.arch }}-
+            turbodecky-upstream-${{ steps.kernel.outputs.series }}-v3-${{ runner.os }}-${{ runner.arch }}-
+            turbodecky-upstream-
 
       - name: Install build dependencies and Polly
         env:
@@ -220,7 +220,7 @@ jobs:
           set -Eeuo pipefail
           grep -Fx "$KERNEL_RELEASE_NAME" logs/kernelrelease.txt
           grep -Fqx "Resolved version: $KERNEL_VERSION" logs/kernel-source-policy.txt
-          grep -Fq 'CONFIG_MBROADWELL=y' logs/final.config
+          grep -Fq 'CONFIG_GENERIC_CPU=y' logs/final.config
           grep -Fq 'CONFIG_CPU_SUP_INTEL=y' logs/final.config
           grep -Fq 'CONFIG_CPU_SUP_AMD=y' logs/final.config
           grep -Fq 'CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y' logs/final.config
@@ -264,7 +264,7 @@ jobs:
           title="$KERNEL_RELEASE_NAME"
 
           cat > release-notes.md <<EOF
-          Latest kernel.org stable Linux ${KERNEL_VERSION} for generic amd64 Debian and Ubuntu systems.
+          Latest kernel.org stable Linux ${KERNEL_VERSION} for generic amd64 Debian and Ubuntu gaming systems.
 
           Stable-source policy:
           - kernel.org latest_stable resolved at build time
@@ -281,11 +281,11 @@ jobs:
           Hardware profile:
           - x86-64 desktop, laptop and workstation hardware
           - Intel and AMD CPU support retained from the upstream configuration
-          - CONFIG_MBROADWELL=y supplies the project's Broadwell-compatible optimization baseline
+          - CONFIG_GENERIC_CPU=y keeps the build independent of a CPU vendor or model
           - upstream graphics, storage, networking, audio, camera and multimedia drivers retained
           - Clang 18, O3, Polly and ThinLTO
 
-          Patch stack retained from TurboLQX:
+          Performance patch stack:
           Marie LRU, BORE, POC Selector, NAP, REFLEX default CPUFreq,
           ADIOS and ZRAM-IR LZ4 -> ZSTD.
 
@@ -311,6 +311,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: zarpon-upstream-validation-logs
+          name: turbodecky-upstream-validation-logs
           path: logs/
           if-no-files-found: warn
