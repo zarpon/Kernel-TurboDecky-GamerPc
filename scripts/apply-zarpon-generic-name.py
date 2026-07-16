@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set the dynamic generic Zarpon kernel identity and Polly plugin path."""
+"""Set the dynamic generic Zarpon kernel identity and Polly toolchain mode."""
 
 from __future__ import annotations
 
@@ -35,23 +35,68 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
 
 # Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
 ''',
-        '''apply_requested_patch_series
+        r'''apply_requested_patch_series
 
-# The CachyOS Polly patch loads LLVMPolly.so by name. Expose the exact plugin
-# installed by the workflow in the kernel source directory before olddefconfig
-# probes CONFIG_POLLY_CLANG and before compilation starts. Clang/dlopen does not
-# search the current directory for a bare plugin name, so include KERNELDIR in
-# the dynamic-loader search path and prove the same option used by Kconfig works.
-test -n "${LLVM_POLLY_SO:-}"
-test -f "$LLVM_POLLY_SO"
-ln -sfn "$LLVM_POLLY_SO" "$KERNELDIR/LLVMPolly.so"
-export LD_LIBRARY_PATH="$KERNELDIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-printf 'int main(void) { return 0; }\n' | \
-  clang -x c -c -o /dev/null - -mllvm -polly -fplugin=LLVMPolly.so
+# Ubuntu's Clang 18 already registers Polly in libLLVM. Loading LLVMPolly.so on
+# top of that registers the same command-line options twice and aborts the
+# compiler. Prefer the built-in implementation and rewrite the CachyOS Kconfig
+# probe/Makefile flags accordingly. Keep the shared plugin as a fallback for a
+# Clang build that does not contain Polly.
+if printf 'int main(void) { return 0; }\n' | \
+    clang -x c -c -o /dev/null - -mllvm -polly \
+      > "$LOGDIR/polly-builtin-probe.log" 2>&1; then
+  python3 - <<'PY'
+from pathlib import Path
+
+makefile = Path("Makefile")
+lines = makefile.read_text(encoding="utf-8").splitlines(keepends=True)
+changed = False
+for index, line in enumerate(lines):
+    if "KBUILD_CFLAGS" in line and "-fplugin=LLVMPolly.so" in line:
+        lines[index] = line.replace("-fplugin=LLVMPolly.so", "-mllvm -polly")
+        if index + 1 < len(lines) and "-mllvm -polly" in lines[index + 1]:
+            del lines[index + 1]
+        changed = True
+        break
+if not changed:
+    raise SystemExit("Clang Polly Makefile plugin flag was not found")
+makefile.write_text("".join(lines), encoding="utf-8")
+
+kconfig = Path("init/Kconfig")
+text = kconfig.read_text(encoding="utf-8")
+old = "$(cc-option,-mllvm -polly -fplugin=LLVMPolly.so)"
+new = "$(cc-option,-mllvm -polly)"
+if text.count(old) != 1:
+    raise SystemExit(f"Clang Polly Kconfig plugin probe count was {text.count(old)}, expected 1")
+kconfig.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+  {
+    echo "Polly mode: built into Clang"
+    echo "Probe flags: -mllvm -polly"
+    echo "LLVMPolly.so deliberately not loaded to avoid duplicate option registration"
+  } | tee "$LOGDIR/polly-mode.txt"
+  ! grep -Fq -- '-fplugin=LLVMPolly.so' Makefile
+  ! grep -Fq -- '-fplugin=LLVMPolly.so' init/Kconfig
+else
+  test -n "${LLVM_POLLY_SO:-}"
+  test -f "$LLVM_POLLY_SO"
+  ln -sfn "$LLVM_POLLY_SO" "$KERNELDIR/LLVMPolly.so"
+  export LD_LIBRARY_PATH="$KERNELDIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  printf 'int main(void) { return 0; }\n' | \
+    clang -x c -c -o /dev/null - -mllvm -polly -fplugin=LLVMPolly.so \
+      > "$LOGDIR/polly-plugin-probe.log" 2>&1
+  {
+    echo "Polly mode: external LLVMPolly.so plugin"
+    echo "Plugin: $LLVM_POLLY_SO"
+    echo "Probe flags: -mllvm -polly -fplugin=LLVMPolly.so"
+  } | tee "$LOGDIR/polly-mode.txt"
+fi
+
+git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-check.log"
 
 # Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
 ''',
-        "Polly plugin exposure",
+        "Polly toolchain selection",
     )
 
     path.write_text(source, encoding="utf-8")
