@@ -7,18 +7,24 @@ Kernel experimental para o notebook HP 240 G4 com Intel Core i3-5005U, destinado
 O kernel compilado usa exatamente o identificador solicitado:
 
 ```text
-Linux.7.1.3.KernelZarpon
+Linux7.1.3.TurboLQX.lqx1
 ```
+
+O formato é composto por:
+
+- versão do kernel: `7.1.3`;
+- marca: `TurboLQX`;
+- release Liquorix: `lqx1`.
 
 Esse valor é passado diretamente ao Kbuild como `KERNELRELEASE` e será usado em:
 
 - `uname -r`;
-- `/boot/vmlinuz-Linux.7.1.3.KernelZarpon`;
-- `/lib/modules/Linux.7.1.3.KernelZarpon`;
+- `/boot/vmlinuz-Linux7.1.3.TurboLQX.lqx1`;
+- `/lib/modules/Linux7.1.3.TurboLQX.lqx1`;
 - `vermagic` dos módulos;
 - descrições e metadados da compilação.
 
-Os nomes internos dos pacotes Debian são normalizados para minúsculas, por exemplo `linux-image-linux.7.1.3.kernelzarpon`, porque identificadores de pacotes `.deb` não aceitam letras maiúsculas. Isso não altera o nome instalado nem o resultado de `uname -r`.
+Os nomes internos dos pacotes Debian são normalizados para minúsculas, por exemplo `linux-image-linux7.1.3.turbolqx.lqx1`, porque identificadores de pacotes `.deb` não aceitam letras maiúsculas. Isso não altera o nome instalado nem o resultado de `uname -r`.
 
 ## Composição atual
 
@@ -35,7 +41,7 @@ Os nomes internos dos pacotes Debian são normalizados para minúsculas, por exe
 
 ## Padrões do kernel
 
-- `KERNELRELEASE=Linux.7.1.3.KernelZarpon`
+- `KERNELRELEASE=Linux7.1.3.TurboLQX.lqx1`
 - `CONFIG_LOCALVERSION=""`
 - `CONFIG_SCHED_BORE=y`
 - `CONFIG_SCHED_POC_SELECTOR=y`
@@ -143,7 +149,7 @@ Para evitar que o pacote ultrapasse o limite do runner:
 6. ZRAM-IR 1.2
 7. port do NAP 0.5.0
 8. REFLEX CPUFreq 0.3.1 para Linux 7.1, seguido pela integração da escolha Kconfig padrão
-9. política de nome `Linux.7.1.3.KernelZarpon` e normalização dos identificadores Debian
+9. política de nome `Linux7.1.3.TurboLQX.lqx1` e normalização dos identificadores Debian
 
 Todos os patches de terceiros obtidos por checkout Git local são fixados por commit, caminho e SHA-256. O workflow registra rejeitos completos e interrompe antes da compilação quando um port não pode ser resolvido com segurança.
 
