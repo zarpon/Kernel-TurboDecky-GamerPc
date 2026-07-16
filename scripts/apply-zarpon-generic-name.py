@@ -39,10 +39,15 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
 
 # The CachyOS Polly patch loads LLVMPolly.so by name. Expose the exact plugin
 # installed by the workflow in the kernel source directory before olddefconfig
-# probes CONFIG_POLLY_CLANG and before compilation starts.
+# probes CONFIG_POLLY_CLANG and before compilation starts. Clang/dlopen does not
+# search the current directory for a bare plugin name, so include KERNELDIR in
+# the dynamic-loader search path and prove the same option used by Kconfig works.
 test -n "${LLVM_POLLY_SO:-}"
 test -f "$LLVM_POLLY_SO"
 ln -sfn "$LLVM_POLLY_SO" "$KERNELDIR/LLVMPolly.so"
+export LD_LIBRARY_PATH="$KERNELDIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+printf 'int main(void) { return 0; }\n' | \
+  clang -x c -c -o /dev/null - -mllvm -polly -fplugin=LLVMPolly.so
 
 # Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
 ''',
