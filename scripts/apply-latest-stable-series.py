@@ -28,7 +28,7 @@ def main() -> None:
         "already integrated in Linux 7.1.3 or an earlier patch":
             "already integrated in Linux $KERNEL_VERSION or an earlier patch",
         "if curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \\\n":
-            "if curl --user-agent 'Kernelnote-CI/1.0 (+https://github.com/zarpon/Kernelnote)' --fail --location \\\n        --retry 3 --retry-all-errors --retry-delay 2 \\\n",
+            "if curl --user-agent 'TurboDecky-GamerPc-CI/1.0 (+https://github.com/zarpon/Kernel-TurboDecky-GamerPc)' --fail --location \\\n        --retry 3 --retry-all-errors --retry-delay 2 \\\n",
     }
 
     for old, new in replacements.items():
