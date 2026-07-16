@@ -378,7 +378,7 @@ cp .config "$LOGDIR/final.config"
 
 if [[ "$MODE" == "package" ]]; then
   echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"
-  "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.3-1kernelnote1"
+  "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.3-1turbodecky1"
   find "$WORKDIR" -maxdepth 1 -type f -name '*.deb' -exec cp -v {} "$ARTIFACTS/" \;
   "$ROOT/scripts/build-tuning-package.sh"
 else
