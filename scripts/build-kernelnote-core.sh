@@ -304,7 +304,7 @@ scripts/config --disable SCHED_BMQ
 scripts/config --enable SCHED_BORE
 scripts/config --set-val MIN_BASE_SLICE_NS 2000000
 
-# Memory and I/O policy requested for the HP 240 G4 notebook.
+# Memory and I/O policy for responsive desktop and gaming workloads.
 scripts/config --enable LRU_MARIE
 scripts/config --enable LRU_GEN
 scripts/config --enable LRU_GEN_ENABLED
