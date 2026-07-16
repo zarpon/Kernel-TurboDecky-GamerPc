@@ -39,7 +39,12 @@ need find
 need dpkg
 need apt-get
 need sed
+need wc
+need tr
 need mktemp
+
+ARCH="$(dpkg --print-architecture)"
+[ "$ARCH" = amd64 ] || die "esta Release fornece pacotes amd64; arquitetura detectada: $ARCH"
 
 if [ "$(id -u)" -eq 0 ]; then
   run_privileged() { "$@"; }
