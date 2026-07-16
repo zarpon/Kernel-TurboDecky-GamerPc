@@ -248,11 +248,13 @@ fetch_requested_patch_series
 
     source = replace_once(
         source,
-        '''# Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
+'''# Generic amd64 profile: keep the upstream platform, topology and driver
+# choices instead of pruning the build for one computer model.
 ''',
         '''apply_requested_patch_series
 
-# Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
+# Generic amd64 profile: keep the upstream platform, topology and driver
+# choices instead of pruning the build for one computer model.
 ''',
         "requested series apply call",
     )
