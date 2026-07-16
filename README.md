@@ -65,6 +65,19 @@ Os nomes internos dos pacotes Debian são normalizados para minúsculas, por exe
 
 `mitigations=off` reduz a proteção contra vulnerabilidades de CPU e `nowatchdog` remove os detectores de soft-lockup e hard-lockup. São escolhas deliberadas de desempenho.
 
+## Perfil fixo do HP 240 G4
+
+Após a compilação atingir o limite de 360 minutos no run 56, a configuração passou a remover somente código de CPU e plataforma que não pode executar no alvo conhecido:
+
+- Intel Core i3-5005U Broadwell-U, x86-64, um socket, dois núcleos e quatro threads;
+- `CONFIG_NR_CPUS=4`;
+- `CONFIG_CPU_SUP_INTEL=y`, microcode Intel e MCE Intel preservados;
+- NUMA, emulação NUMA, paginação x86 de cinco níveis e MAXSMP desativados;
+- suporte exclusivo a AMD, Hygon, Centaur e Zhaoxin desativado;
+- `CONFIG_X86_NATIVE_CPU` permanece desativado para não otimizar para o runner do GitHub.
+
+Drivers de armazenamento, Intel iGPU, ACPI, USB, entrada, rede, áudio, sistemas de arquivos, initramfs, módulos e headers permanecem inalterados porque o repositório ainda não contém um inventário completo do hardware real.
+
 ## REFLEX como governador padrão
 
 O patch REFLEX 0.3.1 adiciona o governador `reflex` e implementa `cpufreq_default_governor()` condicionado a `CONFIG_CPU_FREQ_DEFAULT_GOV_REFLEX`. A documentação upstream orienta habilitar esse símbolo para torná-lo padrão, mas o patch Linux 7.1 não adiciona a opção à escolha Kconfig de governador padrão. O build completa essa integração antes do `olddefconfig`, compila o REFLEX embutido e valida que somente `CONFIG_CPU_FREQ_DEFAULT_GOV_REFLEX=y` permaneceu selecionado.
@@ -135,6 +148,7 @@ Para evitar que o pacote ultrapasse o limite do runner:
 
 - o timeout explícito foi elevado para 360 minutos;
 - DWARF, BTF e o pacote de símbolos de depuração foram desativados em `validate` e `package`;
+- o perfil fixo Broadwell remove somente código de CPU/plataforma incompatível com o HP 240 G4;
 - ThinLTO, módulos, headers, imagem instalável e símbolos de runtime permanecem;
 - o cache do Clang/ccache usa modo de dependências e reaproveita caches anteriores;
 - a limpeza do runner foi reduzida ao método usado pelo Charcoal, evitando remoções desnecessariamente lentas.
