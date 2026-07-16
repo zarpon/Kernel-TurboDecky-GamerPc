@@ -37,7 +37,7 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
     source = replace_once(
         source,
         'normalize_changed_whitespace() {\n',
-        f'''configure_turbolqx_debian_packaging() {{
+        rf'''configure_kernelzarpon_debian_packaging() {{
   echo "==> Configuring exact {KERNEL_RELEASE} release and Debian-safe package names"
   python3 - <<'PY'
 from pathlib import Path
@@ -90,8 +90,8 @@ PY
     echo "Reason: Debian package names permit only lowercase ASCII letters."
   }} | tee "$LOGDIR/kernel-name-policy.txt"
 
-  git diff --check -- scripts/package/mkdebian scripts/package/builddeb \\
-    | tee "$LOGDIR/08-turbolqx-package-diff-check.log"
+  git diff --check -- scripts/package/mkdebian scripts/package/builddeb \
+    | tee "$LOGDIR/08-kernelzarpon-package-diff-check.log"
   grep -Fq 'packagerelease=' scripts/package/mkdebian
   grep -Fq 'version=${{KERNELRELEASE}}' scripts/package/builddeb
   echo "==> TurboLQX naming policy configured successfully"
@@ -106,7 +106,7 @@ normalize_changed_whitespace() {{
         source,
         'apply_reflex_patch "$REFLEX_PATCH"\n\ncp "$WORKDIR/liquorix-amd64.config" .config\n',
         '''apply_reflex_patch "$REFLEX_PATCH"
-configure_turbolqx_debian_packaging
+configure_kernelzarpon_debian_packaging
 
 cp "$WORKDIR/liquorix-amd64.config" .config
 ''',
