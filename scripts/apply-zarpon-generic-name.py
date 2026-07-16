@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set the exact generic Zarpon kernel identity."""
+"""Set the exact generic Zarpon kernel identity and Polly plugin path."""
 
 from __future__ import annotations
 
@@ -30,6 +30,27 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
 ''',
         "generic Zarpon KERNELRELEASE",
     )
+
+    source = replace_once(
+        source,
+        '''apply_requested_patch_series
+
+# Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
+''',
+        '''apply_requested_patch_series
+
+# The CachyOS Polly patch loads LLVMPolly.so by name. Expose the exact plugin
+# installed by the workflow in the kernel source directory before olddefconfig
+# probes CONFIG_POLLY_CLANG and before compilation starts.
+test -n "${LLVM_POLLY_SO:-}"
+test -f "$LLVM_POLLY_SO"
+ln -sfn "$LLVM_POLLY_SO" "$KERNELDIR/LLVMPolly.so"
+
+# Fixed target: HP 240 G4 with Intel Core i3-5005U (Broadwell-U),
+''',
+        "Polly plugin exposure",
+    )
+
     path.write_text(source, encoding="utf-8")
 
 
