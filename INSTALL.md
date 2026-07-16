@@ -6,10 +6,20 @@ Release não preliminar, localiza automaticamente o asset ZIP
 encontrar. Ao final, corrige dependências com `apt-get -f install` e atualiza o
 GRUB.
 
-## Repositório privado
+## Repositório público
 
-Este repositório é privado. Use um token do GitHub com permissão de leitura do
-conteúdo do repositório e exporte-o antes de executar o comando:
+O repositório é público; o token não é necessário:
+
+```bash
+curl -fsSL \
+  "https://raw.githubusercontent.com/zarpon/Kernelnote/experimental/linux-7.1.3-generic-zarpon/scripts/install-latest-release.sh" \
+  | sh
+```
+
+## Fork privado
+
+Para um fork privado, exporte um token do GitHub com permissão de leitura do
+conteúdo antes de executar o mesmo comando:
 
 ```bash
 export GITHUB_TOKEN='SEU_TOKEN_COM_LEITURA_DO_REPOSITORIO'
@@ -21,19 +31,7 @@ curl -fsSL \
 ```
 
 O mesmo `GITHUB_TOKEN` será usado pelo script para consultar e baixar o asset
-da Release. `GH_TOKEN` também é aceito.
-
-## Repositório público ou fork
-
-Se o repositório for público, o token não é necessário:
-
-```bash
-curl -fsSL \
-  "https://raw.githubusercontent.com/zarpon/Kernelnote/experimental/linux-7.1.3-generic-zarpon/scripts/install-latest-release.sh" \
-  | sh
-```
-
-Para um fork, informe o repositório ao script:
+da Release. `GH_TOKEN` também é aceito. Para selecionar o fork:
 
 ```bash
 export KERNELNOTE_REPOSITORY='seu-usuario/Kernelnote'
