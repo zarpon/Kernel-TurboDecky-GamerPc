@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set the dynamic generic Zarpon kernel identity and Polly toolchain mode."""
+"""Set the dynamic TurboDecky kernel identity and Polly toolchain mode."""
 
 from __future__ import annotations
 
@@ -20,13 +20,12 @@ def patch_core(path: Path) -> None:
         source,
         'MAKE=(make LLVM=1 LLVM_IAS=1)\n',
         ''': "${KERNEL_RELEASE_NAME:?latest stable kernel identity was not resolved}"
-# The universal CPU-optimization patch selects -march=broadwell through
-# CONFIG_MBROADWELL. Never use -march=native, which would target the GitHub
-# runner. KERNELRELEASE controls uname -r, module paths, vermagic, installed
-# image names and Debian package names.
+# Keep the generic x86-64 CPU Kconfig choice and never use -march=native,
+# which would target the GitHub runner. KERNELRELEASE controls uname -r,
+# module paths, vermagic, installed image names and Debian package names.
 MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
 ''',
-        "dynamic Zarpon KERNELRELEASE",
+        "dynamic TurboDecky KERNELRELEASE",
     )
 
     source = replace_once(
@@ -133,7 +132,7 @@ def patch_wrapper(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
 
     old_local = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
-    source = replace_once(source, old_local, "", "generic Zarpon localversion")
+    source = replace_once(source, old_local, "", "generic TurboDecky localversion")
 
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
 printf '%s\\n' "$kernel_release" | tee "$LOGDIR/kernelrelease.txt"
@@ -147,7 +146,7 @@ fi
   exit 1
 fi
 '''
-    source = replace_once(source, emitted, replacement, "generic Zarpon release validation")
+    source = replace_once(source, emitted, replacement, "generic TurboDecky release validation")
     path.write_text(source, encoding="utf-8")
 
 
