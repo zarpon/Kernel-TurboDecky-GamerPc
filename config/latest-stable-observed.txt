@@ -1,0 +1,4 @@
+policy=kernel.org/latest_stable
+last_observed_version=7.1.3
+last_observed_date=2026-07-16
+release_format=linux.<version>.zarpon.r1
