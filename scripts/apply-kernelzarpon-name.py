@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Force the exact KernelZarpon UTS release while keeping Debian package names valid."""
+"""Force the exact TurboLQX UTS release while keeping Debian package names valid."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-KERNEL_RELEASE = "Linux.7.1.3.KernelZarpon"
+KERNEL_RELEASE = "Linux7.1.3.TurboLQX.lqx1"
 PACKAGE_RELEASE = KERNEL_RELEASE.lower()
 
 
@@ -37,7 +37,7 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
     source = replace_once(
         source,
         'normalize_changed_whitespace() {\n',
-        f'''configure_kernelzarpon_debian_packaging() {{
+        f'''configure_turbolqx_debian_packaging() {{
   echo "==> Configuring exact {KERNEL_RELEASE} release and Debian-safe package names"
   python3 - <<'PY'
 from pathlib import Path
@@ -91,26 +91,26 @@ PY
   }} | tee "$LOGDIR/kernel-name-policy.txt"
 
   git diff --check -- scripts/package/mkdebian scripts/package/builddeb \\
-    | tee "$LOGDIR/08-kernelzarpon-package-diff-check.log"
+    | tee "$LOGDIR/08-turbolqx-package-diff-check.log"
   grep -Fq 'packagerelease=' scripts/package/mkdebian
   grep -Fq 'version=${{KERNELRELEASE}}' scripts/package/builddeb
-  echo "==> KernelZarpon naming policy configured successfully"
+  echo "==> TurboLQX naming policy configured successfully"
 }}
 
 normalize_changed_whitespace() {{
 ''',
-        "KernelZarpon packaging function",
+        "TurboLQX packaging function",
     )
 
     source = replace_once(
         source,
         'apply_reflex_patch "$REFLEX_PATCH"\n\ncp "$WORKDIR/liquorix-amd64.config" .config\n',
         '''apply_reflex_patch "$REFLEX_PATCH"
-configure_kernelzarpon_debian_packaging
+configure_turbolqx_debian_packaging
 
 cp "$WORKDIR/liquorix-amd64.config" .config
 ''',
-        "KernelZarpon packaging call",
+        "TurboLQX packaging call",
     )
 
     path.write_text(source, encoding="utf-8")
@@ -122,7 +122,7 @@ def patch_wrapper(path: Path) -> None:
     old_local = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
     if source.count(old_local) != 1:
         raise SystemExit(
-            f"KernelZarpon localversion: expected one {old_local!r} occurrence"
+            f"TurboLQX localversion: expected one {old_local!r} occurrence"
         )
     source = source.replace(old_local, "", 1)
 
@@ -145,7 +145,7 @@ if [[ "$kernel_release" != "$KERNEL_RELEASE_NAME" ]]; then
 fi
 '''
     if source.count(emitted) != 1:
-        raise SystemExit("KernelZarpon kernelrelease validation block not found exactly once")
+        raise SystemExit("TurboLQX kernelrelease validation block not found exactly once")
     source = source.replace(emitted, replacement, 1)
 
     path.write_text(source, encoding="utf-8")
