@@ -22,10 +22,11 @@ def patch_core(path: Path) -> None:
         source,
         'MAKE=(make LLVM=1 LLVM_IAS=1)\n',
         f'''KERNEL_RELEASE_NAME="{KERNEL_RELEASE}"
-# Tune scheduling and instruction selection for Broadwell without enabling a
-# Broadwell-only ISA baseline. KERNELRELEASE controls uname -r, module paths,
-# vermagic, installed image names and Debian package names.
-MAKE=(make LLVM=1 LLVM_IAS=1 KCFLAGS="-mtune=broadwell" KERNELRELEASE="$KERNEL_RELEASE_NAME")
+# The universal CPU-optimization patch selects -march=broadwell through
+# CONFIG_MBROADWELL. Never use -march=native, which would target the GitHub
+# runner. KERNELRELEASE controls uname -r, module paths, vermagic, installed
+# image names and Debian package names.
+MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
 ''',
         "generic Zarpon KERNELRELEASE",
     )
@@ -38,10 +39,6 @@ def patch_wrapper(path: Path) -> None:
     old_local = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
     source = replace_once(source, old_local, "", "generic Zarpon localversion")
 
-    emitted = '''kernel_release="$(${MAKE[@]} -s kernelrelease)"
-'''
-    # The generated wrapper uses quoted array expansion. Match its complete
-    # validation block instead of relying on this sentinel.
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
 printf '%s\\n' "$kernel_release" | tee "$LOGDIR/kernelrelease.txt"
 if ((${#kernel_release} > 64)); then
