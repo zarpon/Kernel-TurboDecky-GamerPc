@@ -134,12 +134,12 @@ cp .config "$LOGDIR/final.config"
     )
 
     source = source.replace(
-        'KDEB_PKGVERSION="7.1.3-1kernelnote1"',
+        'KDEB_PKGVERSION="7.1.3-1turbodecky1"',
         'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"',
     )
     source = source.replace(
         'echo "==> Kernelnote ThinLTO build completed successfully"',
-        'echo "==> Latest-stable upstream Zarpon ThinLTO build completed successfully"',
+        'echo "==> Latest-stable TurboDecky ThinLTO build completed successfully"',
     )
 
     path.write_text(source, encoding="utf-8")
