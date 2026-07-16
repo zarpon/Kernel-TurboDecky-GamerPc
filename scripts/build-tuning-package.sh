@@ -35,7 +35,7 @@ Architecture: all
 Maintainer: Kernelnote <noreply@localhost>
 Depends: procps, udev, systemd | systemd-standalone-tmpfiles
 Recommends: grub2-common
-Description: Runtime and boot defaults for the Kernelnote Liquorix kernel
+Description: Runtime and boot defaults for the Kernelnote generic zarpon kernel
  Sets Marie memory defaults, selects ADIOS, applies the requested Transparent
  Hugepage policy, appends mitigations=off plus nowatchdog to GRUB, and configures
  every new zram device for ZRAM-IR with lz4 priority 0 and zstd priority 1.
