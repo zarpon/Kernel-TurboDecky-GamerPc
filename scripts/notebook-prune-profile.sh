@@ -131,7 +131,7 @@ apply_notebook_prune_profile() {
 
   # Broadwell uses Intel I801 SMBus; retain DesignWare for LPSS/I2C-HID paths.
   notebook_disable_tree_except drivers/i2c/busses \
-    I2C_I801 I2C_DESIGNWARE_CORE I2C_DESIGNWARE_PLATFORM I2C_DESIGNWARE_PCI I2C_SCMI
+    I2C_I801 I2C_CCGX_UCSI I2C_DESIGNWARE_CORE I2C_DESIGNWARE_PLATFORM I2C_DESIGNWARE_PCI I2C_SCMI
   scripts/config --module I2C_I801
   scripts/config --module I2C_DESIGNWARE_PLATFORM
   scripts/config --module I2C_DESIGNWARE_PCI
@@ -188,7 +188,7 @@ verify_notebook_prune_profile() {
   notebook_assert_tree_except drivers/hwmon \
     HWMON SENSORS_CORETEMP SENSORS_ACPI_POWER SENSORS_DRIVETEMP
   notebook_assert_tree_except drivers/i2c/busses \
-    I2C_I801 I2C_DESIGNWARE_CORE I2C_DESIGNWARE_PLATFORM I2C_DESIGNWARE_PCI I2C_SCMI
+    I2C_I801 I2C_CCGX_UCSI I2C_DESIGNWARE_CORE I2C_DESIGNWARE_PLATFORM I2C_DESIGNWARE_PCI I2C_SCMI
   notebook_assert_tree_except drivers/watchdog \
     WATCHDOG WATCHDOG_CORE WATCHDOG_HANDLE_BOOT_ENABLED WATCHDOG_OPEN_TIMEOUT \
     WATCHDOG_NOWAYOUT WATCHDOG_SYSFS ITCO_WDT ITCO_VENDOR_SUPPORT SOFT_WATCHDOG
