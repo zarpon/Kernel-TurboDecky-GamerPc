@@ -97,9 +97,11 @@ scripts/config --disable CPU_SUP_AMD
 scripts/config --disable CPU_SUP_HYGON
 scripts/config --disable CPU_SUP_CENTAUR
 scripts/config --disable CPU_SUP_ZHAOXIN
+# Since Linux 7.1 the x86 microcode Kconfig is unified. CONFIG_MICROCODE is a
+# def_bool selected by the enabled CPU vendor; there are no MICROCODE_INTEL or
+# MICROCODE_AMD symbols. With CPU_SUP_INTEL=y and CPU_SUP_AMD=n this compiles
+# only the Intel loader path required by the Broadwell notebook.
 scripts/config --enable MICROCODE
-scripts/config --enable MICROCODE_INTEL
-scripts/config --disable MICROCODE_AMD
 scripts/config --enable X86_MCE
 scripts/config --enable X86_MCE_INTEL
 scripts/config --disable X86_MCE_AMD
@@ -121,14 +123,12 @@ assert_config "CONFIG_SMP=y"
 assert_config "CONFIG_NR_CPUS=4"
 assert_config "CONFIG_CPU_SUP_INTEL=y"
 assert_config "CONFIG_MICROCODE=y"
-assert_config "CONFIG_MICROCODE_INTEL=y"
 assert_config "CONFIG_X86_MCE=y"
 assert_config "CONFIG_X86_MCE_INTEL=y"
 assert_disabled_or_absent CPU_SUP_AMD
 assert_disabled_or_absent CPU_SUP_HYGON
 assert_disabled_or_absent CPU_SUP_CENTAUR
 assert_disabled_or_absent CPU_SUP_ZHAOXIN
-assert_disabled_or_absent MICROCODE_AMD
 assert_disabled_or_absent X86_MCE_AMD
 assert_disabled_or_absent NUMA
 assert_disabled_or_absent X86_5LEVEL
