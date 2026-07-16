@@ -143,8 +143,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: kernelnote-thinlto-v5-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
+          key: kernelnote-thinlto-v6-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
           restore-keys: |
+            kernelnote-thinlto-v6-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v5-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v4-${{ runner.os }}-${{ runner.arch }}-
             kernelnote-thinlto-v3-${{ runner.os }}-${{ runner.arch }}-
@@ -192,6 +193,7 @@ jobs:
 
       - name: Prepare and build ThinLTO kernel
         run: |
+          python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
 
@@ -221,7 +223,7 @@ jobs:
         if: ${{ env.BUILD_MODE == 'package' }}
         uses: actions/upload-artifact@v4
         with:
-          name: linux-7.1.3-lqx-marie-bore-poc-nap-adios-zramir-thinlto-debs
+          name: linux-7.1.3-lqx-marie-bore-poc-nap-reflex-adios-zramir-thinlto-debs
           path: |
             artifacts/*.deb
             artifacts/SHA256SUMS
@@ -239,8 +241,8 @@ jobs:
           shopt -s nullglob
           packages=(artifacts/*.deb)
           short_sha="${RELEASE_TARGET:0:7}"
-          tag="kernelnote-7.1.3-lqx1-poc-2.6.2r2-nap-0.5.0-${short_sha}"
-          title="Kernelnote Linux 7.1.3 Liquorix + POC + NAP"
+          tag="kernelnote-7.1.3-lqx1-poc-nap-reflex-${short_sha}"
+          title="Kernelnote Linux 7.1.3 Liquorix + POC + NAP + REFLEX"
 
           cat > release-notes.md <<EOF
           Experimental AMD64 kernel for LMDE 7 / Debian 13.
@@ -251,10 +253,15 @@ jobs:
           - BORE 6.8.0-rc1
           - POC Selector 2.6.2r2, native Linux 7.1 patch
           - NAP CPUIdle governor 0.5.0, ported from the stable Linux 6.18.3 patch
+          - REFLEX CPUFreq governor 0.3.1, native Linux 7.1 patch and kernel default
           - ADIOS 3.2.0
           - ZRAM-IR 1.2 with LZ4 -> ZSTD
           - Clang/LLVM ThinLTO
           - mitigations=off nowatchdog cpuidle.governor=nap
+
+          REFLEX is built in and selected by CONFIG_CPU_FREQ_DEFAULT_GOV_REFLEX=y.
+          The existing intel_pstate=disable/amd_pstate=disable policy keeps an
+          external CPUFreq driver path available on the target notebook.
 
           DWARF/BTF debug information is intentionally disabled to keep the
           hosted build and package size practical. The kernel image, modules,
