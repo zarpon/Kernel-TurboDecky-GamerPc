@@ -99,6 +99,32 @@ git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-ch
         "Polly toolchain selection",
     )
 
+    # git.openwrt.org can intermittently return 502 from hosted runners. Keep
+    # each user-supplied URL as the first candidate and add the official GitHub
+    # mirror of the exact same OpenWrt commit as a deterministic fallback.
+    openwrt_commit = "0ff1553bd731c0db28043fc9caab90bdc32587f3"
+    openwrt_paths = (
+        "package/kernel/mac80211/patches/subsys/302-mac80211-minstrel_ht-fix-MINSTREL_FRAC-macro.patch",
+        "package/kernel/mac80211/patches/subsys/303-mac80211-minstrel_ht-reduce-fluctuations-in-rate-pro.patch",
+        "package/kernel/mac80211/patches/subsys/304-mac80211-minstrel_ht-rework-rate-downgrade-code-and-.patch",
+        "package/kernel/mac80211/patches/ath11k/910-ath11k-fix-remapped-ce-accessing-issue-on-64bit-OS.patch",
+    )
+    for patch_path in openwrt_paths:
+        primary = (
+            "https://git.openwrt.org/openwrt/openwrt/plain/"
+            f"{patch_path}?id={openwrt_commit}"
+        )
+        mirror = (
+            "https://raw.githubusercontent.com/openwrt/openwrt/"
+            f"{openwrt_commit}/{patch_path}"
+        )
+        source = replace_once(
+            source,
+            f'"{primary}"',
+            f'"{primary}" \\' + "\n    " + f'"{mirror}"',
+            f"OpenWrt mirror for {Path(patch_path).name}",
+        )
+
     path.write_text(source, encoding="utf-8")
 
 
