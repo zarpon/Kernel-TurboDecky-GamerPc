@@ -99,6 +99,33 @@ git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-ch
         "Polly toolchain selection",
     )
 
+    source = replace_once(
+        source,
+        '# ThinLTO is mandatory for the final kernel. These symbols only survive\n',
+        '''source "$ROOT/scripts/notebook-prune-profile.sh"
+apply_notebook_prune_profile
+
+# ThinLTO is mandatory for the final kernel. These symbols only survive
+''',
+        "shared notebook pruning apply call",
+    )
+    source = replace_once(
+        source,
+        'assert_config "CONFIG_CPU_MITIGATIONS=y"\n',
+        '''verify_notebook_prune_profile
+assert_config "CONFIG_CPU_MITIGATIONS=y"
+''',
+        "shared notebook pruning verification call",
+    )
+    source = replace_once(
+        source,
+        'cp .config "$LOGDIR/final.config"\n',
+        '''write_notebook_prune_profile
+cp .config "$LOGDIR/final.config"
+''',
+        "shared notebook pruning log call",
+    )
+
     # git.openwrt.org can intermittently return 502 from hosted runners. Keep
     # each user-supplied URL as the first candidate and add the official GitHub
     # mirror of the exact same OpenWrt commit as a deterministic fallback.
