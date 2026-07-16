@@ -92,6 +92,11 @@ scripts/config --enable 64BIT
 scripts/config --enable X86_64
 scripts/config --enable SMP
 scripts/config --set-val NR_CPUS 4
+# CPU vendor symbols default to y and are only user-selectable when the
+# PROCESSOR_SELECT menu is enabled. Make the menu explicit before disabling
+# non-Intel vendors, otherwise olddefconfig silently restores their defaults.
+scripts/config --enable EXPERT
+scripts/config --enable PROCESSOR_SELECT
 scripts/config --enable CPU_SUP_INTEL
 scripts/config --disable CPU_SUP_AMD
 scripts/config --disable CPU_SUP_HYGON
@@ -121,6 +126,8 @@ scripts/config --disable X86_INTEL_MID
 assert_config "CONFIG_X86_64=y"
 assert_config "CONFIG_SMP=y"
 assert_config "CONFIG_NR_CPUS=4"
+assert_config "CONFIG_EXPERT=y"
+assert_config "CONFIG_PROCESSOR_SELECT=y"
 assert_config "CONFIG_CPU_SUP_INTEL=y"
 assert_config "CONFIG_MICROCODE=y"
 assert_config "CONFIG_X86_MCE=y"
