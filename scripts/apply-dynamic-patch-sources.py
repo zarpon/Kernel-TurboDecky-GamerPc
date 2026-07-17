@@ -94,12 +94,9 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         "patch lock preservation",
     )
 
-    # Files materialized by the resolver.
     text = replace_assignment(text, "LIQUORIX_CONFIG_URL", file_url(component(lock, "liquorix_config")))
     text = replace_assignment(text, "ADIOS_URL", file_url(component(lock, "adios")))
 
-    # Repositories are local immutable snapshots. Existing fetch/show functions
-    # remain unchanged and therefore continue validating the selected blobs.
     for prefix, name in (("INFINITY", "infinity"), ("MARIE", "marie"), ("REFLEX", "reflex")):
         record = component(lock, name)
         text = replace_assignment(text, f"{prefix}_REPO", repo_value(record))
@@ -125,7 +122,6 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         "dynamic core versions",
     )
 
-    # Remove exact-version assumptions while retaining structural validation.
     replacements = {
         'grep -Fq \'Subject: [PATCH] linux7.1-rc5-lru_marie-0.7.7\' "$MARIE_PATCH"':
             'grep -Fq \'lru_marie\' "$MARIE_PATCH"',
@@ -140,8 +136,6 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         if old in text:
             text = text.replace(old, new)
 
-    # Prefer the locally locked requested-series file, while preserving the
-    # original remote candidates as diagnostics/fallbacks.
     for name, (output, prefix) in REQUESTED.items():
         component(lock, name)
         anchor = f'"$REQUESTED_SERIES_DIR/{output}" "{prefix}" \\\n'
@@ -155,7 +149,6 @@ def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
     if "PATCH_ZRAM_IR_VERSION=" in text and "$RESOLVED_PATCH_ROOT/repos/" in text:
         return text
 
-    # These assignments live inside the wrapper's generated Python string.
     for prefix, name in (("ZRAM_IR", "zram_ir"), ("POC", "poc"), ("NAP", "nap"), ("VRAM_PATCH", "vram")):
         record = component(lock, name)
         repo_var = f"{prefix}_REPO"
@@ -174,13 +167,16 @@ def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
         "nap": project_version(component(lock, "nap"), "unknown"),
     }
     anchor = 'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"\n'
-    version_block = (
-        anchor
-        + f'PATCH_ZRAM_IR_VERSION="{versions["zram_ir"]}"\n'
+    position = text.find(anchor)
+    if position < 0:
+        raise RewriteError("dynamic wrapper versions: NAP patch assignment is missing")
+    insertion = (
+        f'PATCH_ZRAM_IR_VERSION="{versions["zram_ir"]}"\n'
         + f'PATCH_POC_VERSION="{versions["poc"]}"\n'
         + f'PATCH_NAP_VERSION="{versions["nap"]}"\n'
     )
-    text = replace_once(text, anchor, version_block, "dynamic wrapper versions")
+    position += len(anchor)
+    text = text[:position] + insertion + text[position:]
 
     replacements = {
         "grep -Fq '#define ZRAM_IR_VERSION \"1.2\"' drivers/block/zram/zram_drv.c":
