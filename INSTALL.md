@@ -1,9 +1,15 @@
 # Instalação da última Release
 
 O instalador `scripts/install-latest-release.sh` consulta a última GitHub
-Release não preliminar, localiza o asset ZIP `turbodecky-linux-*.zip`, valida o
-arquivo, descompacta-o e instala todos os pacotes `.deb`. Ao final, corrige
-dependências com `apt-get -f install` e atualiza o GRUB.
+Release não preliminar e procura primeiro o asset ZIP
+`turbodecky-linux-*.zip`. Quando não existe nenhum ZIP, ele localiza e baixa
+todos os assets `.deb` publicados na mesma Release.
+
+Antes da instalação, o script valida a arquitetura declarada nos pacotes,
+rejeita nomes inválidos ou pacotes duplicados, aplica permissões `0755` aos
+diretórios temporários e `0644` aos arquivos `.deb`, e calcula a ordem de
+instalação usando os campos `Pre-Depends`, `Depends` e `Provides`. Ao final,
+corrige dependências externas com `apt-get -f install` e atualiza o GRUB.
 
 ## Comando rápido
 
@@ -43,8 +49,8 @@ curl -fsSL \
   | sh
 ```
 
-`GH_TOKEN` também é aceito. O token é usado para consultar a API e baixar o
-asset da Release.
+`GH_TOKEN` também é aceito. O token é usado para consultar a API e baixar os
+assets da Release pela API do GitHub.
 
 ## Após instalar
 
