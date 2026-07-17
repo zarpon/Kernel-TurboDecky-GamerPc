@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -32,6 +35,71 @@ REQUESTED = {
 
 class RewriteError(RuntimeError):
     pass
+
+
+def run(command: list[str], *, cwd: Path | None = None, env: dict[str, str] | None = None) -> str:
+    result = subprocess.run(
+        command, cwd=cwd, env=env, check=False, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if result.returncode != 0:
+        raise RewriteError(
+            f"command failed ({result.returncode}): {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+    return result.stdout.strip()
+
+
+def materialize_locked_repositories(lock_path: Path, lock: dict[str, Any]) -> dict[str, Any]:
+    """Replace promisor snapshots with tiny, fully self-contained Git repos."""
+    root = lock_path.parent
+    materialized_root = root / "materialized-repos"
+    shutil.rmtree(materialized_root, ignore_errors=True)
+    materialized_root.mkdir(parents=True, exist_ok=True)
+    old_repo_dirs: set[Path] = set()
+
+    for name, record in lock.get("components", {}).items():
+        if record.get("kind") not in {"git_patch", "git_file"}:
+            continue
+        output = root / str(record["output"])
+        if not output.is_file() or output.stat().st_size == 0:
+            raise RewriteError(f"locked bytes are missing for {name}: {output}")
+        path = str(record["path"])
+        destination = materialized_root / re.sub(r"[^A-Za-z0-9._-]+", "-", name)
+        destination.mkdir(parents=True)
+        run(["git", "init", "--quiet", "--initial-branch=turbodecky-snapshot", str(destination)])
+        run(["git", "config", "user.name", "TurboDecky Patch Resolver"], cwd=destination)
+        run(["git", "config", "user.email", "noreply@localhost"], cwd=destination)
+        target = destination / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(output.read_bytes())
+        run(["git", "add", "--", path], cwd=destination)
+        environment = os.environ.copy()
+        environment.update({
+            "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+            "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z",
+        })
+        run(["git", "commit", "--quiet", "-m", f"Snapshot {name}"], cwd=destination, env=environment)
+        snapshot_commit = run(["git", "rev-parse", "HEAD"], cwd=destination)
+        run(["git", "update-ref", "refs/heads/turbodecky-snapshot", snapshot_commit], cwd=destination)
+
+        old_repo = record.get("repo_dir")
+        if old_repo:
+            old_repo_dirs.add((root / str(old_repo)).resolve())
+        record.setdefault("upstream_commit", record.get("commit"))
+        record["snapshot_commit"] = snapshot_commit
+        record["commit"] = snapshot_commit
+        record["repo_dir"] = str(destination.relative_to(root))
+
+    lock_path.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    materialized_resolved = materialized_root.resolve()
+    root_resolved = root.resolve()
+    for old_repo in old_repo_dirs:
+        if old_repo == materialized_resolved or materialized_resolved in old_repo.parents:
+            continue
+        if root_resolved in old_repo.parents and old_repo.exists():
+            shutil.rmtree(old_repo, ignore_errors=True)
+    return lock
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -101,7 +169,9 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         record = component(lock, name)
         text = replace_assignment(text, f"{prefix}_REPO", repo_value(record))
         if f"{prefix}_COMMIT=" in text:
-            text = replace_assignment(text, f"{prefix}_COMMIT", str(record["commit"]))
+            text = replace_assignment(
+                text, f"{prefix}_COMMIT", str(record.get("snapshot_commit", record["commit"]))
+            )
         if f"{prefix}_PATCH_PATH=" in text:
             text = replace_assignment(text, f"{prefix}_PATCH_PATH", str(record["path"]))
         if prefix == "INFINITY" and "INFINITY_BRANCH=" in text:
@@ -146,7 +216,7 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
 
 
 def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
-    if "PATCH_ZRAM_IR_VERSION=" in text and "$RESOLVED_PATCH_ROOT/repos/" in text:
+    if "PATCH_ZRAM_IR_VERSION=" in text and "$RESOLVED_PATCH_ROOT/" in text:
         return text
 
     for prefix, name in (("ZRAM_IR", "zram_ir"), ("POC", "poc"), ("NAP", "nap"), ("VRAM_PATCH", "vram")):
@@ -157,7 +227,9 @@ def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
         if repo_var in text:
             text = replace_assignment(text, repo_var, repo_value(record))
         if commit_var in text:
-            text = replace_assignment(text, commit_var, str(record["commit"]))
+            text = replace_assignment(
+                text, commit_var, str(record.get("snapshot_commit", record["commit"]))
+            )
         if path_var in text:
             text = replace_assignment(text, path_var, str(record["path"]))
 
@@ -215,6 +287,7 @@ def main() -> None:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     try:
         validate_lock(lock)
+        lock = materialize_locked_repositories(lock_path, lock)
         core = patch_core(core_path.read_text(encoding="utf-8"), lock)
         wrapper = patch_wrapper(wrapper_path.read_text(encoding="utf-8"), lock)
     except RewriteError as exc:
