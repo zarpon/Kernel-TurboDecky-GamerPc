@@ -97,8 +97,6 @@ def snapshot_repo(repo: str, ref: str, destination: Path) -> str:
     commit = run(["git", "-C", str(destination), "rev-parse", "FETCH_HEAD"], capture=True)
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ResolverError(f"invalid resolved commit for {repo}@{ref}: {commit}")
-    # Advertise the immutable snapshot so later local partial clones do not
-    # depend on upload-pack allowing requests for an unadvertised object ID.
     run([
         "git", "-C", str(destination), "update-ref",
         "refs/heads/turbodecky-snapshot", commit,
@@ -117,12 +115,12 @@ def list_tree(repo_dir: Path, commit: str) -> list[str]:
 def read_git_blob(
     repo_dir: Path, commit: str, path: str, *, max_symlinks: int = 8
 ) -> tuple[bytes, str]:
-    """Read a tree path, following repository-relative Git symlinks safely."""
+    """Read a tree path and safely follow internal patch indirections."""
     current = path
     visited: set[str] = set()
     for _ in range(max_symlinks + 1):
         if current in visited:
-            raise ResolverError(f"symlink loop while resolving {path} at {current}")
+            raise ResolverError(f"patch indirection loop while resolving {path} at {current}")
         visited.add(current)
         listing = run(
             ["git", "-C", str(repo_dir), "ls-tree", commit, "--", current],
@@ -148,19 +146,31 @@ def read_git_blob(
                 f"{result.stderr.decode(errors='replace')}"
             )
         data = result.stdout
-        if mode != "120000":
-            if obj_type != "blob":
-                raise ResolverError(f"tree path {current} is not a blob: {obj_type}")
-            return data, current
+        if obj_type != "blob":
+            raise ResolverError(f"tree path {current} is not a blob: {obj_type}")
 
-        target = data.decode("utf-8", errors="strict").strip()
-        if not target or target.startswith("/"):
-            raise ResolverError(f"unsafe Git symlink {current} -> {target!r}")
+        target: str | None = None
+        if mode == "120000":
+            target = data.decode("utf-8", errors="strict").strip()
+        elif len(data) <= 4096:
+            candidate = data.decode("utf-8", errors="replace").strip()
+            if (
+                candidate
+                and "\n" not in candidate
+                and not candidate.startswith(("/", "From ", "diff --git "))
+                and candidate.lower().endswith((".patch", ".diff"))
+            ):
+                target = candidate
+
+        if target is None:
+            return data, current
+        if target.startswith("/"):
+            raise ResolverError(f"unsafe Git patch indirection {current} -> {target!r}")
         resolved = posixpath.normpath(posixpath.join(posixpath.dirname(current), target))
         if resolved == ".." or resolved.startswith("../"):
-            raise ResolverError(f"Git symlink escapes repository: {current} -> {target}")
+            raise ResolverError(f"Git patch indirection escapes repository: {current} -> {target}")
         current = resolved
-    raise ResolverError(f"too many Git symlinks while resolving {path}")
+    raise ResolverError(f"too many Git patch indirections while resolving {path}")
 
 
 def sha256(data: bytes) -> str:
@@ -172,7 +182,10 @@ def validate_patch(data: bytes, component: str, markers: list[str]) -> None:
         raise ResolverError(f"empty patch selected for {component}")
     lines = data.splitlines()
     if not any(line.startswith(PATCH_PREFIXES) for line in lines):
-        raise ResolverError(f"selected source for {component} is not a unified/email patch")
+        preview = data[:160].decode("utf-8", errors="replace")
+        raise ResolverError(
+            f"selected source for {component} is not a unified/email patch; preview={preview!r}"
+        )
     text = data.decode("utf-8", errors="replace")
     for marker in markers:
         if marker not in text:
@@ -232,43 +245,6 @@ def match_paths(paths: list[str], patterns: list[str], values: dict[str, str]) -
         pattern = template.format(**values)
         selected.update(path for path in paths if fnmatch.fnmatch(path, pattern))
     return sorted(selected)
-
-
-def choose_git_path(
-    component: str,
-    spec: dict[str, Any],
-    paths: list[str],
-    kernel: KernelVersion,
-    series_text: str,
-) -> tuple[str, str]:
-    values = {"kernel_version": kernel.text, "series": series_text}
-    exact = match_paths(paths, spec.get("exact_globs", []), values)
-    mode = "exact"
-    candidates = exact
-    if not candidates:
-        if spec.get("require_exact_series", False):
-            raise ResolverError(f"no exact compatible path found for {component} and Linux {series_text}")
-        candidates = match_paths(paths, spec.get("fallback_globs", []), values)
-        mode = "fallback"
-    if not candidates:
-        raise ResolverError(f"no patch path found for {component}")
-
-    compatible = [
-        path for path in candidates
-        if compatibility_score(extract_kernel_target(path), kernel)[0] > 0
-    ]
-    if compatible:
-        candidates = compatible
-    selected = max(
-        candidates,
-        key=lambda path: candidate_score(path, kernel, spec.get("project_version_regex")),
-    )
-    target = extract_kernel_target(selected)
-    if spec.get("require_exact_series", False) and target and target.series != kernel.series:
-        raise ResolverError(
-            f"{component} selected incompatible kernel target {target.text} for Linux {series_text}"
-        )
-    return selected, mode
 
 
 def fetch_url(url: str, attempts: int = 4) -> bytes:
@@ -341,7 +317,7 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                 repo = spec["repo"]
                 refs = [spec.get("ref", "main"), *spec.get("fallback_refs", [])]
                 values = {"kernel_version": kernel.text, "series": series_text}
-                options: list[tuple[tuple[Any, ...], Path, str, str, str]] = []
+                options: list[tuple[tuple[Any, ...], Path, str, str, str, str]] = []
                 ref_errors: list[str] = []
 
                 for ref_index, ref in enumerate(dict.fromkeys(refs)):
@@ -366,12 +342,33 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                             target = extract_kernel_target(candidate_path)
                             if compatibility_score(target, kernel)[0] <= 0:
                                 continue
+                            try:
+                                candidate_data, resolved_path = read_git_blob(
+                                    repo_path, commit, candidate_path
+                                )
+                                if kind == "git_patch":
+                                    validate_patch(
+                                        candidate_data,
+                                        component,
+                                        list(spec.get("required_markers", [])),
+                                    )
+                            except ResolverError as exc:
+                                ref_errors.append(f"{ref}:{candidate_path}: {exc}")
+                                continue
                             base_score = candidate_score(
                                 candidate_path, kernel, spec.get("project_version_regex")
                             )
                             score = (*base_score[:-1], -ref_index, candidate_path)
                             options.append(
-                                (score, repo_path, commit, ref, mode, candidate_path)
+                                (
+                                    score,
+                                    repo_path,
+                                    commit,
+                                    ref,
+                                    mode,
+                                    candidate_path,
+                                    resolved_path,
+                                )
                             )
 
                 if not options:
@@ -382,14 +379,21 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                         f"{series_text}: {detail}"
                     )
 
-                _, repo_path, commit, ref, mode, selected = max(options, key=lambda item: item[0])
+                _, repo_path, commit, ref, mode, selected, resolved_path = max(
+                    options, key=lambda item: item[0]
+                )
                 target = extract_kernel_target(selected)
                 if spec.get("require_exact_series", False) and target and target.series != kernel.series:
                     raise ResolverError(
                         f"{component} selected incompatible kernel target {target.text} "
                         f"for Linux {series_text}"
                     )
-                data, resolved_path = read_git_blob(repo_path, commit, selected)
+                data, confirmed_path = read_git_blob(repo_path, commit, selected)
+                if confirmed_path != resolved_path:
+                    raise ResolverError(
+                        f"resolved path changed during selection for {component}: "
+                        f"{resolved_path} != {confirmed_path}"
+                    )
                 if kind == "git_patch":
                     validate_patch(data, component, list(spec.get("required_markers", [])))
                 write_bytes(output_path, data)
