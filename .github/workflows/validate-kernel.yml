@@ -210,7 +210,7 @@ jobs:
           python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
           python3 -m py_compile scripts/apply-*.py scripts/resolve-latest-stable.py
-          chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh
+          chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
 
       - name: Verify Infinity v3 integration
