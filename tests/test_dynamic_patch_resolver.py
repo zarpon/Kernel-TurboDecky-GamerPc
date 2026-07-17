@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -102,6 +103,7 @@ class ResolverTests(unittest.TestCase):
             self.assertEqual(lock["components"]["nap"]["selection"], "fallback")
             self.assertEqual((output / "files/fixed.patch").read_text(), raw.read_text())
 
+            # The snapshot must be usable as an immutable local Git remote.
             record = lock["components"]["marie"]
             clone = tmp / "consumer"
             run("git", "init", "-q", str(clone))
@@ -109,6 +111,7 @@ class ResolverTests(unittest.TestCase):
             run("git", "-C", str(clone), "fetch", "--depth=1", "origin", record["commit"])
             shown = run("git", "-C", str(clone), "show", f"FETCH_HEAD:{record['path']}").stdout
             self.assertIn("lru_marie 0.8.0", shown)
+
 
     def test_fallback_ref_restores_exact_series(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
