@@ -144,8 +144,8 @@ apply_adios_patch() {
     )
     source = replace_once(
         source,
-        'apply_infinity_patch "$INFINITY_PATCH"\n',
-        'apply_infinity_patch "$INFINITY_PATCH"\napply_cgroup_vram_patch "$CGROUP_VRAM_PATCH"\n',
+        'apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"\n',
+        'apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"\napply_cgroup_vram_patch "$CGROUP_VRAM_PATCH"\n',
         "VRAM apply call",
     )
     source = replace_once(
