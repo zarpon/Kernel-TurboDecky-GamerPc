@@ -77,6 +77,12 @@ Esse valor é usado por `uname -r`, `vermagic`, `/boot/vmlinuz-*`,
 `/lib/modules/*` e pelos nomes dos pacotes Debian. A versão, série, tag, data
 e origem da fonte ficam registradas nos logs e nas notas da Release.
 
+Durante `bindeb-pkg`, o `depmod` do kmod exige que o argumento de versão comece
+por um dígito. Como a identidade pública começa por `linux.`, o workflow cria
+um alias numérico temporário somente para gerar os mapas de dependências e o
+remove ao terminar; o `uname -r`, os módulos instalados e os pacotes mantêm o
+nome TurboDecky completo.
+
 Fonte: [Linux stable](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git).
 O build clona a tag `v<versão>` e confirma a versão pelo Makefile antes de
 aplicar qualquer patch.
