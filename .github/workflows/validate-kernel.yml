@@ -151,7 +151,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential ccache clang-18 cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
             kmod libdw-dev libelf-dev libssl-dev lld-18 llvm-18 llvm-18-dev \
-            pahole patchutils python3 rsync xz-utils zstd
+            pahole patchutils python3 rsync unzip xz-utils zip zstd
           sudo apt-get install -y --no-install-recommends libpolly-18-dev
 
           dpkg-query -W -f='${binary:Package} ${Version}\n' \
@@ -248,6 +248,8 @@ jobs:
             cd artifacts
             sha256sum -- *.deb > SHA256SUMS
             sha256sum --check SHA256SUMS
+            zip -q -9 "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip" -- *.deb SHA256SUMS
+            unzip -tq "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip"
           )
           ls -lh artifacts
           cat artifacts/SHA256SUMS
@@ -260,6 +262,7 @@ jobs:
           path: |
             artifacts/*.deb
             artifacts/SHA256SUMS
+            artifacts/turbodecky-linux-*.zip
           if-no-files-found: error
           compression-level: 0
 
@@ -273,6 +276,9 @@ jobs:
           set -Eeuo pipefail
           shopt -s nullglob
           packages=(artifacts/*.deb)
+          archive="artifacts/turbodecky-linux-${KERNEL_RELEASE_NAME}.zip"
+          test -s "$archive"
+          release_assets=("${packages[@]}" artifacts/SHA256SUMS "$archive")
           short_sha="${RELEASE_TARGET:0:7}"
           tag="${KERNEL_RELEASE_NAME}-${short_sha}"
           title="$KERNEL_RELEASE_NAME"
@@ -314,9 +320,9 @@ jobs:
           EOF
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" "${packages[@]}" artifacts/SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
+            gh release upload "$tag" "${release_assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$tag" "${packages[@]}" artifacts/SHA256SUMS \
+            gh release create "$tag" "${release_assets[@]}" \
               --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" \
               --title "$title" --notes-file release-notes.md
           fi
