@@ -68,7 +68,7 @@ normalize_changed_whitespace() {
 
     source = replace_once(
         source,
-        'apply_bore_patch() {\n',
+        'apply_infinity_patch() {\n',
         r'''apply_reflex_patch() {
   local file="$1" status=0
 
@@ -148,7 +148,7 @@ PY
   echo "==> REFLEX 0.3.1 patch and default-governor integration applied successfully"
 }
 
-apply_bore_patch() {
+apply_infinity_patch() {
 ''',
         "REFLEX apply function",
     )
@@ -215,12 +215,9 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
 
 def patch_wrapper(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    old = '-kn-marie-bore-poc-nap-adios-zir-lto'
-    new = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
-    if new in source:
-        return
-    source = replace_once(source, old, new, "REFLEX local version")
-    path.write_text(source, encoding="utf-8")
+    expected = '-kn-marie-infinity-poc-nap-rfx-adios-zir-lto'
+    if expected not in source:
+        raise SystemExit("REFLEX local version anchor is missing from build wrapper")
 
 
 def main() -> None:
