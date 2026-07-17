@@ -51,7 +51,8 @@ REQUESTED_SERIES_DIR="$PATCHDIR/requested-series"
         --connect-timeout 30 --max-time 600 "$url" -o "$output.tmp" \
         >> "$LOGDIR/${prefix}-fetch-attempts.log" 2>&1 && \
         test -s "$output.tmp" && \
-        grep -Eq '^(From [0-9a-f]{40} |diff --git a/)' "$output.tmp"; then
+        grep -Eq '^(From [0-9a-f]{40} |From: |diff --git a/|--- (a/|/dev/null))' \
+          "$output.tmp"; then
       mv "$output.tmp" "$output"
       {
         echo "Component: $label"
