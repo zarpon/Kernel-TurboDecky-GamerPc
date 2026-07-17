@@ -152,10 +152,6 @@ def patch_wrapper(path: Path) -> None:
     old_local = '-kn-marie-infinity-poc-nap-rfx-adios-zir-lto'
     source = replace_once(source, old_local, "", "generic TurboDecky localversion")
 
-    emitted = '''kernel_release="$(${MAKE[@]} -s kernelrelease)"
-'''
-    # Preserve the exact emitted wrapper text instead of executing the shell
-    # expression while this Python transformer is running.
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
 printf '%s\\n' "$kernel_release" | tee "$LOGDIR/kernelrelease.txt"
 if ((${#kernel_release} > 64)); then
