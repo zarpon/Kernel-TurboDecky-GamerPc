@@ -119,7 +119,9 @@ curl -fsSL \
   | sh
 ```
 
-O script consulta `/releases/latest`, escolhe o asset
-`turbodecky-linux-*.zip`, valida e descompacta todos os `.deb`, instala-os com
-`dpkg`, corrige dependências com `apt-get -f install` e atualiza o GRUB. As
-instruções completas estão em [INSTALL.md](INSTALL.md).
+O script consulta `/releases/latest` e prefere o asset
+`turbodecky-linux-*.zip`. Se a Release não tiver nenhum ZIP, ele baixa todos os
+assets `.deb`. Em ambos os modos, valida os pacotes e a arquitetura, normaliza
+permissões, calcula a ordem de instalação pelas dependências declaradas, usa
+`dpkg`, corrige dependências externas com `apt-get -f install` e atualiza o
+GRUB. As instruções completas estão em [INSTALL.md](INSTALL.md).
