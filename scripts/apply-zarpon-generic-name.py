@@ -131,7 +131,7 @@ git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-ch
 def patch_wrapper(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
 
-    old_local = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
+    old_local = '-kn-marie-infinity-poc-nap-rfx-adios-zir-lto'
     source = replace_once(source, old_local, "", "generic TurboDecky localversion")
 
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
