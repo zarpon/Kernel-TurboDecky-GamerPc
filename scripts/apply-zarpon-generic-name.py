@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Set the dynamic TurboDecky kernel identity, Polly mode and VRAM integration."""
+"""Set the dynamic TurboDecky identity, Polly mode, VRAM and patch resolution."""
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -108,9 +109,8 @@ git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-ch
         "Polly toolchain selection",
     )
 
-    # Keep exact OpenWrt sources in the repository so hosted runners do not
-    # depend on a third-party mirror being available at build time. The
-    # network URLs remain as provenance-preserving fallbacks.
+    # Retain vendored OpenWrt copies only as emergency fallbacks. The dynamic
+    # resolver inserted later always places its branch-head snapshot first.
     openwrt_commit = "0ff1553bd731c0db28043fc9caab90bdc32587f3"
     openwrt_paths = (
         "package/kernel/mac80211/patches/subsys/302-mac80211-minstrel_ht-fix-MINSTREL_FRAC-macro.patch",
@@ -152,6 +152,10 @@ def patch_wrapper(path: Path) -> None:
     old_local = '-kn-marie-infinity-poc-nap-rfx-adios-zir-lto'
     source = replace_once(source, old_local, "", "generic TurboDecky localversion")
 
+    emitted = '''kernel_release="$(${MAKE[@]} -s kernelrelease)"
+'''
+    # Preserve the exact emitted wrapper text instead of executing the shell
+    # expression while this Python transformer is running.
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
 printf '%s\\n' "$kernel_release" | tee "$LOGDIR/kernelrelease.txt"
 if ((${#kernel_release} > 64)); then
@@ -168,17 +172,49 @@ fi
     path.write_text(source, encoding="utf-8")
 
 
+def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
+    root = Path(__file__).resolve().parents[1]
+    kernel_version = os.environ.get("KERNEL_VERSION")
+    kernel_series = os.environ.get("KERNEL_SERIES")
+    if not kernel_version or not kernel_series:
+        raise SystemExit("KERNEL_VERSION and KERNEL_SERIES must be resolved before patch selection")
+
+    manifest = root / "config/patch-sources.json"
+    resolver = root / "scripts/resolve-patch-sources.py"
+    rewriter = root / "scripts/apply-dynamic-patch-sources.py"
+    output = root / ".resolved-patches"
+    subprocess.run(
+        [
+            sys.executable,
+            str(resolver),
+            "--manifest", str(manifest),
+            "--output-dir", str(output),
+            "--kernel-version", kernel_version,
+            "--kernel-series", kernel_series,
+            "--summary", str(output / "resolution-summary.txt"),
+        ],
+        check=True,
+    )
+    lock = output / "patch-lock.json"
+    subprocess.run(
+        [sys.executable, str(rewriter), str(core), str(wrapper), str(lock)],
+        check=True,
+    )
+
+
 def main() -> None:
     if len(sys.argv) != 3:
         raise SystemExit(
             "usage: apply-zarpon-generic-name.py <build-kernelnote-core.sh> "
             "<build-kernelnote.sh>"
         )
-    patch_core(Path(sys.argv[1]))
+    core = Path(sys.argv[1])
     wrapper = Path(sys.argv[2])
+    patch_core(core)
     patch_wrapper(wrapper)
     vram_integrator = Path(__file__).with_name("apply-vram-cgroup.py")
     subprocess.run([sys.executable, str(vram_integrator), str(wrapper)], check=True)
+    resolve_and_lock_sources(core, wrapper)
 
 
 if __name__ == "__main__":
