@@ -12,6 +12,7 @@ import fnmatch
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -113,18 +114,53 @@ def list_tree(repo_dir: Path, commit: str) -> list[str]:
     return [line for line in output.splitlines() if line]
 
 
-def read_git_blob(repo_dir: Path, commit: str, path: str) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(repo_dir), "show", f"{commit}:{path}"],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode != 0:
-        raise ResolverError(
-            f"unable to read {path} from {commit}: {result.stderr.decode(errors='replace')}"
+def read_git_blob(
+    repo_dir: Path, commit: str, path: str, *, max_symlinks: int = 8
+) -> tuple[bytes, str]:
+    """Read a tree path, following repository-relative Git symlinks safely."""
+    current = path
+    visited: set[str] = set()
+    for _ in range(max_symlinks + 1):
+        if current in visited:
+            raise ResolverError(f"symlink loop while resolving {path} at {current}")
+        visited.add(current)
+        listing = run(
+            ["git", "-C", str(repo_dir), "ls-tree", commit, "--", current],
+            capture=True,
         )
-    return result.stdout
+        if not listing:
+            raise ResolverError(f"tree path {current} is missing from {commit}")
+        first = listing.splitlines()[0]
+        metadata, _, listed_path = first.partition("\t")
+        fields = metadata.split()
+        if len(fields) < 3 or listed_path != current:
+            raise ResolverError(f"unexpected ls-tree response for {current}: {first!r}")
+        mode, obj_type = fields[0], fields[1]
+        result = subprocess.run(
+            ["git", "-C", str(repo_dir), "show", f"{commit}:{current}"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            raise ResolverError(
+                f"unable to read {current} from {commit}: "
+                f"{result.stderr.decode(errors='replace')}"
+            )
+        data = result.stdout
+        if mode != "120000":
+            if obj_type != "blob":
+                raise ResolverError(f"tree path {current} is not a blob: {obj_type}")
+            return data, current
+
+        target = data.decode("utf-8", errors="strict").strip()
+        if not target or target.startswith("/"):
+            raise ResolverError(f"unsafe Git symlink {current} -> {target!r}")
+        resolved = posixpath.normpath(posixpath.join(posixpath.dirname(current), target))
+        if resolved == ".." or resolved.startswith("../"):
+            raise ResolverError(f"Git symlink escapes repository: {current} -> {target}")
+        current = resolved
+    raise ResolverError(f"too many Git symlinks while resolving {path}")
 
 
 def sha256(data: bytes) -> str:
@@ -353,7 +389,7 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                         f"{component} selected incompatible kernel target {target.text} "
                         f"for Linux {series_text}"
                     )
-                data = read_git_blob(repo_path, commit, selected)
+                data, resolved_path = read_git_blob(repo_path, commit, selected)
                 if kind == "git_patch":
                     validate_patch(data, component, list(spec.get("required_markers", [])))
                 write_bytes(output_path, data)
@@ -362,7 +398,8 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                         "repo": repo,
                         "ref": ref,
                         "commit": commit,
-                        "path": selected,
+                        "selected_path": selected,
+                        "path": resolved_path,
                         "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",
                         "repo_dir": f"repos/{repo_path.name}",
                         "kernel_target": target.text if target else None,
