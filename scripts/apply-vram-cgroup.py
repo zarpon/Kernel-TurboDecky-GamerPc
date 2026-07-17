@@ -170,7 +170,7 @@ assert_config "CONFIG_LRU_MARIE=y"
 
 replace_once(
     'if [[ "$MODE" == "package" ]]; then\n',
-    '''"$ROOT/scripts/build-vram-package.sh" "$MODE"
+    '''bash "$ROOT/scripts/build-vram-package.sh" "$MODE"
 
 if [[ "$MODE" == "package" ]]; then
 '''
