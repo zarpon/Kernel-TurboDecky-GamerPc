@@ -96,6 +96,12 @@ def snapshot_repo(repo: str, ref: str, destination: Path) -> str:
     commit = run(["git", "-C", str(destination), "rev-parse", "FETCH_HEAD"], capture=True)
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ResolverError(f"invalid resolved commit for {repo}@{ref}: {commit}")
+    # Advertise the immutable snapshot so later local partial clones do not
+    # depend on upload-pack allowing requests for an unadvertised object ID.
+    run([
+        "git", "-C", str(destination), "update-ref",
+        "refs/heads/turbodecky-snapshot", commit,
+    ])
     return commit
 
 
@@ -229,7 +235,26 @@ def choose_git_path(
     return selected, mode
 
 
-def fetch_url(url: str, attempts: int = 3) -> bytes:
+def fetch_url(url: str, attempts: int = 4) -> bytes:
+    curl = shutil.which("curl")
+    if curl:
+        result = subprocess.run(
+            [
+                curl, "--fail", "--location", "--retry", str(attempts),
+                "--retry-all-errors", "--retry-delay", "3",
+                "--connect-timeout", "30", "--max-time", "600",
+                "--user-agent", USER_AGENT, "--silent", "--show-error", url,
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode == 0 and result.stdout:
+            return result.stdout
+        curl_error = result.stderr.decode(errors="replace").strip()
+    else:
+        curl_error = "curl is unavailable"
+
     last_error: Exception | None = None
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     for attempt in range(1, attempts + 1):
@@ -242,7 +267,9 @@ def fetch_url(url: str, attempts: int = 3) -> bytes:
             last_error = exc
         if attempt < attempts:
             time.sleep(attempt * 2)
-    raise ResolverError(f"unable to fetch {url}: {last_error}")
+    raise ResolverError(
+        f"unable to fetch {url}: curl={curl_error}; urllib={last_error}"
+    )
 
 
 def write_bytes(path: Path, data: bytes) -> None:
