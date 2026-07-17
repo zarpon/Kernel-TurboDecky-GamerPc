@@ -209,6 +209,16 @@ jobs:
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
 
+      - name: Verify Infinity v3 integration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'Component: Infinity scheduler v3' logs/01-infinity-provenance.txt
+          grep -Fq 'Correct Infinity v3 CPU/RT scheduler patch applied successfully' logs/build.log
+          grep -Fq 'infinity_rt_consume' work/linux/kernel/sched/rt.c
+          grep -Fq 'SCHED_FLAG_NO_INFINITY_RT' work/linux/include/uapi/linux/sched.h
+          ! grep -Eq '^CONFIG_SCHED_BORE=[ym]$' logs/final.config
+
       - name: Show compiler cache statistics
         if: always()
         run: ccache --show-stats --verbose || true
@@ -286,8 +296,8 @@ jobs:
           - Clang 18, O3, Polly and ThinLTO
 
           Performance patch stack:
-          Marie LRU, BORE, POC Selector, NAP, REFLEX default CPUFreq,
-          ADIOS and ZRAM-IR LZ4 -> ZSTD.
+          Marie LRU, Infinity v3 CPU/EEVDF + RT hooks, POC Selector, NAP,
+          REFLEX default CPUFreq, ADIOS and ZRAM-IR LZ4 -> ZSTD.
 
           Additional requested series:
           C23 libbpf, Clear Linux, fsync FUTEX_WAIT_MULTIPLE, O3,
