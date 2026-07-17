@@ -40,7 +40,7 @@ done
 
 module_root="$base_dir/lib/modules"
 real_dir="$module_root/$release"
-alias_release="1"
+alias_release="1.0.0"
 alias_dir="$module_root/$alias_release"
 
 if [[ ! -d "$real_dir" ]]; then
