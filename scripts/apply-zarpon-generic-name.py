@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -173,8 +174,14 @@ def main() -> None:
             "usage: apply-zarpon-generic-name.py <build-kernelnote-core.sh> "
             "<build-kernelnote.sh>"
         )
-    patch_core(Path(sys.argv[1]))
+    core_path = Path(sys.argv[1])
+    patch_core(core_path)
     patch_wrapper(Path(sys.argv[2]))
+    vram_integrator = Path(__file__).with_name("apply-vram-stack.py")
+    subprocess.run(
+        [sys.executable, str(vram_integrator), str(core_path)],
+        check=True,
+    )
 
 
 if __name__ == "__main__":
