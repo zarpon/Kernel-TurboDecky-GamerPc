@@ -7,14 +7,22 @@ from pathlib import Path
 import sys
 
 
+DIAGNOSTIC = Path("logs/vram-integrator.txt")
+
+
 def replace_once(source: str, old: str, new: str, label: str) -> str:
     count = source.count(old)
+    DIAGNOSTIC.parent.mkdir(parents=True, exist_ok=True)
+    with DIAGNOSTIC.open("a", encoding="utf-8") as stream:
+        stream.write(f"{label}: {count}\n")
     if count != 1:
         raise SystemExit(f"{label}: expected one anchor, found {count}")
     return source.replace(old, new, 1)
 
 
 def patch_core(path: Path) -> None:
+    DIAGNOSTIC.parent.mkdir(parents=True, exist_ok=True)
+    DIAGNOSTIC.write_text(f"core: {path}\n", encoding="utf-8")
     source = path.read_text(encoding="utf-8")
 
     source = replace_once(
