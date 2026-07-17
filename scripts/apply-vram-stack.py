@@ -161,9 +161,9 @@ assert_config "CONFIG_DRM_AMDGPU=m"
     )
     source = replace_once(
         source,
-        'echo "==> Kernelnote ThinLTO build completed successfully"\n',
+        'echo "==> Latest-stable TurboDecky ThinLTO build completed successfully"\n',
         '''bash "$ROOT/scripts/build-vram-package.sh"
-echo "==> Kernelnote ThinLTO build completed successfully"
+echo "==> Latest-stable TurboDecky ThinLTO build completed successfully"
 ''',
         "VRAM package build",
     )
