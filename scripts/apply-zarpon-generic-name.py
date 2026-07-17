@@ -168,6 +168,24 @@ fi
     path.write_text(source, encoding="utf-8")
 
 
+
+
+def run_logged(command: list[str], log_path: Path) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        command,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    output = result.stdout or ""
+    log_path.write_text(output, encoding="utf-8")
+    print(output, end="")
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, command)
+
+
 def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
     root = Path(__file__).resolve().parents[1]
     kernel_version = os.environ.get("KERNEL_VERSION")
@@ -179,7 +197,8 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
     resolver = root / "scripts/resolve-patch-sources.py"
     rewriter = root / "scripts/apply-dynamic-patch-sources.py"
     output = root / ".resolved-patches"
-    subprocess.run(
+    logs = root / "logs"
+    run_logged(
         [
             sys.executable,
             str(resolver),
@@ -189,12 +208,12 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
             "--kernel-series", kernel_series,
             "--summary", str(output / "resolution-summary.txt"),
         ],
-        check=True,
+        logs / "patch-source-resolution.log",
     )
     lock = output / "patch-lock.json"
-    subprocess.run(
+    run_logged(
         [sys.executable, str(rewriter), str(core), str(wrapper), str(lock)],
-        check=True,
+        logs / "patch-source-rewrite.log",
     )
 
 
