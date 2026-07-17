@@ -15,5 +15,7 @@ grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
 grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
 grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 grep -Fq 'KERNEL_VERSION' "$ROOT/scripts/apply-zarpon-generic-name.py"
+grep -Fq 'patch-source-resolution.log' "$ROOT/scripts/apply-zarpon-generic-name.py"
+grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/resolve-patch-sources.py"
 
 echo "Dynamic patch source validation passed"
