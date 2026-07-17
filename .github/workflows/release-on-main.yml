@@ -1,0 +1,29 @@
+name: Dispatch full TurboDecky release on main changes
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: turbodecky-release-dispatch-main
+  cancel-in-progress: true
+
+jobs:
+  dispatch-package-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Dispatch full package and release workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          gh workflow run validate-kernel.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            --field mode=package
