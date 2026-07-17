@@ -103,15 +103,13 @@ class ResolverTests(unittest.TestCase):
             self.assertEqual(lock["components"]["nap"]["selection"], "fallback")
             self.assertEqual((output / "files/fixed.patch").read_text(), raw.read_text())
 
-            # The snapshot must be usable as an immutable local Git remote.
             record = lock["components"]["marie"]
             clone = tmp / "consumer"
             run("git", "init", "-q", str(clone))
             run("git", "-C", str(clone), "remote", "add", "origin", str(output / record["repo_dir"]))
-            run("git", "-C", str(clone), "fetch", "--depth=1", "origin", record["commit"])
+            run("git", "-C", str(clone), "fetch", "--depth=1", "origin", record["snapshot_commit"])
             shown = run("git", "-C", str(clone), "show", f"FETCH_HEAD:{record['path']}").stdout
             self.assertIn("lru_marie 0.8.0", shown)
-
 
     def test_fallback_ref_restores_exact_series(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,8 +149,46 @@ class ResolverTests(unittest.TestCase):
             )
             record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
             self.assertEqual(record["commit"], exact_commit)
+            self.assertRegex(record["snapshot_commit"], r"^[0-9a-f]{40}$")
             self.assertEqual(record["selection"], "exact-fallback-ref")
             self.assertIn("7.1", record["path"])
+
+    def test_git_symlink_patch_is_followed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            repo = tmp / "repo"
+            init_repo(repo, {"patches/7.0/clear.patch": patch("clear target")})
+            link = repo / "patches/7.1/clear.patch"
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to("../7.0/clear.patch")
+            run("git", "add", "-A", cwd=repo)
+            run("git", "commit", "-qm", "series symlink", cwd=repo)
+            manifest = {
+                "schema": 1,
+                "components": {
+                    "clear": {
+                        "kind": "git_patch",
+                        "repo": str(repo),
+                        "ref": "main",
+                        "exact_globs": ["patches/{series}/clear.patch"],
+                        "fallback_globs": ["patches/*/clear.patch"],
+                        "require_exact_series": False,
+                        "output": "clear.patch",
+                    }
+                },
+            }
+            manifest_path = tmp / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = tmp / "resolved"
+            run(
+                "python3", str(RESOLVER), "--manifest", str(manifest_path),
+                "--output-dir", str(output), "--kernel-version", "7.1.3",
+                "--kernel-series", "7.1",
+            )
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["clear"]
+            self.assertEqual(record["selected_path"], "patches/7.1/clear.patch")
+            self.assertEqual(record["path"], "patches/7.0/clear.patch")
+            self.assertIn("clear target", (output / "files/clear.patch").read_text())
 
     def test_exact_required_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -216,6 +252,13 @@ class RewriterTests(unittest.TestCase):
                 components[name] = {"kind": "http_patch", "output": f"files/{output}"}
             lock = {"schema": 1, "components": components}
             lock_path = tmp / "lock.json"
+            for name in git_names:
+                output = tmp / components[name]["output"]
+                output.parent.mkdir(parents=True, exist_ok=True)
+                if name == "liquorix_config":
+                    output.write_text("CONFIG_GENERIC_CPU=y\n", encoding="utf-8")
+                else:
+                    output.write_text(patch(f"{name} snapshot"), encoding="utf-8")
             lock_path.write_text(json.dumps(lock), encoding="utf-8")
 
             requested_calls = "".join(
@@ -268,8 +311,14 @@ class RewriterTests(unittest.TestCase):
             self.assertEqual(first_wrapper, wrapper.read_text())
             self.assertIn("RESOLVED_PATCH_ROOT", first_core)
             self.assertIn("file://$RESOLVED_PATCH_ROOT/files/08-c23-libbpf.patch", first_core)
-            self.assertIn('$RESOLVED_PATCH_ROOT/repos/infinity', first_core)
-            self.assertIn('$RESOLVED_PATCH_ROOT/repos/vram', first_wrapper)
+            self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/infinity', first_core)
+            self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/vram', first_wrapper)
+            rewritten_lock = json.loads(lock_path.read_text())
+            infinity = rewritten_lock["components"]["infinity"]
+            self.assertRegex(infinity["snapshot_commit"], r"^[0-9a-f]{40}$")
+            self.assertEqual(infinity["commit"], infinity["snapshot_commit"])
+            self.assertEqual(infinity["upstream_commit"], "a" * 40)
+            self.assertFalse((tmp / infinity["repo_dir"] / ".git/objects/info/alternates").exists())
 
 
 if __name__ == "__main__":
