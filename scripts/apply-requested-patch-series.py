@@ -227,6 +227,11 @@ apply_requested_patch_series() {
   apply_requested_patch "mac80211 minstrel fluctuation reduction" "$REQUESTED_SERIES_DIR/19-minstrel-fluctuation.patch" "19-minstrel-fluctuation"
   apply_requested_patch "mac80211 minstrel rate downgrade rework" "$REQUESTED_SERIES_DIR/20-minstrel-downgrade.patch" "20-minstrel-downgrade"
   apply_requested_patch "ath11k remapped CE 64-bit fix" "$REQUESTED_SERIES_DIR/21-ath11k-remapped-ce.patch" "21-ath11k-remapped-ce"
+  if grep -R -n -F 'ATH11K_CE_OFFSET' \
+      "$KERNELDIR/drivers/net/wireless/ath/ath11k"; then
+    echo "ath11k remapped CE port left ATH11K_CE_OFFSET references behind" >&2
+    return 1
+  fi
   apply_requested_patch "ath11k DISABLE_KEY revert" "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key"
   apply_requested_patch "ath11k Qualcomm upstream series" "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream"
 
