@@ -5,364 +5,228 @@
       "kind": "git_patch",
       "repo": "https://github.com/galpt/infinity-scheduler.git",
       "ref": "v3",
-      "exact_globs": [
-        "patches/stable/linux-{series}-infinity/0001-infinity-scheduler.patch"
-      ],
+      "exact_globs": ["patches/stable/linux-{series}-infinity/0001-infinity-scheduler.patch"],
       "fallback_globs": [],
       "require_exact_series": true,
       "output": "01-infinity.patch",
-      "required_markers": [
-        "infinity_sched.c",
-        "SCHED_FLAG_NO_INFINITY_RT",
-        "infinity_rt_consume"
-      ]
+      "required_markers": ["infinity_sched.c", "SCHED_FLAG_NO_INFINITY_RT", "infinity_rt_consume"]
     },
     "marie": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/lru_marie.git",
       "ref": "main",
-      "exact_globs": [
-        "patches/stable/*linux{series}*lru_marie*.patch",
-        "patches/testing/*linux{series}*lru_marie*.patch"
-      ],
-      "fallback_globs": [
-        "patches/stable/*lru_marie*.patch",
-        "patches/testing/*lru_marie*.patch"
-      ],
+      "exact_globs": ["patches/stable/*linux{series}*lru_marie*.patch", "patches/testing/*linux{series}*lru_marie*.patch"],
+      "fallback_globs": ["patches/stable/*lru_marie*.patch", "patches/testing/*lru_marie*.patch"],
       "require_exact_series": false,
       "output": "02-lru-marie.patch",
       "project_version_regex": "lru[_-]marie[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
-      "required_markers": [
-        "LRU_MARIE",
-        "lru_marie"
-      ]
+      "required_markers": ["LRU_MARIE", "lru_marie"]
     },
     "adios": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/adios.git",
       "ref": "main",
-      "exact_globs": [
-        "patches/stable/*linux{kernel_version}*ADIOS*.patch",
-        "patches/stable/*linux{series}*ADIOS*.patch"
-      ],
-      "fallback_globs": [
-        "patches/stable/*ADIOS*.patch",
-        "patches/testing/*ADIOS*.patch",
-        "patches/*ADIOS*.patch"
-      ],
+      "exact_globs": ["patches/stable/*linux{kernel_version}*ADIOS*.patch", "patches/stable/*linux{series}*ADIOS*.patch"],
+      "fallback_globs": ["patches/stable/*ADIOS*.patch", "patches/testing/*ADIOS*.patch", "patches/*ADIOS*.patch"],
       "require_exact_series": false,
       "output": "03-adios.patch",
       "project_version_regex": "ADIOS[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
-      "required_markers": [
-        "ADIOS",
-        "MQ_IOSCHED_ADIOS"
-      ]
+      "required_markers": ["ADIOS", "MQ_IOSCHED_ADIOS"]
     },
     "zram_ir": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/zram-ir.git",
       "ref": "main",
-      "exact_globs": [
-        "patches/*linux{series}*zram-ir*.patch"
-      ],
-      "fallback_globs": [
-        "patches/stable/*zram-ir*.patch",
-        "patches/testing/*zram-ir*.patch",
-        "patches/*zram-ir*.patch"
-      ],
+      "exact_globs": ["patches/*linux{series}*zram-ir*.patch"],
+      "fallback_globs": ["patches/stable/*zram-ir*.patch", "patches/testing/*zram-ir*.patch", "patches/*zram-ir*.patch"],
       "require_exact_series": false,
       "output": "04-zram-ir.patch",
       "project_version_regex": "zram[-_]ir[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
-      "required_markers": [
-        "zram_recomp_immediate",
-        "ZRAM_IR_VERSION"
-      ]
+      "required_markers": ["zram_recomp_immediate", "ZRAM_IR_VERSION"]
     },
     "poc": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/poc-selector.git",
       "ref": "main",
-      "exact_globs": [
-        "patches/stable/*{series}*poc-selector*.patch",
-        "patches/testing/*{series}*poc-selector*.patch"
-      ],
-      "fallback_globs": [
-        "patches/stable/*poc-selector*.patch",
-        "patches/testing/*poc-selector*.patch",
-        "patches/*poc-selector*.patch"
-      ],
+      "exact_globs": ["patches/stable/*{series}*poc-selector*.patch", "patches/testing/*{series}*poc-selector*.patch"],
+      "fallback_globs": ["patches/stable/*poc-selector*.patch", "patches/testing/*poc-selector*.patch", "patches/*poc-selector*.patch"],
       "require_exact_series": false,
       "output": "05-poc-selector.patch",
       "project_version_regex": "poc[-_]selector[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
-      "required_markers": [
-        "poc_selector",
-        "SCHED_POC_SELECTOR"
-      ]
+      "required_markers": ["poc_selector", "SCHED_POC_SELECTOR"]
     },
     "nap": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/nap.git",
       "ref": "main",
-      "exact_globs": [
-        "patches/stable/*{series}*nap*.patch",
-        "patches/testing/*{series}*nap*.patch"
-      ],
-      "fallback_globs": [
-        "patches/stable/*nap*.patch",
-        "patches/testing/*nap*.patch",
-        "patches/*nap*.patch"
-      ],
+      "exact_globs": ["patches/stable/*{series}*nap*.patch", "patches/testing/*{series}*nap*.patch"],
+      "fallback_globs": ["patches/stable/*nap*.patch", "patches/testing/*nap*.patch", "patches/*nap*.patch"],
       "require_exact_series": false,
       "output": "06-nap.patch",
       "project_version_regex": "nap[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
-      "required_markers": [
-        "CPU_IDLE_GOV_NAP",
-        "CPUIDLE_NAP_VERSION"
-      ]
+      "required_markers": ["CPU_IDLE_GOV_NAP", "CPUIDLE_NAP_VERSION"]
     },
     "reflex": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/reflex.git",
       "ref": "main",
-      "exact_globs": [
-        "patches/*linux{series}*reflex*.patch"
-      ],
-      "fallback_globs": [
-        "patches/stable/*reflex*.patch",
-        "patches/testing/*reflex*.patch",
-        "patches/*reflex*.patch"
-      ],
+      "exact_globs": ["patches/*linux{series}*reflex*.patch"],
+      "fallback_globs": ["patches/stable/*reflex*.patch", "patches/testing/*reflex*.patch", "patches/*reflex*.patch"],
       "require_exact_series": false,
       "output": "07-reflex.patch",
       "project_version_regex": "reflex[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
-      "required_markers": [
-        "CPU_FREQ_GOV_REFLEX",
-        "cpufreq_reflex"
-      ]
+      "required_markers": ["CPU_FREQ_GOV_REFLEX", "cpufreq_reflex"]
     },
     "c23_libbpf": {
       "kind": "http_patch",
-      "urls": [
-        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=d70f79fef65810faf64dbae1f3a1b5623cdb2345",
-        "https://github.com/torvalds/linux/commit/d70f79fef65810faf64dbae1f3a1b5623cdb2345.patch"
-      ],
+      "urls": ["https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=d70f79fef65810faf64dbae1f3a1b5623cdb2345", "https://github.com/torvalds/linux/commit/d70f79fef65810faf64dbae1f3a1b5623cdb2345.patch"],
       "output": "08-c23-libbpf.patch"
     },
     "clear": {
       "kind": "git_patch",
       "repo": "https://github.com/Frogging-Family/linux-tkg.git",
       "ref": "master",
-      "exact_globs": [
-        "linux-tkg-patches/{series}/0002-clear-patches.patch"
-      ],
-      "fallback_globs": [
-        "linux-tkg-patches/*/0002-clear-patches.patch"
-      ],
+      "exact_globs": ["linux-tkg-patches/{series}/0002-clear-patches.patch"],
+      "fallback_globs": ["linux-tkg-patches/*/0002-clear-patches.patch"],
       "require_exact_series": false,
       "output": "09-clear.patch",
-      "fallback_refs": [
-        "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
-        "d837d80398a62ea884caabad36530093f9711d49"
-      ]
+      "fallback_refs": ["489513b1a3b9339d40d9e4718c7eb4e90c2e2723", "d837d80398a62ea884caabad36530093f9711d49"]
     },
     "fsync": {
       "kind": "git_patch",
       "repo": "https://github.com/Frogging-Family/linux-tkg.git",
       "ref": "master",
-      "exact_globs": [
-        "linux-tkg-patches/{series}/0007-v{series}-fsync1_via_futex_waitv.patch"
-      ],
-      "fallback_globs": [
-        "linux-tkg-patches/*/0007-v*-fsync1_via_futex_waitv.patch"
-      ],
+      "exact_globs": ["linux-tkg-patches/{series}/0007-v{series}-fsync1_via_futex_waitv.patch"],
+      "fallback_globs": ["linux-tkg-patches/*/0007-v*-fsync1_via_futex_waitv.patch"],
       "require_exact_series": false,
       "output": "10-fsync-futex-waitv.patch",
-      "fallback_refs": [
-        "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
-        "d837d80398a62ea884caabad36530093f9711d49"
-      ]
+      "fallback_refs": ["489513b1a3b9339d40d9e4718c7eb4e90c2e2723", "d837d80398a62ea884caabad36530093f9711d49"]
     },
     "o3": {
       "kind": "git_patch",
       "repo": "https://github.com/Frogging-Family/linux-tkg.git",
       "ref": "master",
-      "exact_globs": [
-        "linux-tkg-patches/{series}/0013-optimize_harder_O3.patch"
-      ],
-      "fallback_globs": [
-        "linux-tkg-patches/*/0013-optimize_harder_O3.patch"
-      ],
+      "exact_globs": ["linux-tkg-patches/{series}/0013-optimize_harder_O3.patch"],
+      "fallback_globs": ["linux-tkg-patches/*/0013-optimize_harder_O3.patch"],
       "require_exact_series": false,
       "output": "11-o3.patch",
-      "fallback_refs": [
-        "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
-        "d837d80398a62ea884caabad36530093f9711d49"
-      ]
+      "fallback_refs": ["489513b1a3b9339d40d9e4718c7eb4e90c2e2723", "d837d80398a62ea884caabad36530093f9711d49"]
     },
     "bt_ssp": {
       "kind": "http_patch",
-      "urls": [
-        "https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/2000_BT-Check-key-sizes-only-if-Secure-Simple-Pairing-enabled.patch"
-      ],
+      "urls": ["https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/2000_BT-Check-key-sizes-only-if-Secure-Simple-Pairing-enabled.patch"],
       "output": "12-bt-ssp-key-size.patch"
     },
     "libbpf_uninitialized": {
       "kind": "http_patch",
-      "urls": [
-        "https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/2990_libbpf-v2-workaround-Wmaybe-uninitialized-false-pos.patch"
-      ],
+      "urls": ["https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/2990_libbpf-v2-workaround-Wmaybe-uninitialized-false-pos.patch"],
       "output": "13-libbpf-uninitialized.patch"
     },
     "cpu_optimizations": {
-      "kind": "http_patch",
-      "urls": [
-        "https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/5010_enable-cpu-optimizations-universal.patch"
-      ],
-      "output": "14-cpu-optimizations.patch"
+      "kind": "git_patch",
+      "repo": "https://github.com/graysky2/kernel_compiler_patch.git",
+      "ref": "master",
+      "exact_globs": ["more-ISA-levels-and-uarches-for-kernel-{series}*.patch"],
+      "fallback_globs": ["more-ISA-levels-and-uarches-for-kernel-6.16+.patch", "more-ISA-levels-and-uarches-for-kernel-*.patch"],
+      "require_exact_series": false,
+      "output": "14-cpu-optimizations.patch",
+      "required_markers": ["x86-64 compiler ISA level", "CONFIG_GENERIC_CPU"]
     },
     "dkms_clang": {
       "kind": "git_patch",
       "repo": "https://github.com/CachyOS/kernel-patches.git",
       "ref": "master",
-      "exact_globs": [
-        "{series}/misc/dkms-clang.patch"
-      ],
-      "fallback_globs": [
-        "*/misc/dkms-clang.patch"
-      ],
+      "exact_globs": ["{series}/misc/dkms-clang.patch"],
+      "fallback_globs": ["*/misc/dkms-clang.patch"],
       "require_exact_series": false,
       "output": "15-dkms-clang.patch",
-      "fallback_refs": [
-        "ea739d734ec179864b21446856315bc49f7c52fa"
-      ]
+      "fallback_refs": ["ea739d734ec179864b21446856315bc49f7c52fa"]
     },
     "clang_polly": {
       "kind": "git_patch",
       "repo": "https://github.com/CachyOS/kernel-patches.git",
       "ref": "master",
-      "exact_globs": [
-        "{series}/misc/0001-clang-polly.patch"
-      ],
-      "fallback_globs": [
-        "*/misc/0001-clang-polly.patch"
-      ],
+      "exact_globs": ["{series}/misc/0001-clang-polly.patch"],
+      "fallback_globs": ["*/misc/0001-clang-polly.patch"],
       "require_exact_series": false,
       "output": "16-clang-polly.patch",
-      "fallback_refs": [
-        "ea739d734ec179864b21446856315bc49f7c52fa"
-      ]
+      "fallback_refs": ["ea739d734ec179864b21446856315bc49f7c52fa"]
     },
     "firmware_name": {
       "kind": "http_patch",
-      "urls": [
-        "https://732852.bugs.gentoo.org/attachment.cgi?id=649432"
-      ],
+      "urls": ["https://732852.bugs.gentoo.org/attachment.cgi?id=649432"],
       "output": "17-firmware-name.patch"
     },
     "minstrel_frac": {
       "kind": "git_patch",
       "repo": "https://github.com/openwrt/openwrt.git",
       "ref": "main",
-      "exact_globs": [
-        "package/kernel/mac80211/patches/subsys/302-mac80211-minstrel_ht-fix-MINSTREL_FRAC-macro.patch"
-      ],
+      "exact_globs": ["package/kernel/mac80211/patches/subsys/302-mac80211-minstrel_ht-fix-MINSTREL_FRAC-macro.patch"],
       "fallback_globs": [],
       "require_exact_series": true,
       "output": "18-minstrel-frac.patch",
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ]
+      "fallback_refs": ["0ff1553bd731c0db28043fc9caab90bdc32587f3"]
     },
     "minstrel_fluctuation": {
       "kind": "git_patch",
       "repo": "https://github.com/openwrt/openwrt.git",
       "ref": "main",
-      "exact_globs": [
-        "package/kernel/mac80211/patches/subsys/303-mac80211-minstrel_ht-reduce-fluctuations-in-rate-pro.patch"
-      ],
+      "exact_globs": ["package/kernel/mac80211/patches/subsys/303-mac80211-minstrel_ht-reduce-fluctuations-in-rate-pro.patch"],
       "fallback_globs": [],
       "require_exact_series": true,
       "output": "19-minstrel-fluctuation.patch",
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ]
+      "fallback_refs": ["0ff1553bd731c0db28043fc9caab90bdc32587f3"]
     },
     "minstrel_downgrade": {
       "kind": "git_patch",
       "repo": "https://github.com/openwrt/openwrt.git",
       "ref": "main",
-      "exact_globs": [
-        "package/kernel/mac80211/patches/subsys/304-mac80211-minstrel_ht-rework-rate-downgrade-code-and-.patch"
-      ],
+      "exact_globs": ["package/kernel/mac80211/patches/subsys/304-mac80211-minstrel_ht-rework-rate-downgrade-code-and-.patch"],
       "fallback_globs": [],
       "require_exact_series": true,
       "output": "20-minstrel-downgrade.patch",
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ]
+      "fallback_refs": ["0ff1553bd731c0db28043fc9caab90bdc32587f3"]
     },
     "ath11k_remapped_ce": {
       "kind": "git_patch",
       "repo": "https://github.com/openwrt/openwrt.git",
       "ref": "main",
-      "exact_globs": [
-        "package/kernel/mac80211/patches/ath11k/910-ath11k-fix-remapped-ce-accessing-issue-on-64bit-OS.patch"
-      ],
+      "exact_globs": ["package/kernel/mac80211/patches/ath11k/910-ath11k-fix-remapped-ce-accessing-issue-on-64bit-OS.patch"],
       "fallback_globs": [],
       "require_exact_series": true,
       "output": "21-ath11k-remapped-ce.patch",
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ]
+      "fallback_refs": ["0ff1553bd731c0db28043fc9caab90bdc32587f3"]
     },
     "ath11k_disable_key": {
       "kind": "http_patch",
-      "urls": [
-        "https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch",
-        "https://git.infobricfleet.com/gtu/openwrt/-/raw/95341cc9c560ff371c06db2a8221d19bb62d0c30/package/kernel/mac80211/patches/ath11k/940-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"
-      ],
+      "urls": ["https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch", "https://git.infobricfleet.com/gtu/openwrt/-/raw/95341cc9c560ff371c06db2a8221d19bb62d0c30/package/kernel/mac80211/patches/ath11k/940-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"],
       "output": "22-ath11k-disable-key.patch"
     },
     "ath11k_upstream": {
       "kind": "http_patch",
-      "urls": [
-        "https://lore.kernel.org/all/20260319065608.2408179-1-reshma.rajkumar@oss.qualcomm.com/raw"
-      ],
+      "urls": ["https://lore.kernel.org/all/20260319065608.2408179-1-reshma.rajkumar@oss.qualcomm.com/raw"],
       "output": "23-ath11k-upstream.patch"
     },
     "vram": {
       "kind": "git_patch",
       "repo": "https://github.com/CachyOS/kernel-patches.git",
       "ref": "master",
-      "exact_globs": [
-        "{series}/misc/0001-cgroup-vram.patch"
-      ],
-      "fallback_globs": [
-        "*/misc/0001-cgroup-vram.patch"
-      ],
+      "exact_globs": ["{series}/misc/0001-cgroup-vram.patch"],
+      "fallback_globs": ["*/misc/0001-cgroup-vram.patch"],
       "require_exact_series": false,
       "output": "24-cgroup-vram.patch",
-      "required_markers": [
-        "struct ttm_bo_alloc_state",
-        "dmem_cgroup_get_common_ancestor"
-      ],
-      "fallback_refs": [
-        "ea739d734ec179864b21446856315bc49f7c52fa"
-      ]
+      "required_markers": ["struct ttm_bo_alloc_state", "dmem_cgroup_get_common_ancestor"],
+      "fallback_refs": ["ea739d734ec179864b21446856315bc49f7c52fa"]
     },
     "liquorix_config": {
       "kind": "git_file",
       "repo": "https://github.com/damentz/liquorix-package.git",
       "ref": "HEAD",
-      "exact_globs": [
-        "linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
-      ],
+      "exact_globs": ["linux-liquorix/debian/config/kernelarch-x86/config-arch-64"],
       "fallback_globs": [],
       "require_exact_series": true,
       "output": "liquorix-amd64.config",
-      "fallback_refs": [
-        "56f0e85662990ee20b4ea10465a41a23b65ace2c"
-      ]
+      "fallback_refs": ["56f0e85662990ee20b4ea10465a41a23b65ace2c"]
     }
   }
 }
