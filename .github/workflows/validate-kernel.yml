@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - main
+  # A push to the integration branch is the reproducible package trigger.
+  push:
+    branches:
+      - infinity-v3
   workflow_dispatch:
     inputs:
       mode:
@@ -28,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'validate' }}
+      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'pull_request' && 'validate' || 'package' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 8G
       CCACHE_BASEDIR: ${{ github.workspace }}
