@@ -15,8 +15,17 @@ MAKE=(make LLVM=1 LLVM_IAS=1)
 KERNEL_TAG="v7.1.3-lqx1"
 KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
-BORE_URL="https://raw.githubusercontent.com/firelzrd/bore-scheduler/16bf5baebbb42cdba393c501ba9c2af5f84e4749/patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
+
+# Correct Infinity scheduler v3 patch for Linux 7.1. This is the single
+# cumulative patch from the upstream v3/stable/linux-7.1-infinity tree; it
+# includes the CPU, futex and RT hooks. No separate Infinity GPU series is used.
+INFINITY_REPO="https://github.com/galpt/infinity-scheduler.git"
+INFINITY_BRANCH="v3"
+INFINITY_COMMIT="2cc72b8a3caf4ed75638893306c3e319819e2a42"
+INFINITY_PATCH_PATH="patches/stable/linux-7.1-infinity/0001-infinity-scheduler.patch"
+INFINITY_DIR="$WORKDIR/infinity-scheduler"
+INFINITY_PATCH="$PATCHDIR/0001-infinity-scheduler.patch"
 
 # Marie is fetched as a pinned local Git checkout rather than through a raw
 # patch URL. Only the exact patch blob is materialized in the workspace.
@@ -74,6 +83,37 @@ fetch_marie_testing_patch() {
     echo "SHA256: $(sha256sum "$MARIE_PATCH" | awk '{print $1}')"
     echo "Acquisition: pinned local partial Git checkout; no raw patch URL"
   } | tee "$LOGDIR/02-lru-marie-provenance.txt"
+}
+
+fetch_infinity_patch() {
+  echo "==> Fetching the pinned correct Infinity CPU scheduler patch locally"
+  rm -rf "$INFINITY_DIR"
+  git init --quiet "$INFINITY_DIR"
+  git -C "$INFINITY_DIR" remote add origin "$INFINITY_REPO"
+  git -C "$INFINITY_DIR" config remote.origin.promisor true
+  git -C "$INFINITY_DIR" config remote.origin.partialclonefilter blob:none
+  git -C "$INFINITY_DIR" fetch --no-tags --depth=1 --filter=blob:none origin "$INFINITY_COMMIT" \
+    2>&1 | tee "$LOGDIR/01-infinity-fetch.log"
+
+  git -C "$INFINITY_DIR" show "FETCH_HEAD:$INFINITY_PATCH_PATH" > "$INFINITY_PATCH"
+  test -s "$INFINITY_PATCH"
+  grep -Fq 'diff --git a/kernel/sched/infinity_sched.c b/kernel/sched/infinity_sched.c' \
+    "$INFINITY_PATCH"
+  grep -Fq 'infinity_consume' "$INFINITY_PATCH"
+  grep -Fq 'SCHED_FLAG_NO_INFINITY_RT' "$INFINITY_PATCH"
+  grep -Fq 'infinity_rt_consume' "$INFINITY_PATCH"
+  grep -Fq 'futex_waiting' "$INFINITY_PATCH"
+  grep -Fq 'Subject: [PATCH] infinity-scheduler v3' "$INFINITY_PATCH"
+
+  {
+    echo "Component: Infinity scheduler v3"
+    echo "Repository: $INFINITY_REPO"
+    echo "Branch: $INFINITY_BRANCH"
+    echo "Commit: $INFINITY_COMMIT"
+    echo "Path: $INFINITY_PATCH_PATH"
+    echo "SHA256: $(sha256sum "$INFINITY_PATCH" | awk '{print $1}')"
+    echo "Acquisition: pinned local partial Git checkout"
+  } | tee "$LOGDIR/01-infinity-provenance.txt"
 }
 
 normalize_changed_whitespace() {
@@ -156,41 +196,57 @@ apply_marie_testing_patch() {
   echo "==> Marie LRU 0.7.7 testing patch applied successfully"
 }
 
-apply_bore_patch() {
-  local file="$1" status
-  local -a rejects expected
+report_infinity_rejects() {
+  local label="$1" output="$2"
+  {
+    echo "==> Unresolved Infinity port rejects: $label"
+    find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort
+    echo
+    while IFS= read -r reject; do
+      echo "### ${reject#$KERNELDIR/}"
+      cat "$reject"
+    done < <(find "$KERNELDIR" -name '*.rej' -type f | sort)
+  } | tee "$output"
+}
 
-  echo "==> Applying BORE with Liquorix compatibility handling"
-  if patch --batch --forward --strip=1 < "$file" > "$LOGDIR/01-bore.apply.log" 2>&1; then
-    status=0
+apply_infinity_patch() {
+  local file="$1" status=0
+
+  echo "==> Applying the correct Infinity v3 CPU/RT scheduler patch"
+  if patch --batch --forward --strip=1 --dry-run < "$file" \
+      > "$LOGDIR/01-infinity.dry-run.log" 2>&1; then
+    patch --batch --forward --strip=1 < "$file" \
+      | tee "$LOGDIR/01-infinity.apply.log"
   else
+    cat "$LOGDIR/01-infinity.dry-run.log"
+    echo "==> Retrying Infinity with controlled port fuzz <= 3"
+    set +e
+    patch --batch --forward --fuzz=3 --strip=1 < "$file" \
+      > "$LOGDIR/01-infinity.fuzz-apply.log" 2>&1
     status=$?
-  fi
-  cat "$LOGDIR/01-bore.apply.log"
+    set -e
+    cat "$LOGDIR/01-infinity.fuzz-apply.log"
 
-  if [[ $status -eq 0 ]]; then
-    find "$KERNELDIR" -name '*.orig' -delete
-    return 0
-  fi
-
-  mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort)
-  expected=(
-    "kernel/sched/debug.c.rej"
-    "kernel/sched/fair.c.rej"
-  )
-
-  if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
-    echo "Unexpected BORE rejects: ${rejects[*]:-none}" >&2
-    return 1
+    if ((status != 0)) || find "$KERNELDIR" -name '*.rej' -print -quit | grep -q .; then
+      report_infinity_rejects "correct CPU scheduler patch" \
+        "$LOGDIR/01-infinity-port-rejects.log"
+      return 1
+    fi
   fi
 
-  python3 "$ROOT/scripts/apply-bore-liquorix.py" "$KERNELDIR"
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
-  git diff --check -- kernel/sched/fair.c kernel/sched/debug.c
+  git diff --check | tee "$LOGDIR/01-infinity-diff-check.log"
 
-  grep -Fq 'CONFIG_SCHED_BORE' kernel/sched/fair.c
-  grep -Fq 'sched_min_base_slice_fops' kernel/sched/debug.c
-  echo "==> BORE compatibility layer applied successfully"
+  test -s kernel/sched/infinity_sched.c
+  test -s kernel/sched/infinity_sched.h
+  grep -Fq 'struct infinity_ctx' include/linux/sched.h
+  grep -Fq 'infinity_slice' kernel/sched/fair.c
+  grep -Fq 'infinity_consume' kernel/sched/fair.c
+  grep -Fq 'infinity_rt_consume' kernel/sched/rt.c
+  grep -Fq 'SCHED_FLAG_NO_INFINITY_RT' include/uapi/linux/sched.h
+  grep -Fq 'futex_waiting' kernel/futex/waitwake.c
+  grep -Fq 'Infinity scheduler active' kernel/sched/infinity_sched.c
+  echo "==> Correct Infinity v3 CPU/RT scheduler patch applied successfully"
 }
 
 apply_adios_patch() {
@@ -285,23 +341,22 @@ git clone --no-checkout --depth 1 --single-branch --no-tags --branch "$KERNEL_TA
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 
 fetch_marie_testing_patch
-download "$BORE_URL" "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
+fetch_infinity_patch
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
 download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
 apply_marie_testing_patch "$MARIE_PATCH"
-apply_bore_patch "$PATCHDIR/0001-bore-6.8.0-rc1.patch"
+apply_infinity_patch "$INFINITY_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
 cp "$WORKDIR/liquorix-amd64.config" .config
 
-# BORE enhances the normal CFS/EEVDF path. Liquorix PDS/BMQ must be disabled,
-# otherwise BORE would be present in the source but not be the effective scheduler.
+# Infinity v3 is integrated directly into CFS/EEVDF and the RT class.
+# Liquorix alternative schedulers must remain disabled so Infinity is effective.
 scripts/config --disable SCHED_ALT
 scripts/config --disable SCHED_PDS
 scripts/config --disable SCHED_BMQ
-scripts/config --enable SCHED_BORE
 scripts/config --set-val MIN_BASE_SLICE_NS 2000000
 
 # Memory and I/O policy for responsive desktop and gaming workloads.
@@ -320,7 +375,7 @@ scripts/config --enable LTO_CLANG_THIN
 
 # Reproducible generic AMD64 build for LMDE. Avoid distro certificate paths and
 # Rust toolchain coupling from the upstream Liquorix generated configuration.
-scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"
+scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-infinity-adios-thinlto"
 scripts/config --disable LOCALVERSION_AUTO
 scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
 scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
@@ -345,6 +400,7 @@ fi
 assert_disabled_or_absent SCHED_ALT
 assert_disabled_or_absent SCHED_PDS
 assert_disabled_or_absent SCHED_BMQ
+assert_disabled_or_absent SCHED_BORE
 assert_disabled_or_absent LTO_NONE
 assert_disabled_or_absent LTO_CLANG_FULL
 assert_disabled_or_absent CMDLINE_OVERRIDE
@@ -354,7 +410,6 @@ assert_config "CONFIG_AS_IS_LLVM=y"
 assert_config "CONFIG_LTO=y"
 assert_config "CONFIG_LTO_CLANG=y"
 assert_config "CONFIG_LTO_CLANG_THIN=y"
-assert_config "CONFIG_SCHED_BORE=y"
 assert_config "CONFIG_LRU_MARIE=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"

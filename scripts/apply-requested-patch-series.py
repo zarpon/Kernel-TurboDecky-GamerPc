@@ -49,7 +49,10 @@ REQUESTED_SERIES_DIR="$PATCHDIR/requested-series"
     echo "Candidate $candidate: $url" | tee -a "$LOGDIR/${prefix}-fetch-attempts.log"
     if curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
         --connect-timeout 30 --max-time 600 "$url" -o "$output.tmp" \
-        >> "$LOGDIR/${prefix}-fetch-attempts.log" 2>&1 && test -s "$output.tmp"; then
+        >> "$LOGDIR/${prefix}-fetch-attempts.log" 2>&1 && \
+        test -s "$output.tmp" && \
+        grep -Eq '^(From [0-9a-f]{40} |From: |diff --git a/|--- (a/|/dev/null))' \
+          "$output.tmp"; then
       mv "$output.tmp" "$output"
       {
         echo "Component: $label"
@@ -64,6 +67,8 @@ REQUESTED_SERIES_DIR="$PATCHDIR/requested-series"
       } | tee "$LOGDIR/${prefix}-provenance.txt"
       return 0
     fi
+    echo "Rejected candidate: response is not a unified email/diff patch" \
+      | tee -a "$LOGDIR/${prefix}-fetch-attempts.log"
     rm -f "$output.tmp"
   done
 
@@ -141,7 +146,8 @@ fetch_requested_patch_series() {
 
   fetch_candidate_patch "ath11k DISABLE_KEY revert" \
     "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key" \
-    "https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"
+    "https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch" \
+    "https://git.infobricfleet.com/gtu/openwrt/-/raw/95341cc9c560ff371c06db2a8221d19bb62d0c30/package/kernel/mac80211/patches/ath11k/940-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"
 
   fetch_candidate_patch "ath11k Qualcomm upstream series" \
     "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream" \
@@ -221,6 +227,11 @@ apply_requested_patch_series() {
   apply_requested_patch "mac80211 minstrel fluctuation reduction" "$REQUESTED_SERIES_DIR/19-minstrel-fluctuation.patch" "19-minstrel-fluctuation"
   apply_requested_patch "mac80211 minstrel rate downgrade rework" "$REQUESTED_SERIES_DIR/20-minstrel-downgrade.patch" "20-minstrel-downgrade"
   apply_requested_patch "ath11k remapped CE 64-bit fix" "$REQUESTED_SERIES_DIR/21-ath11k-remapped-ce.patch" "21-ath11k-remapped-ce"
+  if grep -R -n -F 'ATH11K_CE_OFFSET' \
+      "$KERNELDIR/drivers/net/wireless/ath/ath11k"; then
+    echo "ath11k remapped CE port left ATH11K_CE_OFFSET references behind" >&2
+    return 1
+  fi
   apply_requested_patch "ath11k DISABLE_KEY revert" "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key"
   apply_requested_patch "ath11k Qualcomm upstream series" "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream"
 

@@ -34,9 +34,13 @@ ou a verificação deve ser desativada.
 
 ## Benefícios esperados
 
-- **Responsividade e jogos:** BORE e POC Selector favorecem tarefas
-  interativas e escolhem CPUs ociosas considerando a topologia de cache, o que
-  pode melhorar a latência percebida e a consistência do frame time.
+- **Responsividade e jogos:** Infinity CPU/EEVDF e POC Selector favorecem
+  tarefas interativas, controlam o orçamento de CPU por EMA e escolhem CPUs
+  ociosas considerando a topologia de cache, o que pode melhorar a latência
+  percebida e a consistência do frame time.
+- **Tarefas RT e espera:** Infinity v3 também adiciona hooks de EMA para
+  SCHED_FIFO/SCHED_RR e bypass seguro da proteção de fatia para tarefas que
+  estão entrando em espera futex; isso não transforma o kernel em PREEMPT_RT.
 - **Resposta de frequência:** REFLEX acelera a transição de ocioso para ativo,
   enquanto NAP escolhe estados de idle de forma adaptativa.
 - **I/O e carregamento:** ADIOS ajusta deadlines e lotes conforme a latência
@@ -73,13 +77,19 @@ Esse valor é usado por `uname -r`, `vermagic`, `/boot/vmlinuz-*`,
 `/lib/modules/*` e pelos nomes dos pacotes Debian. A versão, série, tag, data
 e origem da fonte ficam registradas nos logs e nas notas da Release.
 
+Durante `bindeb-pkg`, o `depmod` do kmod exige que o argumento de versão comece
+por um dígito. Como a identidade pública começa por `linux.`, o workflow cria
+um alias numérico temporário somente para gerar os mapas de dependências e o
+remove ao terminar; o `uname -r`, os módulos instalados e os pacotes mantêm o
+nome TurboDecky completo.
+
 Fonte: [Linux stable](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git).
 O build clona a tag `v<versão>` e confirma a versão pelo Makefile antes de
 aplicar qualquer patch.
 
 ## Patchset de desempenho
 
-- **BORE 6.8.0-rc1** — [firelzrd/bore-scheduler](https://github.com/firelzrd/bore-scheduler): favorece responsividade de tarefas em rajadas sobre CFS/EEVDF.
+- **Infinity scheduler v3** — [branch v3 / patch stable/linux-7.1-infinity/0001](https://github.com/galpt/infinity-scheduler/blob/v3/patches/stable/linux-7.1-infinity/0001-infinity-scheduler.patch): scheduler de CPU integrado ao CFS/EEVDF, modulação de vruntime e fatias por EMA, bypass futex e hooks de RT. O patch não inclui DRM/GPU; o scheduler DRM upstream é mantido.
 - **POC Selector 2.6.2r2** — [firelzrd/poc-selector](https://github.com/firelzrd/poc-selector): seleção eficiente de CPU ociosa considerando LLC e topologia.
 - **NAP CPUIdle 0.5.0** — [firelzrd/nap](https://github.com/firelzrd/nap): predição adaptativa do estado de idle.
 - **REFLEX CPUFreq 0.3.1** — [firelzrd/reflex](https://github.com/firelzrd/reflex): resposta rápida idle→busy combinada com PELT.
@@ -91,8 +101,11 @@ O workflow também resolve e registra C23 libbpf, Clear Linux, fsync via
 `FUTEX_WAIT_MULTIPLE`, O3, Bluetooth SSP, workaround libbpf, otimizações
 universais de CPU sem selecioná-las para um modelo específico, compatibilidade
 DKMS-Clang, Polly, diagnósticos de firmware, três correções minstrel_ht e
-correções ath11k. Cada patch tem fonte, commit ou URL, SHA-256, tentativa de
-aplicação, detecção de integração prévia e relatório de rejeitos.
+correções ath11k. As quatro fontes OpenWrt do commit
+[`0ff1553b`](https://github.com/openwrt/openwrt/tree/0ff1553bd731c0db28043fc9caab90bdc32587f3)
+ficam versionadas em `patches/openwrt-0ff1553/`; o rework de downgrade possui
+um port com contexto Linux 7.1. Cada patch tem fonte, commit ou URL, SHA-256,
+tentativa de aplicação, detecção de integração prévia e relatório de rejeitos.
 
 
 ## Instalação automática da última Release
