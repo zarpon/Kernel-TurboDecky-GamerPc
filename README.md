@@ -95,8 +95,11 @@ O workflow também resolve e registra C23 libbpf, Clear Linux, fsync via
 `FUTEX_WAIT_MULTIPLE`, O3, Bluetooth SSP, workaround libbpf, otimizações
 universais de CPU sem selecioná-las para um modelo específico, compatibilidade
 DKMS-Clang, Polly, diagnósticos de firmware, três correções minstrel_ht e
-correções ath11k. Cada patch tem fonte, commit ou URL, SHA-256, tentativa de
-aplicação, detecção de integração prévia e relatório de rejeitos.
+correções ath11k. As quatro fontes OpenWrt do commit
+[`0ff1553b`](https://github.com/openwrt/openwrt/tree/0ff1553bd731c0db28043fc9caab90bdc32587f3)
+ficam versionadas em `patches/openwrt-0ff1553/`; o rework de downgrade possui
+um port com contexto Linux 7.1. Cada patch tem fonte, commit ou URL, SHA-256,
+tentativa de aplicação, detecção de integração prévia e relatório de rejeitos.
 
 
 ## Instalação automática da última Release
