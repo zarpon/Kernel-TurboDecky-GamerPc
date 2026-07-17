@@ -24,15 +24,18 @@ O resolvedor cria `.resolved-patches/patch-lock.json` contendo, para cada
 componente:
 
 - repositório e branch consultados;
-- commit exato;
+- commit upstream exato;
+- commit do repositório Git mínimo e autocontido usado pelo build;
 - caminho selecionado;
 - série do kernel-alvo identificada no nome;
 - versão do patch, quando disponível;
 - SHA-256 e tamanho dos bytes aplicados;
 - indicação de correspondência exata, fallback de série ou fallback de commit.
 
-O build usa os snapshots locais desse lock, não volta a consultar a rede durante
-a aplicação e copia o lock para `logs/patch-lock.json`.
+O build usa repositórios Git mínimos e autocontidos gerados a partir dos bytes
+selecionados. Eles não possuem `promisor remote` nem dependem de lazy fetch;
+assim, a aplicação não volta a consultar a rede. O lock é copiado para
+`logs/patch-lock.json`.
 
 ## Componentes versionados
 
@@ -56,5 +59,6 @@ Os testes usam repositórios Git locais e confirmam:
 - escolha da série anterior compatível mais próxima;
 - falha quando uma série exata obrigatória não existe;
 - recuperação por commit histórico;
-- consumo do snapshot como repositório Git local;
+- consumo do snapshot como repositório Git local autocontido;
+- ausência de dependência de lazy fetch durante a aplicação;
 - reescrita idempotente dos scripts de build.
