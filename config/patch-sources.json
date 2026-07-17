@@ -54,7 +54,7 @@
       "output": "03-adios.patch",
       "project_version_regex": "ADIOS[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
       "required_markers": [
-        "adios",
+        "ADIOS",
         "MQ_IOSCHED_ADIOS"
       ]
     },
