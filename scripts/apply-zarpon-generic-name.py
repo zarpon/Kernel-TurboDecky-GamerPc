@@ -99,9 +99,9 @@ git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-ch
         "Polly toolchain selection",
     )
 
-    # git.openwrt.org can intermittently return 502 from hosted runners. Keep
-    # each user-supplied URL as the first candidate and add the official GitHub
-    # mirror of the exact same OpenWrt commit as a deterministic fallback.
+    # Keep exact OpenWrt sources in the repository so hosted runners do not
+    # depend on a third-party mirror being available at build time. The
+    # network URLs remain as provenance-preserving fallbacks.
     openwrt_commit = "0ff1553bd731c0db28043fc9caab90bdc32587f3"
     openwrt_paths = (
         "package/kernel/mac80211/patches/subsys/302-mac80211-minstrel_ht-fix-MINSTREL_FRAC-macro.patch",
@@ -109,7 +109,15 @@ git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-ch
         "package/kernel/mac80211/patches/subsys/304-mac80211-minstrel_ht-rework-rate-downgrade-code-and-.patch",
         "package/kernel/mac80211/patches/ath11k/910-ath11k-fix-remapped-ce-accessing-issue-on-64bit-OS.patch",
     )
+    vendored_names = {
+        "package/kernel/mac80211/patches/subsys/304-mac80211-minstrel_ht-rework-rate-downgrade-code-and-.patch":
+            "304-mac80211-minstrel_ht-rework-rate-downgrade-code-and--linux7.1-port.patch",
+    }
     for patch_path in openwrt_paths:
+        vendored = (
+            "file://$ROOT/patches/openwrt-0ff1553/"
+            f"{vendored_names.get(patch_path, Path(patch_path).name)}"
+        )
         primary = (
             "https://git.openwrt.org/openwrt/openwrt/plain/"
             f"{patch_path}?id={openwrt_commit}"
@@ -121,6 +129,7 @@ git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-ch
         source = replace_once(
             source,
             f'"{primary}"',
+            f'"{vendored}" \\' + "\n    " +
             f'"{primary}" \\' + "\n    " + f'"{mirror}"',
             f"OpenWrt mirror for {Path(patch_path).name}",
         )
