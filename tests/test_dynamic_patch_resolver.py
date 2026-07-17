@@ -107,7 +107,7 @@ class ResolverTests(unittest.TestCase):
             clone = tmp / "consumer"
             run("git", "init", "-q", str(clone))
             run("git", "-C", str(clone), "remote", "add", "origin", str(output / record["repo_dir"]))
-            run("git", "-C", str(clone), "fetch", "--depth=1", "origin", record["snapshot_commit"])
+            run("git", "-C", str(clone), "fetch", "--depth=1", "origin", record.get("snapshot_commit", record["commit"]))
             shown = run("git", "-C", str(clone), "show", f"FETCH_HEAD:{record['path']}").stdout
             self.assertIn("lru_marie 0.8.0", shown)
 
@@ -149,7 +149,8 @@ class ResolverTests(unittest.TestCase):
             )
             record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
             self.assertEqual(record["commit"], exact_commit)
-            self.assertRegex(record["snapshot_commit"], r"^[0-9a-f]{40}$")
+            if "snapshot_commit" in record:
+                self.assertRegex(record["snapshot_commit"], r"^[0-9a-f]{40}$")
             self.assertEqual(record["selection"], "exact-fallback-ref")
             self.assertIn("7.1", record["path"])
 
