@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Set the dynamic TurboDecky kernel identity and Polly toolchain mode."""
+"""Set the dynamic TurboDecky kernel identity, Polly mode and VRAM integration."""
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -174,7 +175,10 @@ def main() -> None:
             "<build-kernelnote.sh>"
         )
     patch_core(Path(sys.argv[1]))
-    patch_wrapper(Path(sys.argv[2]))
+    wrapper = Path(sys.argv[2])
+    patch_wrapper(wrapper)
+    vram_integrator = Path(__file__).with_name("apply-vram-cgroup.py")
+    subprocess.run([sys.executable, str(vram_integrator), str(wrapper)], check=True)
 
 
 if __name__ == "__main__":
