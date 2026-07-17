@@ -30,6 +30,14 @@ MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
 
     source = replace_once(
         source,
+        '  "${MAKE[@]}" -j"$JOBS" bindeb-pkg ',
+        '  "${MAKE[@]}" -j"$JOBS" '
+        'DEPMOD="$ROOT/scripts/depmod-turbodecky.sh" bindeb-pkg ',
+        "depmod compatibility for linux.* release names",
+    )
+
+    source = replace_once(
+        source,
         '''apply_requested_patch_series
 
 # Generic amd64 profile: keep the upstream platform, topology and driver
