@@ -1,0 +1,4 @@
+TurboDecky full package release trigger
+Source main commit: e23f2c4986d35fee37b0b6ab5650aa5f67d7d9cf
+Requested: 2026-07-17
+Mode: package
