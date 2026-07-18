@@ -1,6 +1,9 @@
 name: Test Infinity v4.6 full GPU series
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - agent/infinity-v46-full-gpu-test
