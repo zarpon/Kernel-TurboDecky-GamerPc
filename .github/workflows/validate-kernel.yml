@@ -177,6 +177,12 @@ jobs:
           assert infinity['excluded_patches'] == []
           assert [Path(path).name[:4] for path in infinity['selected_paths']] == ['0001','0002','0003','0004','0005','0006']
           PY
+
+      - name: Verify validation module coverage
+        if: ${{ env.BUILD_MODE == 'validate' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
           test -s logs/modules-build.log
           test -s logs/modules-products.txt
 
