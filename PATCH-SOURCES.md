@@ -18,6 +18,25 @@ pelo workflow.
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
 
+## Infinity v4.6-gpu: política CPU/RT
+
+O Infinity é resolvido separadamente por
+`config/infinity-source.json`. Cada build consulta o HEAD atual da branch
+`v4.6-gpu` e exige exatamente os três patches da série correspondente ao kernel:
+
+1. `0001`: infraestrutura principal do Infinity;
+2. `0002`: agendamento CPU em CFS/EEVDF;
+3. `0003`: agendamento RT e proteção por requeue.
+
+Os três arquivos são concatenados em um único mbox bloqueado por build para
+preservar o caminho de aplicação existente. Os patches `0004`, `0005` e `0006`
+do agendador DRM/GPU são proibidos e o build falha se qualquer marcador deles
+aparecer no arquivo combinado.
+
+A resolução registra o commit exato do HEAD consultado, os três caminhos
+selecionados, o SHA-256 do mbox combinado e a política
+`exact-branch-head-cpu-rt-only`.
+
 ## Lock por build
 
 O resolvedor cria `.resolved-patches/patch-lock.json` contendo, para cada
@@ -39,9 +58,9 @@ assim, a aplicação não volta a consultar a rede. O lock é copiado para
 
 ## Componentes versionados
 
-A resolução dinâmica cobre Infinity v3, Marie LRU, ADIOS, ZRAM-IR, POC
-Selector, NAP, REFLEX, patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a
-configuração-base do Liquorix.
+A resolução dinâmica cobre Infinity v4.6-gpu CPU/RT, Marie LRU, ADIOS, ZRAM-IR,
+POC Selector, NAP, REFLEX, patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt
+e a configuração-base do Liquorix.
 
 Patches de correção sem versão própria, como commits upstream específicos e
 séries enviadas por e-mail, são baixados novamente e registrados por SHA-256,
@@ -61,4 +80,7 @@ Os testes usam repositórios Git locais e confirmam:
 - recuperação por commit histórico;
 - consumo do snapshot como repositório Git local autocontido;
 - ausência de dependência de lazy fetch durante a aplicação;
+- acompanhamento do HEAD da branch `v4.6-gpu`;
+- combinação exclusiva dos patches Infinity `0001`–`0003`;
+- rejeição dos patches DRM/GPU `0004`–`0006`;
 - reescrita idempotente dos scripts de build.
