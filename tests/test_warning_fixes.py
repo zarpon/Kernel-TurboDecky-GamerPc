@@ -18,9 +18,12 @@ normalize_changed_whitespace() {
   :
 }
 apply_requested_patch_series
+apply_other_dynamic_series
 
+# A different rewriter may insert arbitrary calls here.
 # Generic amd64 profile: keep the upstream platform, topology and driver
 configure_builtin_cmdline
+apply_post_cmdline_policy
 
 # PR validation exercises the complete built-in kernel
 assert_config \"CONFIG_CMDLINE_BOOL=y\"
@@ -36,7 +39,15 @@ assert_config \"CONFIG_CMDLINE_BOOL=y\"
         self.assertEqual(first, second)
         self.assertIn("fix_known_build_warnings()", first)
         self.assertIn("static int futex_opcode_31(", first)
-        self.assertIn("fix_known_build_warnings\n\n# Generic amd64 profile", first)
+        self.assertIn(
+            "apply_requested_patch_series\nfix_known_build_warnings\n"
+            "apply_other_dynamic_series",
+            first,
+        )
+        self.assertIn(
+            "configure_builtin_cmdline\n\n# MULTIPLEXER is a boolean symbol.",
+            first,
+        )
         self.assertIn("scripts/config --enable MULTIPLEXER", first)
         self.assertIn('assert_config "CONFIG_MULTIPLEXER=y"', first)
 
