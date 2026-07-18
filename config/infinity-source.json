@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "repo": "https://github.com/galpt/infinity-scheduler.git",
+  "ref": "v4.6-gpu",
+  "patches": [
+    {
+      "glob": "patches/arch/{series}/0001-v4.5-core-Infinity-scheduler-infrastructure.patch",
+      "required_markers": [
+        "kernel/sched/infinity_sched.c",
+        "futex_waiting",
+        "infinity_version"
+      ]
+    },
+    {
+      "glob": "patches/arch/{series}/0002-v4.5-Infinity-CPU-scheduling-on-CFS-EEVDF.patch",
+      "required_markers": [
+        "infinity_update_weight",
+        "group_ema_sleep_start",
+        "can_migrate_task"
+      ]
+    },
+    {
+      "glob": "patches/arch/{series}/0003-v4.5-Infinity-RT-scheduling-adaptive-RR-timeslice-an.patch",
+      "required_markers": [
+        "infinity_rt_consume",
+        "infinity_rr_timeslice",
+        "INFINITY_RT_DEMOTE_THRESHOLD",
+        "requeue_task_rt"
+      ]
+    }
+  ],
+  "combined_required_markers": [
+    "Subject: [PATCH 1/6] v4.5: core Infinity scheduler infrastructure",
+    "Subject: [PATCH 2/6] v4.5: Infinity CPU scheduling on CFS/EEVDF",
+    "Subject: [PATCH 3/6] v4.5: Infinity RT scheduling",
+    "group_ema_sleep_start",
+    "infinity_rt_consume",
+    "requeue_task_rt"
+  ],
+  "forbidden_markers": [
+    "Subject: [PATCH 4/6]",
+    "Subject: [PATCH 5/6]",
+    "Subject: [PATCH 6/6]",
+    "drivers/gpu/drm",
+    "INFINITY_GPU_",
+    "drm_sched_entity_calc_vtime"
+  ],
+  "synthetic_path": "patches/turbodecky/linux-{series}-infinity/0001-infinity-v4.6-gpu-cpu-rt.patch",
+  "output": "01-infinity.patch"
+}
