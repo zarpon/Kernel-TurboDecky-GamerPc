@@ -2,6 +2,7 @@
 """Rewrite generated build assertions for Infinity v4.6-gpu CPU/RT only."""
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -88,8 +89,11 @@ def rewrite(path: Path) -> None:
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("usage: patch-infinity-v46-build.py <generated-core>")
+    core = Path(sys.argv[1])
     try:
-        rewrite(Path(sys.argv[1]))
+        rewrite(core)
+        module_rewriter = Path(__file__).with_name("apply-validation-modules.py")
+        subprocess.run([sys.executable, str(module_rewriter), str(core)], check=True)
     except RewriteError as exc:
         raise SystemExit(f"Infinity build rewrite failed: {exc}") from exc
 
