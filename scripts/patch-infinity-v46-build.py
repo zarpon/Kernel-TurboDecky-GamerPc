@@ -92,8 +92,12 @@ def main() -> None:
     core = Path(sys.argv[1])
     try:
         rewrite(core)
-        module_rewriter = Path(__file__).with_name("apply-validation-modules.py")
-        subprocess.run([sys.executable, str(module_rewriter), str(core)], check=True)
+        # Full generated build scripts contain the package/validate mode block.
+        # Small unit-test fixtures intentionally exercise only Infinity rewriting;
+        # module coverage has its own fail-closed unit tests.
+        if 'if [[ "$MODE" == "package" ]]' in core.read_text(encoding="utf-8"):
+            module_rewriter = Path(__file__).with_name("apply-validation-modules.py")
+            subprocess.run([sys.executable, str(module_rewriter), str(core)], check=True)
     except RewriteError as exc:
         raise SystemExit(f"Infinity build rewrite failed: {exc}") from exc
 
