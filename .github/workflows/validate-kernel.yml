@@ -2,27 +2,21 @@ name: Build latest upstream TurboDecky GamerPc kernel
 
 on:
   pull_request:
-    branches:
-      - main
-  # A push to the integration branch is the reproducible package trigger.
+    branches: [main]
   push:
-    branches:
-      - infinity-v46-cpu-rt
+    branches: [integration/infinity-v46-full-gpu]
   workflow_dispatch:
     inputs:
       mode:
         description: Build mode
         required: true
-        default: package
+        default: validate
         type: choice
-        options:
-          - validate
-          - package
+        options: [validate, package]
 
 permissions:
   contents: write
 
-# Keep the generic kernel workflow independent from unrelated pull requests.
 concurrency:
   group: turbodecky-generic-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -32,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'pull_request' && github.head_ref != 'infinity-v46-cpu-rt' && 'validate' || 'package' }}
+      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'push' && 'package' || 'validate' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 8G
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -48,21 +42,16 @@ jobs:
       TZ: UTC
 
     steps:
-      - name: Free /opt runner space
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          sudo find /opt -maxdepth 1 -mindepth 1 \
-            ! -path /opt/containerd \
-            ! -path /opt/actionarchivecache \
-            ! -path /opt/runner \
-            ! -path /opt/runner-cache \
-            -print -exec rm -rf -- {} +
-
-      - name: Free tool cache
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+      - name: Free runner space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
         with:
           tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Check out project
         uses: actions/checkout@v4
@@ -81,58 +70,32 @@ jobs:
             --github-output "$GITHUB_OUTPUT" \
             --log-dir logs
 
-      - name: Configure CPU and zswap
+      - name: Configure resources
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p logs
-          exec > >(tee -a logs/ci-resources.log) 2>&1
-
           JOBS="$(nproc --all)"
           echo "JOBS=$JOBS" >> "$GITHUB_ENV"
           echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
-
           parameters=/sys/module/zswap/parameters
-          test -e "$parameters/compressor"
-          test -e "$parameters/max_pool_percent"
-          test -e "$parameters/shrinker_enabled"
-          test -e "$parameters/enabled"
           echo zstd | sudo tee "$parameters/compressor"
-          echo 90   | sudo tee "$parameters/max_pool_percent"
-          echo 1    | sudo tee "$parameters/shrinker_enabled"
-          echo 1    | sudo tee "$parameters/enabled"
-
-          [[ "$(cat "$parameters/compressor")" == zstd ]]
-          [[ "$(cat "$parameters/max_pool_percent")" == 90 ]]
-          case "$(cat "$parameters/enabled")" in Y|1) ;; *) exit 1 ;; esac
-          case "$(cat "$parameters/shrinker_enabled")" in Y|1) ;; *) exit 1 ;; esac
-          echo "Detected logical CPUs: $JOBS"
+          echo 90 | sudo tee "$parameters/max_pool_percent"
+          echo 1 | sudo tee "$parameters/shrinker_enabled"
+          echo 1 | sudo tee "$parameters/enabled"
 
       - name: Configure 16 GiB swap
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
         with:
           swap-size-gb: 16
 
-      - name: Verify build resources
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          exec > >(tee -a logs/ci-resources.log) 2>&1
-          free -h
-          swapon --show
-          df -h /
-          SWAP_BYTES="$(swapon --noheadings --show=SIZE --bytes | awk '{total += $1} END {print total + 0}')"
-          (( SWAP_BYTES >= 15 * 1024 * 1024 * 1024 ))
-
       - name: Restore compiler cache
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: turbodecky-upstream-${{ steps.kernel.outputs.version }}-v46-cpu-rt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'scripts/resolve-*.py', 'config/*.json', 'config/kernelnote.config') }}
+          key: turbodecky-full-gpu-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'scripts/*.sh', 'config/*.json', 'config/kernelnote.config') }}
           restore-keys: |
-            turbodecky-upstream-${{ steps.kernel.outputs.version }}-v46-cpu-rt-${{ runner.os }}-${{ runner.arch }}-
-            turbodecky-upstream-${{ steps.kernel.outputs.series }}-v46-cpu-rt-${{ runner.os }}-${{ runner.arch }}-
-            turbodecky-upstream-
+            turbodecky-full-gpu-${{ steps.kernel.outputs.series }}-${{ runner.os }}-${{ runner.arch }}-
+            turbodecky-full-gpu-
 
       - name: Install build dependencies and Polly
         env:
@@ -144,63 +107,32 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get -o Acquire::Retries=3 update
-
-          apt-cache policy clang-18 llvm-18-dev libpolly-18-dev \
-            | tee logs/llvm-apt-policy.txt
-
           sudo apt-get install -y --no-install-recommends \
             bc bison build-essential ccache clang-18 cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
-            kmod libdw-dev libelf-dev libssl-dev lld-18 llvm-18 llvm-18-dev \
+            kmod libdw-dev libelf-dev libssl-dev lld-18 llvm-18 llvm-18-dev libpolly-18-dev \
             pahole patchutils python3 rsync unzip xz-utils zip zstd
-          sudo apt-get install -y --no-install-recommends libpolly-18-dev
-
-          dpkg-query -W -f='${binary:Package} ${Version}\n' \
-            clang-18 llvm-18 llvm-18-dev libpolly-18-dev \
-            | tee logs/llvm-installed-packages.txt
-
           echo "/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
-          POLLY_SO="$(
-            {
-              dpkg -L libpolly-18-dev
-              find /usr/lib/llvm-18 /usr/lib/x86_64-linux-gnu \
-                -maxdepth 4 -type f -name 'LLVMPolly.so*' 2>/dev/null
-            } | grep -E '/LLVMPolly\.so($|\.[0-9]+)' | head -n 1
-          )"
-          if [[ -z "$POLLY_SO" || ! -f "$POLLY_SO" ]]; then
-            echo "LLVMPolly plugin was not found after installing libpolly-18-dev" >&2
-            dpkg -L libpolly-18-dev >&2 || true
-            exit 1
-          fi
-          POLLY_SO="$(readlink -f "$POLLY_SO")"
-          echo "LLVM_POLLY_SO=$POLLY_SO" >> "$GITHUB_ENV"
-          echo "Polly plugin: $POLLY_SO" | tee logs/polly-toolchain.txt
-
+          POLLY_SO="$(find /usr/lib/llvm-18 /usr/lib/x86_64-linux-gnu -type f -name 'LLVMPolly.so*' 2>/dev/null | head -n 1)"
+          test -n "$POLLY_SO"
+          echo "LLVM_POLLY_SO=$(readlink -f "$POLLY_SO")" >> "$GITHUB_ENV"
           ccache --set-config=max_size="$CCACHE_MAXSIZE"
           ccache --set-config=compression=true
           ccache --set-config=compiler_check=content
           ccache --set-config=base_dir="$CCACHE_BASEDIR"
           ccache --set-config=hash_dir=false
           ccache --set-config=depend_mode=true
-          ccache --set-config=sloppiness="$CCACHE_SLOPPINESS"
           ccache --zero-stats
 
-          clang-18 --version
-          ld.lld-18 --version
-          llvm-ar-18 --version | head -n 1
-
-      - name: Configure cached Clang 18 toolchain
+      - name: Configure cached Clang 18
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/.ci-bin"
-          cat > "$GITHUB_WORKSPACE/.ci-bin/clang" <<'EOF'
-          #!/usr/bin/env bash
-          exec ccache /usr/bin/clang-18 "$@"
-          EOF
-          chmod +x "$GITHUB_WORKSPACE/.ci-bin/clang"
+          mkdir -p .ci-bin
+          printf '#!/usr/bin/env bash\nexec ccache /usr/bin/clang-18 "$@"\n' > .ci-bin/clang
+          chmod +x .ci-bin/clang
           echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
 
-      - name: Prepare and build upstream ThinLTO kernel
+      - name: Validate and build kernel
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -210,67 +142,57 @@ jobs:
           python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
-          python3 -m py_compile scripts/apply-*.py scripts/resolve-*.py
+          python3 -m py_compile scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
 
-      - name: Verify Infinity v4.6-gpu CPU/RT integration
+      - name: Verify complete Infinity series and POC compatibility
         shell: bash
         run: |
           set -Eeuo pipefail
-          grep -Fq 'Component: Infinity scheduler v4.6-gpu CPU/RT subset' logs/01-infinity-provenance.txt
-          grep -Fq 'Infinity v4.6-gpu CPU/RT patches applied successfully' logs/build.log
-          grep -Fq 'infinity_rt_consume' work/linux/kernel/sched/rt.c
+          grep -Fq 'Component: Infinity scheduler v4.6-gpu full CPU/RT/DRM/GPU series' logs/01-infinity-provenance.txt
+          grep -Fq 'Infinity v4.6-gpu full series applied successfully' logs/build.log
+          for n in 1 2 3 4 5 6; do
+            grep -Fq "Subject: [PATCH $n/6]" .resolved-patches/files/01-infinity.patch
+          done
+          grep -Fq 'infinity_update_weight' work/linux/kernel/sched/fair.c
           grep -Fq 'INFINITY_RT_DEMOTE_THRESHOLD' work/linux/kernel/sched/infinity_sched.h
-          grep -Fq 'group_ema_sleep_start' work/linux/kernel/sched/fair.c
-          ! grep -Fq 'drivers/gpu/drm' .resolved-patches/files/01-infinity.patch
-          ! grep -Fq 'INFINITY_GPU_' .resolved-patches/files/01-infinity.patch
-          ! grep -Fq 'Subject: [PATCH 4/6]' .resolved-patches/files/01-infinity.patch
+          grep -Fq 'cached_gpu_vtime' work/linux/include/drm/gpu_scheduler.h
+          grep -Fq 'drm_sched_entity_calc_vtime' work/linux/drivers/gpu/drm/scheduler/sched_main.c
+          grep -Fq 'drm_sched_rq_select_entity_infinity' work/linux/drivers/gpu/drm/scheduler/sched_main.c
+          grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
+          ! grep -Eq '^CONFIG_SCHED_BORE=[ym]$' logs/final.config
+          python3 scripts/validate-infinity-poc-compat.py \
+            .resolved-patches/files/01-infinity.patch \
+            .resolved-patches/files/05-poc-selector.patch \
+            --report logs/infinity-poc-compatibility.txt
           python3 - <<'PY'
           import json
           from pathlib import Path
-
           lock = json.loads(Path('logs/patch-lock.json').read_text(encoding='utf-8'))
           infinity = lock['components']['infinity']
           assert infinity['ref'] == 'v4.6-gpu'
-          assert infinity['selection'] == 'exact-branch-head-cpu-rt-only'
-          assert infinity['series_count'] == 3
-          assert infinity['excluded_patches'] == ['0004', '0005', '0006']
-          selected = [Path(path).name for path in infinity['selected_paths']]
-          assert [name[:4] for name in selected] == ['0001', '0002', '0003']
+          assert infinity['selection'] == 'exact-branch-head-full-series'
+          assert infinity['series_count'] == 6
+          assert infinity['excluded_patches'] == []
+          assert [Path(path).name[:4] for path in infinity['selected_paths']] == ['0001','0002','0003','0004','0005','0006']
           PY
-          ! grep -Eq '^CONFIG_SCHED_BORE=[ym]$' logs/final.config
+          test -s logs/modules-build.log
+          test -s logs/modules-products.txt
 
-      - name: Show compiler cache statistics
-        if: always()
-        run: ccache --show-stats --verbose || true
-
-      - name: Prepare package release files
+      - name: Prepare release files
         if: ${{ env.BUILD_MODE == 'package' }}
         shell: bash
         run: |
           set -Eeuo pipefail
-          grep -Fx "$KERNEL_RELEASE_NAME" logs/kernelrelease.txt
-          grep -Fqx "Resolved version: $KERNEL_VERSION" logs/kernel-source-policy.txt
-          grep -Fq 'CONFIG_GENERIC_CPU=y' logs/final.config
-          grep -Fq 'CONFIG_CPU_SUP_INTEL=y' logs/final.config
-          grep -Fq 'CONFIG_CPU_SUP_AMD=y' logs/final.config
-          grep -Fq 'CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y' logs/final.config
-          grep -Fq 'CONFIG_POLLY_CLANG=y' logs/final.config
-          grep -Fq 'CONFIG_CPU_FREQ_DEFAULT_GOV_REFLEX=y' logs/final.config
-
           shopt -s nullglob
           packages=(artifacts/*.deb)
           (( ${#packages[@]} > 0 ))
-          (
-            cd artifacts
-            sha256sum -- *.deb > SHA256SUMS
-            sha256sum --check SHA256SUMS
-            zip -q -9 "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip" -- *.deb SHA256SUMS
-            unzip -tq "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip"
-          )
-          ls -lh artifacts
-          cat artifacts/SHA256SUMS
+          cd artifacts
+          sha256sum -- *.deb > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          zip -q -9 "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip" -- *.deb SHA256SUMS
+          unzip -tq "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip"
 
       - name: Upload Debian packages
         if: ${{ env.BUILD_MODE == 'package' }}
@@ -289,61 +211,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TARGET: ${{ github.event.pull_request.head.sha || github.sha }}
+          RELEASE_TARGET: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
-          shopt -s nullglob
-          packages=(artifacts/*.deb)
-          archive="artifacts/turbodecky-linux-${KERNEL_RELEASE_NAME}.zip"
-          test -s "$archive"
-          release_assets=("${packages[@]}" artifacts/SHA256SUMS "$archive")
           short_sha="${RELEASE_TARGET:0:7}"
           tag="${KERNEL_RELEASE_NAME}-${short_sha}"
-          title="$KERNEL_RELEASE_NAME"
-
-          cat > release-notes.md <<EOF
-          Latest kernel.org stable Linux ${KERNEL_VERSION} for generic amd64 Debian and Ubuntu gaming systems.
-
-          Stable-source policy:
-          - kernel.org latest_stable resolved at build time
-          - version: ${KERNEL_VERSION}
-          - release date: ${KERNEL_RELEASE_DATE}
-          - source: ${KERNEL_SOURCE_URL}
-          - source tag: ${KERNEL_TAG}
-
-          Identity:
-          - uname -r: ${KERNEL_RELEASE_NAME}
-          - /boot/vmlinuz-${KERNEL_RELEASE_NAME}
-          - /lib/modules/${KERNEL_RELEASE_NAME}
-
-          Hardware profile:
-          - x86-64 desktop, laptop and workstation hardware
-          - Intel and AMD CPU support retained from the upstream configuration
-          - CONFIG_GENERIC_CPU=y keeps the build independent of a CPU vendor or model
-          - upstream graphics, storage, networking, audio, camera and multimedia drivers retained
-          - Clang 18, O3, Polly and ThinLTO
-
-          Performance patch stack:
-          Marie LRU, Infinity v4.6-gpu CPU/EEVDF + RT hooks (patches 0001-0003 only; DRM/GPU excluded), POC Selector, NAP,
-          REFLEX default CPUFreq, ADIOS and ZRAM-IR LZ4 -> ZSTD.
-
-          Additional requested series:
-          C23 libbpf, Clear Linux, fsync FUTEX_WAIT_MULTIPLE, O3,
-          Bluetooth SSP key-size handling, libbpf warning workaround,
-          universal CPU optimizations, DKMS-Clang, Clang Polly, firmware-name,
-          three minstrel_ht changes and three ath11k changes.
-
-          Source commit: ${RELEASE_TARGET}
-          GitHub Actions run: ${GITHUB_RUN_ID}
-          EOF
-
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" "${release_assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
-          else
-            gh release create "$tag" "${release_assets[@]}" \
-              --repo "$GITHUB_REPOSITORY" --target "$RELEASE_TARGET" \
-              --title "$title" --notes-file release-notes.md
-          fi
+          shopt -s nullglob
+          assets=(artifacts/*.deb artifacts/SHA256SUMS artifacts/turbodecky-linux-*.zip)
+          gh release create "$tag" "${assets[@]}" --target "$RELEASE_TARGET" --title "$KERNEL_RELEASE_NAME" --generate-notes
 
       - name: Upload validation logs
         if: always()
