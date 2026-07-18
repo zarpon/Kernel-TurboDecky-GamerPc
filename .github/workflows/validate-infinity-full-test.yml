@@ -92,15 +92,35 @@ jobs:
           sudo apt-get install -y --no-install-recommends software-properties-common
           sudo add-apt-repository -y universe
           sudo apt-get -o Acquire::Retries=3 update
+
+          apt-cache policy clang-18 llvm-18-dev libpolly-18-dev \
+            | tee logs/llvm-apt-policy.txt
+
           sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential ccache clang-18 cpio curl debhelper diffstat \
-            dpkg-dev fakeroot flex git kmod libdw-dev libelf-dev libssl-dev \
-            lld-18 llvm-18 llvm-18-dev libpolly-18-dev pahole patchutils \
-            python3 rsync unzip xz-utils zip zstd
+            bc bison build-essential ccache clang-18 cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
+            kmod libdw-dev libelf-dev libssl-dev lld-18 llvm-18 llvm-18-dev \
+            pahole patchutils python3 rsync unzip xz-utils zip zstd
+          sudo apt-get install -y --no-install-recommends libpolly-18-dev
+
+          dpkg-query -W -f='${binary:Package} ${Version}\n' \
+            clang-18 llvm-18 llvm-18-dev libpolly-18-dev \
+            | tee logs/llvm-installed-packages.txt
+
           echo "/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
-          POLLY_SO="$(dpkg -L libpolly-18-dev | grep -E '/LLVMPolly\.so($|\.)' | head -n1)"
-          test -f "$POLLY_SO"
-          echo "LLVM_POLLY_SO=$(readlink -f "$POLLY_SO")" >> "$GITHUB_ENV"
+          POLLY_SO="$({
+            dpkg -L libpolly-18-dev
+            find /usr/lib/llvm-18 /usr/lib/x86_64-linux-gnu \
+              -maxdepth 4 -type f -name 'LLVMPolly.so*' 2>/dev/null
+          } | grep -E '/LLVMPolly\.so($|\.[0-9]+)' | head -n 1)"
+          if [[ -z "$POLLY_SO" || ! -f "$POLLY_SO" ]]; then
+            echo "LLVMPolly plugin was not found after installing libpolly-18-dev" >&2
+            dpkg -L libpolly-18-dev >&2 || true
+            exit 1
+          fi
+          POLLY_SO="$(readlink -f "$POLLY_SO")"
+          echo "LLVM_POLLY_SO=$POLLY_SO" >> "$GITHUB_ENV"
+          echo "Polly plugin: $POLLY_SO" | tee logs/polly-toolchain.txt
+
           ccache --set-config=max_size="$CCACHE_MAXSIZE"
           ccache --set-config=compression=true
           ccache --set-config=compiler_check=content
@@ -109,6 +129,10 @@ jobs:
           ccache --set-config=depend_mode=true
           ccache --set-config=sloppiness="$CCACHE_SLOPPINESS"
           ccache --zero-stats
+
+          clang-18 --version
+          ld.lld-18 --version
+          llvm-ar-18 --version | head -n 1
 
       - name: Configure cached Clang 18
         shell: bash
