@@ -36,7 +36,9 @@ def main():
     core=Path(sys.argv[1])
     try:
         rewrite(core)
+        helper_dir = Path(__file__).parent
+        subprocess.run([sys.executable, str(helper_dir / "apply-known-warning-fixes.py"), str(core)], check=True)
         if 'if [[ "$MODE" == "package" ]]' in core.read_text(encoding="utf-8"):
-            subprocess.run([sys.executable, str(Path(__file__).with_name("apply-validation-modules.py")), str(core)], check=True)
+            subprocess.run([sys.executable, str(helper_dir / "apply-validation-modules.py"), str(core)], check=True)
     except RewriteError as exc: raise SystemExit(f"Infinity build rewrite failed: {exc}") from exc
 if __name__=="__main__": main()
