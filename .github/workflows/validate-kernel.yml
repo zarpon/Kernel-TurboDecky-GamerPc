@@ -7,7 +7,7 @@ on:
   # A push to the integration branch is the reproducible package trigger.
   push:
     branches:
-      - infinity-v3
+      - infinity-v46-cpu-rt
   workflow_dispatch:
     inputs:
       mode:
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'pull_request' && github.head_ref != 'infinity-v3' && 'validate' || 'package' }}
+      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'pull_request' && github.head_ref != 'infinity-v46-cpu-rt' && 'validate' || 'package' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 8G
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -128,10 +128,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .ccache
-          key: turbodecky-upstream-${{ steps.kernel.outputs.version }}-v3-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'config/kernelnote.config') }}
+          key: turbodecky-upstream-${{ steps.kernel.outputs.version }}-v46-cpu-rt-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/build-kernelnote*.sh', 'scripts/apply-*.py', 'scripts/resolve-*.py', 'config/*.json', 'config/kernelnote.config') }}
           restore-keys: |
-            turbodecky-upstream-${{ steps.kernel.outputs.version }}-v3-${{ runner.os }}-${{ runner.arch }}-
-            turbodecky-upstream-${{ steps.kernel.outputs.series }}-v3-${{ runner.os }}-${{ runner.arch }}-
+            turbodecky-upstream-${{ steps.kernel.outputs.version }}-v46-cpu-rt-${{ runner.os }}-${{ runner.arch }}-
+            turbodecky-upstream-${{ steps.kernel.outputs.series }}-v46-cpu-rt-${{ runner.os }}-${{ runner.arch }}-
             turbodecky-upstream-
 
       - name: Install build dependencies and Polly
@@ -204,23 +204,41 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          scripts/validate-dynamic-patches-local.sh
           python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
           python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
-          python3 -m py_compile scripts/apply-*.py scripts/resolve-latest-stable.py
+          python3 -m py_compile scripts/apply-*.py scripts/resolve-*.py
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
 
-      - name: Verify Infinity v3 integration
+      - name: Verify Infinity v4.6-gpu CPU/RT integration
         shell: bash
         run: |
           set -Eeuo pipefail
-          grep -Fq 'Component: Infinity scheduler v3' logs/01-infinity-provenance.txt
-          grep -Fq 'Correct Infinity v3 CPU/RT scheduler patch applied successfully' logs/build.log
+          grep -Fq 'Component: Infinity scheduler v4.6-gpu CPU/RT subset' logs/01-infinity-provenance.txt
+          grep -Fq 'Infinity v4.6-gpu CPU/RT patches applied successfully' logs/build.log
           grep -Fq 'infinity_rt_consume' work/linux/kernel/sched/rt.c
-          grep -Fq 'SCHED_FLAG_NO_INFINITY_RT' work/linux/include/uapi/linux/sched.h
+          grep -Fq 'INFINITY_RT_DEMOTE_THRESHOLD' work/linux/kernel/sched/infinity_sched.h
+          grep -Fq 'group_ema_sleep_start' work/linux/kernel/sched/fair.c
+          ! grep -Fq 'drivers/gpu/drm' .resolved-patches/files/01-infinity.patch
+          ! grep -Fq 'INFINITY_GPU_' .resolved-patches/files/01-infinity.patch
+          ! grep -Fq 'Subject: [PATCH 4/6]' .resolved-patches/files/01-infinity.patch
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          lock = json.loads(Path('logs/patch-lock.json').read_text(encoding='utf-8'))
+          infinity = lock['components']['infinity']
+          assert infinity['ref'] == 'v4.6-gpu'
+          assert infinity['selection'] == 'exact-branch-head-cpu-rt-only'
+          assert infinity['series_count'] == 3
+          assert infinity['excluded_patches'] == ['0004', '0005', '0006']
+          selected = [Path(path).name for path in infinity['selected_paths']]
+          assert [name[:4] for name in selected] == ['0001', '0002', '0003']
+          PY
           ! grep -Eq '^CONFIG_SCHED_BORE=[ym]$' logs/final.config
 
       - name: Show compiler cache statistics
@@ -306,7 +324,7 @@ jobs:
           - Clang 18, O3, Polly and ThinLTO
 
           Performance patch stack:
-          Marie LRU, Infinity v3 CPU/EEVDF + RT hooks, POC Selector, NAP,
+          Marie LRU, Infinity v4.6-gpu CPU/EEVDF + RT hooks (patches 0001-0003 only; DRM/GPU excluded), POC Selector, NAP,
           REFLEX default CPUFreq, ADIOS and ZRAM-IR LZ4 -> ZSTD.
 
           Additional requested series:
