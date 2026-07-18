@@ -17,6 +17,26 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def insert_after_exact_line_once(
+    text: str, line: str, addition: str, label: str
+) -> str:
+    """Insert after one exact shell line without depending on surrounding blocks."""
+    lines = text.splitlines(keepends=True)
+    matches = [
+        index
+        for index, candidate in enumerate(lines)
+        if candidate.rstrip("\r\n") == line
+    ]
+    if len(matches) != 1:
+        raise RewriteError(
+            f"{label}: expected one exact line {line!r}, found {len(matches)}"
+        )
+    if addition and not addition.endswith("\n"):
+        addition += "\n"
+    lines.insert(matches[0] + 1, addition)
+    return "".join(lines)
+
+
 def rewrite(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     marker = "fix_known_build_warnings() {"
@@ -57,22 +77,24 @@ PYFIX
         function + "normalize_changed_whitespace() {\n",
         "known warning fix function",
     )
-    text = replace_once(
+    text = insert_after_exact_line_once(
         text,
-        "apply_requested_patch_series\n\n# Generic amd64 profile:",
-        "apply_requested_patch_series\nfix_known_build_warnings\n\n# Generic amd64 profile:",
+        "apply_requested_patch_series",
+        "fix_known_build_warnings\n",
         "known warning fix call",
     )
-    text = replace_once(
+    text = insert_after_exact_line_once(
         text,
-        "configure_builtin_cmdline\n\n# PR validation",
-        "configure_builtin_cmdline\n\n# MULTIPLEXER is a boolean symbol. Liquorix may carry the stale module value,\n# which olddefconfig normalizes with a warning unless corrected first.\nscripts/config --enable MULTIPLEXER\n\n# PR validation",
+        "configure_builtin_cmdline",
+        "\n# MULTIPLEXER is a boolean symbol. Liquorix may carry the stale module value,\n"
+        "# which olddefconfig normalizes with a warning unless corrected first.\n"
+        "scripts/config --enable MULTIPLEXER\n",
         "MULTIPLEXER configuration",
     )
-    text = replace_once(
+    text = insert_after_exact_line_once(
         text,
-        'assert_config "CONFIG_CMDLINE_BOOL=y"\n',
-        'assert_config "CONFIG_CMDLINE_BOOL=y"\nassert_config "CONFIG_MULTIPLEXER=y"\n',
+        'assert_config "CONFIG_CMDLINE_BOOL=y"',
+        'assert_config "CONFIG_MULTIPLEXER=y"\n',
         "MULTIPLEXER assertion",
     )
     path.write_text(text, encoding="utf-8")
