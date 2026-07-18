@@ -168,8 +168,6 @@ fi
     path.write_text(source, encoding="utf-8")
 
 
-
-
 def run_logged(command: list[str], log_path: Path) -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     result = subprocess.run(
@@ -194,8 +192,9 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
         raise SystemExit("KERNEL_VERSION and KERNEL_SERIES must be resolved before patch selection")
 
     manifest = root / "config/patch-sources.json"
-    resolver = root / "scripts/resolve-patch-sources.py"
+    resolver = root / "scripts/resolve-infinity-v46-cpu-series.py"
     rewriter = root / "scripts/apply-dynamic-patch-sources.py"
+    infinity_rewriter = root / "scripts/patch-infinity-v46-build.py"
     output = root / ".resolved-patches"
     logs = root / "logs"
     run_logged(
@@ -214,6 +213,10 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
     run_logged(
         [sys.executable, str(rewriter), str(core), str(wrapper), str(lock)],
         logs / "patch-source-rewrite.log",
+    )
+    run_logged(
+        [sys.executable, str(infinity_rewriter), str(core)],
+        logs / "infinity-v46-build-rewrite.log",
     )
 
 
