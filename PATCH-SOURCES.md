@@ -18,24 +18,31 @@ pelo workflow.
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
 
-## Infinity v4.6-gpu: política CPU/RT
+## Infinity v4.6-gpu: série completa de teste
 
-O Infinity é resolvido separadamente por
+Nesta branch de teste, o Infinity é resolvido separadamente por
 `config/infinity-source.json`. Cada build consulta o HEAD atual da branch
-`v4.6-gpu` e exige exatamente os três patches da série correspondente ao kernel:
+`v4.6-gpu` e exige exatamente os seis patches da série correspondente ao kernel:
 
 1. `0001`: infraestrutura principal do Infinity;
 2. `0002`: agendamento CPU em CFS/EEVDF;
-3. `0003`: agendamento RT e proteção por requeue.
+3. `0003`: agendamento RT e proteção por requeue;
+4. `0004`: extensões do cabeçalho do DRM scheduler;
+5. `0005`: vtime GPU e acoplamento entre os schedulers CPU/GPU;
+6. `0006`: limpeza final dos campos removidos pela série.
 
-Os três arquivos são concatenados em um único mbox bloqueado por build para
-preservar o caminho de aplicação existente. Os patches `0004`, `0005` e `0006`
-do agendador DRM/GPU são proibidos e o build falha se qualquer marcador deles
-aparecer no arquivo combinado.
+Os seis arquivos são concatenados em um único mbox bloqueado por build. A
+resolução registra o commit exato do HEAD, os seis caminhos, o SHA-256 do mbox e
+a política `exact-branch-head-full-series`. A ausência de qualquer patch
+interrompe o build e `excluded_patches` deve permanecer vazio.
 
-A resolução registra o commit exato do HEAD consultado, os três caminhos
-selecionados, o SHA-256 do mbox combinado e a política
-`exact-branch-head-cpu-rt-only`.
+## Infinity e POC Selector
+
+`scripts/validate-infinity-poc-compat.py` falha se os patches GPU deixarem de
+ficar restritos ao DRM, começarem a tocar arquivos do POC, escreverem estado
+`poc_*` ou perderem o acoplamento explícito com o estado CPU do Infinity.
+Também exige que o POC preserve o bypass em topologias de capacidade
+assimétrica. A análise está documentada em `INFINITY-POC-COMPATIBILITY.md`.
 
 ## Lock por build
 
@@ -45,22 +52,21 @@ componente:
 - repositório e branch consultados;
 - commit upstream exato;
 - commit do repositório Git mínimo e autocontido usado pelo build;
-- caminho selecionado;
-- série do kernel-alvo identificada no nome;
+- caminho ou caminhos selecionados;
+- série do kernel-alvo;
 - versão do patch, quando disponível;
 - SHA-256 e tamanho dos bytes aplicados;
 - indicação de correspondência exata, fallback de série ou fallback de commit.
 
 O build usa repositórios Git mínimos e autocontidos gerados a partir dos bytes
-selecionados. Eles não possuem `promisor remote` nem dependem de lazy fetch;
-assim, a aplicação não volta a consultar a rede. O lock é copiado para
+selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 `logs/patch-lock.json`.
 
 ## Componentes versionados
 
-A resolução dinâmica cobre Infinity v4.6-gpu CPU/RT, Marie LRU, ADIOS, ZRAM-IR,
-POC Selector, NAP, REFLEX, patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt
-e a configuração-base do Liquorix.
+A resolução dinâmica cobre Infinity v4.6-gpu completo, Marie LRU, ADIOS,
+ZRAM-IR, POC Selector, NAP, REFLEX, patches TTM/DMEM de VRAM, linux-tkg,
+CachyOS, OpenWrt e a configuração-base do Liquorix.
 
 Patches de correção sem versão própria, como commits upstream específicos e
 séries enviadas por e-mail, são baixados novamente e registrados por SHA-256,
@@ -72,15 +78,15 @@ mas continuam apontando para a revisão imutável escolhida.
 scripts/validate-dynamic-patches-local.sh
 ```
 
-Os testes usam repositórios Git locais e confirmam:
+Os testes confirmam:
 
 - escolha da versão mais nova para a série exata;
 - escolha da série anterior compatível mais próxima;
 - falha quando uma série exata obrigatória não existe;
 - recuperação por commit histórico;
 - consumo do snapshot como repositório Git local autocontido;
-- ausência de dependência de lazy fetch durante a aplicação;
 - acompanhamento do HEAD da branch `v4.6-gpu`;
-- combinação exclusiva dos patches Infinity `0001`–`0003`;
-- rejeição dos patches DRM/GPU `0004`–`0006`;
-- reescrita idempotente dos scripts de build.
+- combinação obrigatória dos patches Infinity `0001`–`0006`;
+- falha fechada quando qualquer patch da série está ausente;
+- reescrita das validações de build;
+- ausência de sobreposição DRM/POC e preservação dos gates semânticos.

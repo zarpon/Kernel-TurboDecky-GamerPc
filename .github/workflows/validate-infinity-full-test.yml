@@ -1,0 +1,184 @@
+name: Test Infinity v4.6 full GPU series
+
+on:
+  push:
+    branches:
+      - agent/infinity-v46-full-gpu-test
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infinity-v46-full-gpu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      BUILD_MODE: validate
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 8G
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_SLOPPINESS: include_file_ctime,include_file_mtime,time_macros
+      KBUILD_BUILD_USER: turbodecky
+      KBUILD_BUILD_HOST: github-actions
+      KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
+      KBUILD_BUILD_VERSION: "1"
+      SOURCE_DATE_EPOCH: "1767225600"
+      LC_ALL: C
+      TZ: UTC
+
+    steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: true
+
+      - name: Check out test branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Resolve latest stable Linux
+        id: kernel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p logs
+          python3 scripts/resolve-latest-stable.py \
+            --github-env "$GITHUB_ENV" \
+            --github-output "$GITHUB_OUTPUT" \
+            --log-dir logs
+
+      - name: Configure build resources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          JOBS="$(nproc --all)"
+          echo "JOBS=$JOBS" >> "$GITHUB_ENV"
+          echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
+          free -h | tee logs/ci-resources.log
+          df -h / | tee -a logs/ci-resources.log
+
+      - name: Configure 16 GiB swap
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+        with:
+          swap-size-gb: 16
+
+      - name: Restore compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: infinity-v46-full-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'config/*.json', 'config/kernelnote.config') }}
+          restore-keys: |
+            infinity-v46-full-${{ steps.kernel.outputs.series }}-${{ runner.os }}-${{ runner.arch }}-
+            infinity-v46-full-
+
+      - name: Install build dependencies and Polly
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get install -y --no-install-recommends software-properties-common
+          sudo add-apt-repository -y universe
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ccache clang-18 cpio curl debhelper diffstat \
+            dpkg-dev fakeroot flex git kmod libdw-dev libelf-dev libssl-dev \
+            lld-18 llvm-18 llvm-18-dev libpolly-18-dev pahole patchutils \
+            python3 rsync unzip xz-utils zip zstd
+          echo "/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
+          POLLY_SO="$(dpkg -L libpolly-18-dev | grep -E '/LLVMPolly\.so($|\.)' | head -n1)"
+          test -f "$POLLY_SO"
+          echo "LLVM_POLLY_SO=$(readlink -f "$POLLY_SO")" >> "$GITHUB_ENV"
+          ccache --set-config=max_size="$CCACHE_MAXSIZE"
+          ccache --set-config=compression=true
+          ccache --set-config=compiler_check=content
+          ccache --set-config=base_dir="$CCACHE_BASEDIR"
+          ccache --set-config=hash_dir=false
+          ccache --set-config=depend_mode=true
+          ccache --set-config=sloppiness="$CCACHE_SLOPPINESS"
+          ccache --zero-stats
+
+      - name: Configure cached Clang 18
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .ci-bin
+          cat > .ci-bin/clang <<'EOF'
+          #!/usr/bin/env bash
+          exec ccache /usr/bin/clang-18 "$@"
+          EOF
+          chmod +x .ci-bin/clang
+          echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
+
+      - name: Resolve patches and build kernel plus modules
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          scripts/validate-dynamic-patches-local.sh
+          python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 -m py_compile scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py
+          chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh \
+            scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
+          scripts/build-kernelnote.sh validate
+
+      - name: Verify complete Infinity series and POC compatibility
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'Component: Infinity scheduler v4.6-gpu full CPU/RT/DRM/GPU series' logs/01-infinity-provenance.txt
+          grep -Fq 'Infinity v4.6-gpu full series applied successfully' logs/build.log
+          for n in 1 2 3 4 5 6; do
+            grep -Fq "Subject: [PATCH $n/6]" .resolved-patches/files/01-infinity.patch
+          done
+          grep -Fq 'infinity_update_weight' work/linux/kernel/sched/fair.c
+          grep -Fq 'INFINITY_RT_DEMOTE_THRESHOLD' work/linux/kernel/sched/infinity_sched.h
+          grep -Fq 'cached_gpu_vtime' work/linux/include/drm/gpu_scheduler.h
+          grep -Fq 'drm_sched_entity_calc_vtime' work/linux/drivers/gpu/drm/scheduler/sched_main.c
+          grep -Fq 'drm_sched_rq_select_entity_infinity' work/linux/drivers/gpu/drm/scheduler/sched_main.c
+          grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
+          ! grep -Eq '^CONFIG_SCHED_BORE=[ym]$' logs/final.config
+          python3 scripts/validate-infinity-poc-compat.py \
+            .resolved-patches/files/01-infinity.patch \
+            .resolved-patches/files/05-poc-selector.patch \
+            --report logs/infinity-poc-compatibility.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          lock = json.loads(Path('logs/patch-lock.json').read_text(encoding='utf-8'))
+          infinity = lock['components']['infinity']
+          assert infinity['ref'] == 'v4.6-gpu'
+          assert infinity['selection'] == 'exact-branch-head-full-series'
+          assert infinity['series_count'] == 6
+          assert infinity['excluded_patches'] == []
+          assert [Path(path).name[:4] for path in infinity['selected_paths']] == [
+              '0001', '0002', '0003', '0004', '0005', '0006'
+          ]
+          PY
+          test -s logs/modules-build.log
+          test -s logs/modules-products.txt
+
+      - name: Show compiler cache statistics
+        if: always()
+        run: ccache --show-stats --verbose || true
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: infinity-v46-full-gpu-validation-logs
+          path: logs
+          if-no-files-found: error
+          retention-days: 30
