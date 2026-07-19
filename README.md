@@ -1,6 +1,6 @@
 # Kernel TurboDecky GamerPc
 
-Kernel Linux experimental otimizado para entusiastas que querem alto
+Kernel Linux otimizado para entusiastas que querem alto
 desempenho em multimídia e jogos nas distribuições Debian, Ubuntu e derivados.
 O repositório `Kernel-TurboDecky-GamerPc` acompanha a versão estável mais
 recente publicada pelo kernel.org.
