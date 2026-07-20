@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [integration/infinity-v46-full-gpu]
+    branches: [integration/infinity-v46-full-gpu, validation/release-publication-retry]
   workflow_dispatch:
     inputs:
       mode:
@@ -220,11 +220,57 @@ jobs:
           RELEASE_TARGET: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
+          shopt -s nullglob
+
           short_sha="${RELEASE_TARGET:0:7}"
           tag="${KERNEL_RELEASE_NAME}-${short_sha}"
-          shopt -s nullglob
-          assets=(artifacts/*.deb artifacts/SHA256SUMS artifacts/turbodecky-linux-*.zip)
-          gh release create "$tag" "${assets[@]}" --target "$RELEASE_TARGET" --title "$KERNEL_RELEASE_NAME" --generate-notes
+          packages=(artifacts/*.deb)
+          if ((${#packages[@]} == 0)); then
+            echo "No Debian packages are available for release" >&2
+            exit 1
+          fi
+          assets=(
+            "${packages[@]}"
+            artifacts/SHA256SUMS
+            artifacts/turbodecky-linux-*.zip
+          )
+          for asset in "${assets[@]}"; do
+            if [[ ! -f "$asset" ]]; then
+              echo "Release asset is missing: $asset" >&2
+              exit 1
+            fi
+          done
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            git fetch --force origin "+refs/tags/${tag}:refs/tags/${tag}"
+            existing_tag_commit="$(git rev-list -n 1 "$tag")"
+            if [[ "$existing_tag_commit" != "$RELEASE_TARGET" ]]; then
+              echo "Remote tag ${tag} points to ${existing_tag_commit}, expected ${RELEASE_TARGET}" >&2
+              exit 1
+            fi
+            echo "Reusing existing release tag ${tag}"
+          else
+            git tag "$tag" "$RELEASE_TARGET"
+            git push origin "refs/tags/${tag}"
+          fi
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$KERNEL_RELEASE_NAME"
+          else
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$KERNEL_RELEASE_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
+
+          gh release upload "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber \
+            "${assets[@]}"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY"
 
       - name: Upload validation logs
         if: always()
