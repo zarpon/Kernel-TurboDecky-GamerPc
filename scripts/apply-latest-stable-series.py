@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make requested patch lookup follow the dynamically resolved stable series."""
+"""Follow the resolved stable series and preserve VirtualBox host compatibility."""
 
 from __future__ import annotations
 
@@ -7,13 +7,15 @@ import sys
 from pathlib import Path
 
 
-def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: apply-latest-stable-series.py <generated-core-script>")
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{label}: expected exactly one anchor, found {count}: {old[:120]!r}")
+    return text.replace(old, new, 1)
 
-    path = Path(sys.argv[1])
+
+def patch_core(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-
     replacements = {
         "linux-tkg-patches/7.1/": "linux-tkg-patches/${KERNEL_SERIES}/",
         "0007-v7.1-fsync1_via_futex_waitv.patch": "0007-v${KERNEL_SERIES}-fsync1_via_futex_waitv.patch",
@@ -37,6 +39,79 @@ def main() -> None:
         source = source.replace(old, new)
 
     path.write_text(source, encoding="utf-8")
+
+
+def patch_wrapper(path: Path) -> None:
+    source = path.read_text(encoding="utf-8")
+    source = replace_once(
+        source,
+        '''  "cpuidle.governor=nap"
+)
+''',
+        '''  "cpuidle.governor=nap"
+  "kvm.enable_virt_at_load=0"
+)
+''',
+        "VirtualBox/KVM command line",
+    )
+    source = replace_once(
+        source,
+        'scripts/config --enable CPU_IDLE_GOV_NAP\n',
+        '''scripts/config --enable CPU_IDLE_GOV_NAP
+# VirtualBox host drivers are external modules. Preserve the module loader,
+# symbol metadata and host-network devices they require.
+scripts/config --enable MODULES
+scripts/config --enable MODULE_UNLOAD
+scripts/config --enable MODULE_FORCE_UNLOAD
+scripts/config --enable KALLSYMS
+scripts/config --enable KALLSYMS_ALL
+scripts/config --enable VIRTUALIZATION
+scripts/config --module KVM
+scripts/config --module KVM_INTEL
+scripts/config --module KVM_AMD
+scripts/config --module TUN
+scripts/config --module BRIDGE
+scripts/config --enable NETFILTER
+''',
+        "VirtualBox host Kconfig",
+    )
+    source = replace_once(
+        source,
+        'assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"\n',
+        '''assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"
+assert_config "CONFIG_MODULES=y"
+assert_config "CONFIG_MODULE_UNLOAD=y"
+assert_config "CONFIG_MODULE_FORCE_UNLOAD=y"
+assert_config "CONFIG_KALLSYMS=y"
+assert_config "CONFIG_KALLSYMS_ALL=y"
+assert_config "CONFIG_VIRTUALIZATION=y"
+assert_config "CONFIG_KVM=m"
+assert_config "CONFIG_KVM_INTEL=m"
+assert_config "CONFIG_KVM_AMD=m"
+assert_config "CONFIG_TUN=m"
+assert_config "CONFIG_BRIDGE=m"
+assert_config "CONFIG_NETFILTER=y"
+''',
+        "VirtualBox host Kconfig assertions",
+    )
+    source = replace_once(
+        source,
+        'assert_cmdline_token "cpuidle.governor=nap"\n',
+        '''assert_cmdline_token "cpuidle.governor=nap"
+assert_cmdline_token "kvm.enable_virt_at_load=0"
+''',
+        "VirtualBox/KVM command-line assertion",
+    )
+    path.write_text(source, encoding="utf-8")
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        raise SystemExit("usage: apply-latest-stable-series.py <generated-core-script>")
+
+    core = Path(sys.argv[1])
+    patch_core(core)
+    patch_wrapper(core.with_name("build-kernelnote.sh"))
 
 
 if __name__ == "__main__":

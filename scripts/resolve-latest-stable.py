@@ -11,6 +11,7 @@ from pathlib import Path
 
 RELEASES_URL = "https://www.kernel.org/releases.json"
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+DEBIAN_KERNEL_RELEASE_RE = re.compile(r"^[0-9][A-Za-z0-9.+~_-]*$")
 
 
 def append_key_value(path: Path | None, values: dict[str, str]) -> None:
@@ -54,13 +55,18 @@ def main() -> None:
 
     release = matching[0]
     series = ".".join(version.split(".")[:2])
-    release_name = f"linux.{version}.turbodecky.release"
+    kernel_release = f"{version}.turbodecky"
+    publish_name = f"linux.{kernel_release}"
+    if not DEBIAN_KERNEL_RELEASE_RE.fullmatch(kernel_release):
+        raise SystemExit(f"invalid Debian-compatible kernel release: {kernel_release!r}")
+
     values = {
         "KERNEL_VERSION": version,
         "KERNEL_SERIES": series,
         "KERNEL_TAG": f"v{version}",
-        "KERNEL_RELEASE_NAME": release_name,
-        "KERNEL_ARTIFACT_NAME": f"{release_name}-debs",
+        "KERNEL_RELEASE_NAME": kernel_release,
+        "KERNEL_PUBLISH_NAME": publish_name,
+        "KERNEL_ARTIFACT_NAME": f"{publish_name}-debs",
         "KERNEL_DEB_VERSION": f"{version}-1turbodecky1",
         "KERNEL_SOURCE_URL": str(release.get("source") or ""),
         "KERNEL_GITWEB_URL": str(release.get("gitweb") or ""),
@@ -81,13 +87,16 @@ def main() -> None:
             "version": version,
             "series": series,
             "tag": values["KERNEL_TAG"],
-            "release_name": release_name,
+            "kernel_release": kernel_release,
+            "release_name": publish_name,
+            "publish_name": publish_name,
             "artifact_name": values["KERNEL_ARTIFACT_NAME"],
         },
     )
 
     print(f"Latest stable Linux: {version}")
-    print(f"Kernel identity: {release_name}")
+    print(f"Kernel identity: {kernel_release}")
+    print(f"Publish identity: {publish_name}")
     print(f"Source: {values['KERNEL_SOURCE_URL']}")
 
 
