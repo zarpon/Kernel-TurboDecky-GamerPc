@@ -55,7 +55,7 @@ def main() -> None:
 
     release = matching[0]
     series = ".".join(version.split(".")[:2])
-    kernel_release = f"{version}.turbodecky.release"
+    kernel_release = f"{version}.turbodecky"
     publish_name = f"linux.{kernel_release}"
     if not DEBIAN_KERNEL_RELEASE_RE.fullmatch(kernel_release):
         raise SystemExit(f"invalid Debian-compatible kernel release: {kernel_release!r}")
