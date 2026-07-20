@@ -4,6 +4,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 python3 -m py_compile \
+  "$ROOT/scripts/resolve-latest-stable.py" \
   "$ROOT/scripts/resolve-patch-sources.py" \
   "$ROOT/scripts/resolve-infinity-v46-cpu-series.py" \
   "$ROOT/scripts/apply-dynamic-patch-sources.py" \
@@ -13,6 +14,7 @@ python3 -m py_compile \
 python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
 python3 -m json.tool "$ROOT/config/infinity-source.json" >/dev/null
 python3 -m unittest -v \
+  "$ROOT/tests/test_latest_stable_identity.py" \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
