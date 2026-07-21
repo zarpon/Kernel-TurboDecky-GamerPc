@@ -32,7 +32,7 @@ endif
 endif
 
 ifdef CONFIG_POLLY_CLANG
-KBUILD_CFLAGS += -mllvm -polly \\
+KBUILD_CFLAGS += -mllvm -polly \
                  -mllvm -polly-loopfusion-greedy
 ifdef CONFIG_LD_DEAD_CODE_DATA_ELIMINATION
 KBUILD_CFLAGS += -mllvm -polly-run-dce
@@ -75,6 +75,24 @@ class ExternalModuleToolchainTest(unittest.TestCase):
         self.assertIn(
             "KBUILD_CFLAGS += -mllvm -polly-run-dce\nendif\nendif\nendif\n\n# Tell gcc",
             first,
+        )
+
+    def test_pipeline_runs_patch_after_polly_integration(self) -> None:
+        integrator = (
+            ROOT / "scripts/apply-latest-stable-series.py"
+        ).read_text(encoding="utf-8")
+        polly_completion = (
+            'git diff --check -- Makefile init/Kconfig | tee '
+            '"$LOGDIR/polly-toolchain-diff-check.log"'
+        )
+        helper = 'python3 "$ROOT/scripts/patch-external-module-toolchain.py" Makefile'
+
+        self.assertEqual(integrator.count(helper), 1)
+        self.assertLess(integrator.index(polly_completion), integrator.index(helper))
+        self.assertNotIn(
+            'python3 "$ROOT/scripts/patch-external-module-toolchain.py" Makefile\n\n'
+            'cp "$WORKDIR/liquorix-amd64.config" .config',
+            integrator,
         )
 
 
