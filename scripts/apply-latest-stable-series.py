@@ -38,6 +38,18 @@ def patch_core(path: Path) -> None:
             raise SystemExit(f"latest-stable patch-series anchor missing: {old!r}")
         source = source.replace(old, new)
 
+    source = replace_once(
+        source,
+        'cp "$WORKDIR/liquorix-amd64.config" .config\n',
+        '''# The packaged headers retain Clang-only flags. Make external modules use
+# LLVM automatically and keep kernel-only Polly flags out of DKMS/VirtualBox.
+python3 "$ROOT/scripts/patch-external-module-toolchain.py" Makefile
+
+cp "$WORKDIR/liquorix-amd64.config" .config
+''',
+        "external-module LLVM toolchain",
+    )
+
     path.write_text(source, encoding="utf-8")
 
 
