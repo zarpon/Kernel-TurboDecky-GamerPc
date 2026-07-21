@@ -81,6 +81,7 @@ class ExternalModuleToolchainTest(unittest.TestCase):
         stable_integrator = (
             ROOT / "scripts/apply-latest-stable-series.py"
         ).read_text(encoding="utf-8")
+        series_application = "apply_requested_patch_series"
         polly_completion = (
             'git diff --check -- Makefile init/Kconfig | tee '
             '"$LOGDIR/polly-toolchain-diff-check.log"'
@@ -88,6 +89,10 @@ class ExternalModuleToolchainTest(unittest.TestCase):
         helper = 'python3 "$ROOT/scripts/patch-external-module-toolchain.py" Makefile'
 
         self.assertEqual(polly_integrator.count(helper), 1)
+        self.assertLess(
+            polly_integrator.index(series_application),
+            polly_integrator.index(polly_completion),
+        )
         self.assertLess(
             polly_integrator.index(polly_completion),
             polly_integrator.index(helper),
