@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import importlib.util
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = ROOT / "scripts/patch-external-module-toolchain.py"
+SPEC = importlib.util.spec_from_file_location("patch_external_module_toolchain", MODULE_PATH)
+assert SPEC and SPEC.loader
+module = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(module)
+
+
+FIXTURE = """KBUILD_EXTMOD := $(M)
+export KBUILD_EXTMOD
+
+ifneq ($(LLVM),)
+LLVM_PREFIX := $(LLVM)
+endif
+
+ifdef CONFIG_POLLY_CLANG
+KBUILD_CFLAGS += -mllvm -polly \\
+                 -mllvm -polly-loopfusion-greedy
+ifdef CONFIG_LD_DEAD_CODE_DATA_ELIMINATION
+KBUILD_CFLAGS += -mllvm -polly-run-dce
+endif
+endif
+
+# Tell gcc to never replace conditional load with a non-conditional one
+ifdef CONFIG_CC_IS_GCC
+endif
+"""
+
+
+class ExternalModuleToolchainTest(unittest.TestCase):
+    def test_external_modules_default_to_llvm_and_skip_polly(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            makefile = Path(directory) / "Makefile"
+            makefile.write_text(FIXTURE, encoding="utf-8")
+            module.patch_makefile(makefile)
+            first = makefile.read_text(encoding="utf-8")
+            module.patch_makefile(makefile)
+            second = makefile.read_text(encoding="utf-8")
+
+        self.assertEqual(first, second)
+        self.assertIn(module.MARKER, first)
+        self.assertIn('ifeq ("$(origin LLVM)", "undefined")', first)
+        self.assertIn("ifneq ($(KBUILD_EXTMOD),)\nLLVM := 1", first)
+        self.assertIn(
+            "ifdef CONFIG_POLLY_CLANG\nifeq ($(KBUILD_EXTMOD),)\nKBUILD_CFLAGS",
+            first,
+        )
+        self.assertIn(
+            "KBUILD_CFLAGS += -mllvm -polly-run-dce\nendif\nendif\nendif\n\n# Tell gcc",
+            first,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
