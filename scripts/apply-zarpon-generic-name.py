@@ -104,6 +104,12 @@ fi
 
 git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-check.log"
 
+# The packaged headers retain Clang-only flags. Make external modules use LLVM
+# automatically and keep kernel-only Polly flags out of DKMS/VirtualBox.
+python3 "$ROOT/scripts/patch-external-module-toolchain.py" Makefile
+grep -Fq 'TurboDecky: default external-module builds' Makefile
+grep -Fq 'ifeq ($(KBUILD_EXTMOD),)' Makefile
+
 # Generic x86-64 target with the upstream platform and driver matrix,
 ''',
         "Polly toolchain selection",
