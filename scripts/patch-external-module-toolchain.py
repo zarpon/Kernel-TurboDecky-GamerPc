@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 MARKER = "# TurboDecky: default external-module builds to the kernel LLVM toolchain."
+LLVM_BLOCK_ANCHOR = "ifneq ($(LLVM),)\nifneq ($(filter %/,$(LLVM)),)\n"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -21,9 +22,12 @@ def patch_makefile(path: Path) -> None:
     if MARKER in text:
         return
 
+    # Linux has more than one generic `ifneq ($(LLVM),)` stanza. Anchor the
+    # change to the compiler-selection block, immediately before LLVM_PREFIX,
+    # instead of matching the short expression globally.
     text = replace_once(
         text,
-        "ifneq ($(LLVM),)\n",
+        LLVM_BLOCK_ANCHOR,
         f'''{MARKER}
 ifeq ("$(origin LLVM)", "undefined")
 ifneq ($(KBUILD_EXTMOD),)
@@ -31,9 +35,8 @@ LLVM := 1
 endif
 endif
 
-ifneq ($(LLVM),)
-''',
-        "LLVM external-module default",
+{LLVM_BLOCK_ANCHOR}''',
+        "LLVM external-module compiler-selection block",
     )
 
     # Polly optimizes the kernel itself. External modules must not require the
