@@ -33,7 +33,10 @@ grep -Fq 'Subject: [PATCH 4/6]' "$ROOT/config/infinity-source.json"
 grep -Fq 'resolve-infinity-v46-cpu-series.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-infinity-v46-build.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
-! grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-latest-stable-series.py"
+if grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-latest-stable-series.py"; then
+  echo "external module helper must not be owned by apply-latest-stable-series.py" >&2
+  exit 1
+fi
 grep -Fq 'apply-validation-modules.py' "$ROOT/scripts/patch-infinity-v46-build.py"
 grep -Fq 'drivers/gpu/drm/amd/amdgpu/amdgpu.ko' "$ROOT/scripts/apply-validation-modules.py"
 grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
