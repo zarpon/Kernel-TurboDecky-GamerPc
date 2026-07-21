@@ -10,6 +10,7 @@ python3 -m py_compile \
   "$ROOT/scripts/apply-dynamic-patch-sources.py" \
   "$ROOT/scripts/apply-validation-modules.py" \
   "$ROOT/scripts/patch-infinity-v46-build.py" \
+  "$ROOT/scripts/patch-external-module-toolchain.py" \
   "$ROOT/scripts/apply-zarpon-generic-name.py" \
   "$ROOT/scripts/apply-latest-stable-series.py"
 python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
@@ -17,6 +18,7 @@ python3 -m json.tool "$ROOT/config/infinity-source.json" >/dev/null
 python3 -m unittest -v \
   "$ROOT/tests/test_latest_stable_identity.py" \
   "$ROOT/tests/test_virtualbox_host_compat.py" \
+  "$ROOT/tests/test_external_module_toolchain.py" \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
@@ -30,6 +32,7 @@ grep -Fq '0003-v4.5-Infinity-RT' "$ROOT/config/infinity-source.json"
 grep -Fq 'Subject: [PATCH 4/6]' "$ROOT/config/infinity-source.json"
 grep -Fq 'resolve-infinity-v46-cpu-series.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-infinity-v46-build.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
+grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'apply-validation-modules.py' "$ROOT/scripts/patch-infinity-v46-build.py"
 grep -Fq 'drivers/gpu/drm/amd/amdgpu/amdgpu.ko' "$ROOT/scripts/apply-validation-modules.py"
 grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
