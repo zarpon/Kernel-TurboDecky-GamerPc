@@ -28,17 +28,18 @@ install -m 0644 "$ROOT/packaging/99-kernelnote-thp.conf" \
 
 cat > "$PKGROOT/DEBIAN/control" <<'EOF'
 Package: turbodecky-tuning
-Version: 1.2.0
+Version: 1.3.0
 Section: kernel
 Priority: optional
 Architecture: all
 Maintainer: TurboDecky GamerPc <noreply@localhost>
-Depends: procps, udev, systemd | systemd-standalone-tmpfiles
+Depends: clang, llvm, lld, make, procps, udev, systemd | systemd-standalone-tmpfiles
 Recommends: grub2-common
-Description: Runtime and boot defaults for the TurboDecky GamerPc kernel
+Description: Runtime, boot and external-module defaults for TurboDecky GamerPc
  Sets Marie memory defaults, selects ADIOS, applies the requested Transparent
- Hugepage policy, appends mitigations=off plus nowatchdog to GRUB, and configures
- every new zram device for ZRAM-IR with lz4 priority 0 and zstd priority 1.
+ Hugepage policy, appends performance parameters to GRUB, configures every new
+ zram device for ZRAM-IR and installs the LLVM toolchain required to compile
+ VirtualBox, DKMS and other external modules against this Clang kernel.
 EOF
 
 cat > "$PKGROOT/DEBIAN/postinst" <<'EOF'
@@ -74,4 +75,4 @@ chmod 0755 "$PKGROOT/DEBIAN/postrm"
 
 mkdir -p "$ARTIFACTS"
 dpkg-deb --build --root-owner-group "$PKGROOT" \
-  "$ARTIFACTS/turbodecky-tuning_1.2.0_all.deb"
+  "$ARTIFACTS/turbodecky-tuning_1.3.0_all.deb"
