@@ -38,16 +38,21 @@ def patch_core(path: Path) -> None:
             raise SystemExit(f"latest-stable patch-series anchor missing: {old!r}")
         source = source.replace(old, new)
 
+    # The Clang Polly patch is part of apply_requested_patch_series. Patch the
+    # external-module toolchain only after that series and the Polly plugin
+    # rewrite have completed, otherwise CONFIG_POLLY_CLANG is not present yet.
     source = replace_once(
         source,
-        'cp "$WORKDIR/liquorix-amd64.config" .config\n',
-        '''# The packaged headers retain Clang-only flags. Make external modules use
-# LLVM automatically and keep kernel-only Polly flags out of DKMS/VirtualBox.
-python3 "$ROOT/scripts/patch-external-module-toolchain.py" Makefile
+        'git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-check.log"\n',
+        '''git diff --check -- Makefile init/Kconfig | tee "$LOGDIR/polly-toolchain-diff-check.log"
 
-cp "$WORKDIR/liquorix-amd64.config" .config
+# The packaged headers retain Clang-only flags. Make external modules use LLVM
+# automatically and keep kernel-only Polly flags out of DKMS/VirtualBox.
+python3 "$ROOT/scripts/patch-external-module-toolchain.py" Makefile
+grep -Fq 'TurboDecky: default external-module builds' Makefile
+grep -Fq 'ifeq ($(KBUILD_EXTMOD),)' Makefile
 ''',
-        "external-module LLVM toolchain",
+        "post-Polly external-module LLVM toolchain",
     )
 
     path.write_text(source, encoding="utf-8")
