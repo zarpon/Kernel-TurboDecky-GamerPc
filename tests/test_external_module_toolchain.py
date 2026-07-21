@@ -17,8 +17,18 @@ SPEC.loader.exec_module(module)
 FIXTURE = """KBUILD_EXTMOD := $(M)
 export KBUILD_EXTMOD
 
+# An unrelated LLVM conditional exists earlier in the real Linux Makefile.
 ifneq ($(LLVM),)
+LLVM_TOOLS := enabled
+endif
+
+# Compiler-selection block that must receive the TurboDecky default.
+ifneq ($(LLVM),)
+ifneq ($(filter %/,$(LLVM)),)
 LLVM_PREFIX := $(LLVM)
+else ifneq ($(filter -%,$(LLVM)),)
+LLVM_SUFFIX := $(LLVM)
+endif
 endif
 
 ifdef CONFIG_POLLY_CLANG
@@ -47,8 +57,17 @@ class ExternalModuleToolchainTest(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertIn(module.MARKER, first)
+        self.assertEqual(first.count(module.MARKER), 1)
         self.assertIn('ifeq ("$(origin LLVM)", "undefined")', first)
         self.assertIn("ifneq ($(KBUILD_EXTMOD),)\nLLVM := 1", first)
+        self.assertIn(
+            module.MARKER + "\nifeq",
+            first,
+        )
+        self.assertIn(
+            "endif\n\nifneq ($(LLVM),)\nifneq ($(filter %/,$(LLVM)),)",
+            first,
+        )
         self.assertIn(
             "ifdef CONFIG_POLLY_CLANG\nifeq ($(KBUILD_EXTMOD),)\nKBUILD_CFLAGS",
             first,
