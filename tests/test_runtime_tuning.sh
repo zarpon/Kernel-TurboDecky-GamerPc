@@ -5,6 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 helper="$root/packaging/configure-zram-ir"
 zram_generator_dropin="$root/packaging/90-turbodecky-zram.conf"
 zram_setup_dropin="$root/packaging/90-turbodecky-zram-ir.conf"
+thp_policy="$root/packaging/99-kernelnote-thp.conf"
 sandbox="$(mktemp -d)"
 trap 'rm -rf "$sandbox"' EXIT
 
@@ -32,6 +33,13 @@ require_line "$zram_generator_dropin" "[zram0]"
 require_line "$zram_generator_dropin" "compression-algorithm = lz4 zstd"
 require_line "$zram_setup_dropin" "[Service]"
 require_line "$zram_setup_dropin" "ExecStartPre=/usr/lib/turbodecky/configure-zram-ir %I"
+
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/defrag - - - - defer"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 64"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 0"
 
 # A distro may configure zram0 with zstd in its main generator configuration.
 # The TurboDecky drop-in must replace only the compression policy, preserving
@@ -91,19 +99,115 @@ require_value "$sandbox/proc/sys/vm/zram_recomp_immediate" "1"
 require_value "$sandbox/sys/block/zram0/comp_algorithm" "already-active-primary"
 require_value "$sandbox/sys/block/zram0/recomp_algorithm" "already-active-secondary"
 
+# Parse and apply the shipped tmpfiles policy in an isolated root. The
+# policy uses w- so it is also applied during package installation, without
+# failing on kernels that do not expose one of these sysfs nodes.
+if command -v systemd-tmpfiles >/dev/null 2>&1; then
+  rootfs="$sandbox/rootfs"
+  install -D -m 0644 "$thp_policy" \
+    "$rootfs/usr/lib/tmpfiles.d/99-turbodecky-thp.conf"
+  while read -r path; do
+    install -D -m 0644 /dev/null "$rootfs$path"
+  done <<'EOF'
+/sys/kernel/mm/transparent_hugepage/enabled
+/sys/kernel/mm/transparent_hugepage/defrag
+/sys/kernel/mm/transparent_hugepage/shmem_enabled
+/sys/kernel/mm/transparent_hugepage/khugepaged/defrag
+/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none
+/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap
+EOF
+  systemd-tmpfiles --create --root="$rootfs"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/enabled" "madvise"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/defrag" "defer"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/shmem_enabled" "advise"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/defrag" "0"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none" "64"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap" "0"
+fi
+
+# Deterministic admission-control simulation for one 2 MiB x86 THP. This is
+# not a hardware FPS benchmark: it proves the shipped limits retain a dense
+# 64-hole candidate while rejecting sparse or swapped candidates that could
+# add khugepaged allocation and swap-in work to frame-time-sensitive loads.
+python3 - "$thp_policy" <<'PY'
+from dataclasses import dataclass
+from pathlib import Path
+import sys
+
+PTE_PER_THP = 512
+PAGE_SIZE = 4096
+
+
+def tmpfiles_values(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        fields = raw_line.split()
+        if len(fields) == 7 and fields[0] in {"w-", "w!"}:
+            values[fields[1]] = fields[-1]
+    return values
+
+
+@dataclass(frozen=True)
+class Policy:
+    max_none: int
+    max_swap: int
+
+
+def eligible(policy: Policy, *, none: int, swap: int) -> bool:
+    present = PTE_PER_THP - none - swap
+    assert present >= 0
+    return none <= policy.max_none and swap <= policy.max_swap
+
+
+values = tmpfiles_values(Path(sys.argv[1]))
+assert values["/sys/kernel/mm/transparent_hugepage/enabled"] == "madvise"
+assert values["/sys/kernel/mm/transparent_hugepage/defrag"] == "defer"
+assert values["/sys/kernel/mm/transparent_hugepage/shmem_enabled"] == "advise"
+assert values["/sys/kernel/mm/transparent_hugepage/khugepaged/defrag"] == "0"
+proposed = Policy(
+    max_none=int(values["/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none"]),
+    max_swap=int(values["/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap"]),
+)
+assert proposed == Policy(max_none=64, max_swap=0)
+
+legacy = Policy(max_none=409, max_swap=8)
+assert eligible(legacy, none=64, swap=0)
+assert eligible(proposed, none=64, swap=0)
+assert eligible(legacy, none=409, swap=0)
+assert not eligible(proposed, none=409, swap=0)
+assert eligible(legacy, none=0, swap=8)
+assert not eligible(proposed, none=0, swap=8)
+
+legacy_zero_fill = legacy.max_none * PAGE_SIZE
+proposed_zero_fill = proposed.max_none * PAGE_SIZE
+legacy_swap_bytes = legacy.max_swap * PAGE_SIZE
+proposed_swap_bytes = proposed.max_swap * PAGE_SIZE
+assert legacy_zero_fill - proposed_zero_fill == 1_413_120
+assert legacy_swap_bytes - proposed_swap_bytes == 32_768
+
+print(
+    "THP admission simulation passed: zero-fill cap "
+    f"{legacy_zero_fill / 1024**2:.2f} MiB -> "
+    f"{proposed_zero_fill / 1024**2:.2f} MiB; "
+    f"swap candidate cap {legacy_swap_bytes // 1024} KiB -> "
+    f"{proposed_swap_bytes // 1024} KiB"
+)
+PY
+
 # Build the tuning package in an isolated tree and verify that the runtime
 # payload and post-install daemon reload are actually delivered in the DEB.
 TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.3.1_all.deb"
+deb="$sandbox/artifacts/turbodecky-tuning_1.3.2_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.3.1" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "1.3.2" ]] || fail "unexpected tuning package version"
 
 for payload in \
   './usr/lib/turbodecky/configure-zram-ir' \
   './usr/lib/systemd/zram-generator.conf.d/90-turbodecky-zram.conf' \
-  './usr/lib/systemd/system/systemd-zram-setup@.service.d/90-turbodecky-zram-ir.conf'; do
+  './usr/lib/systemd/system/systemd-zram-setup@.service.d/90-turbodecky-zram-ir.conf' \
+  './usr/lib/tmpfiles.d/99-turbodecky-thp.conf'; do
   dpkg-deb -c "$deb" | awk '{print $6}' | grep -Fxq -- "$payload" \
     || fail "package is missing $payload"
 done
@@ -113,5 +217,12 @@ dpkg-deb -e "$deb" "$control_dir"
 sh -n "$control_dir/postinst"
 grep -Fq 'systemctl daemon-reload' "$control_dir/postinst" \
   || fail "postinst does not reload systemd units"
+grep -Fq 'systemd-tmpfiles --create /usr/lib/tmpfiles.d/99-turbodecky-thp.conf' "$control_dir/postinst" \
+  || fail "postinst does not apply the THP policy"
+
+package_root="$sandbox/package-root"
+dpkg-deb -x "$deb" "$package_root"
+cmp -s "$thp_policy" "$package_root/usr/lib/tmpfiles.d/99-turbodecky-thp.conf" \
+  || fail "package does not contain the expected THP policy"
 
 echo "runtime tuning validation passed"
