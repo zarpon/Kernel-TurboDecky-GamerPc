@@ -1,4 +1,5 @@
 #!/bin/sh
+# Configure the TurboDecky ZRAM-IR policy without ever resetting live swap.
 set -eu
 
 name="${1:-}"
@@ -7,7 +8,12 @@ case "$name" in
   *) exit 0 ;;
 esac
 
-sys="/sys/block/$name"
+# These roots make the packaged helper testable without touching the host's
+# sysfs/procfs. Udev does not set either variable in normal operation.
+sys_root="${TURBODECKY_SYS_ROOT:-/sys}"
+proc_sys_root="${TURBODECKY_PROC_SYS_ROOT:-/proc/sys}"
+sys="$sys_root/block/$name"
+
 [ -d "$sys" ] || exit 0
 
 log_notice() {
@@ -16,21 +22,21 @@ log_notice() {
   fi
 }
 
-# The patch defaults this sysctl to 1. Reassert it whenever zram appears so
-# priority 0 and priority 1 are tried for every initial page write.
-if [ -w /proc/sys/vm/zram_recomp_immediate ]; then
-  printf '%s\n' 1 > /proc/sys/vm/zram_recomp_immediate
+# ZRAM-IR value 1 makes every initial write try priority 0 and priority 1.
+# Reassert it when zram appears in case systemd-sysctl ran before zram loaded.
+if [ -w "$proc_sys_root/vm/zram_recomp_immediate" ]; then
+  printf '%s\n' 1 > "$proc_sys_root/vm/zram_recomp_immediate"
 fi
 
-# Compressor selection is immutable after disksize initializes the device.
-# The udev add rule runs before device-dependent services are released, but a
-# change event for an already active device must never reset or disrupt swap.
+# The kernel does not permit changing the compressor after disksize has
+# initialized a zram device. The zram-generator drop-in and systemd drop-in
+# configure it before that point; this UDEV path is only a safe fallback.
 if [ "$(cat "$sys/initstate" 2>/dev/null || printf 1)" != 0 ]; then
-  log_notice "$name already initialized; keeping its active compressor setup"
+  log_notice "$name already initialized; preserving its active compressor setup"
   exit 0
 fi
 
-if ! grep -qw lz4 "$sys/comp_algorithm"; then
+if [ ! -w "$sys/comp_algorithm" ] || ! grep -qw lz4 "$sys/comp_algorithm"; then
   log_notice "$name does not expose lz4; ZRAM-IR setup skipped"
   exit 0
 fi
@@ -43,7 +49,15 @@ fi
 printf '%s\n' lz4 > "$sys/comp_algorithm"
 printf '%s\n' 'algo=zstd priority=1' > "$sys/recomp_algorithm"
 
-grep -q '\[lz4\]' "$sys/comp_algorithm"
-grep -q '\[zstd\]' "$sys/recomp_algorithm"
+# Sysfs shows the selected algorithm in brackets. Accept direct write forms
+# too, so the exact helper can be validated against regular files in CI.
+is_selected() {
+  algorithm="$1"
+  path="$2"
+  grep -Eq "(^|[[:space:]])\\[${algorithm}\\]([[:space:]]|$)|(^|[[:space:]])algo=${algorithm}([[:space:]]|$)|^${algorithm}$" "$path"
+}
 
-log_notice "$name configured for immediate recompression: lz4 priority 0 -> zstd priority 1"
+is_selected lz4 "$sys/comp_algorithm"
+is_selected zstd "$sys/recomp_algorithm"
+
+log_notice "$name configured for ZRAM-IR: lz4 priority 0 -> zstd priority 1"

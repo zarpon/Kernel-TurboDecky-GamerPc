@@ -73,7 +73,14 @@ aplicar qualquer patch.
 - **REFLEX CPUFreq** — [firelzrd/reflex](https://github.com/firelzrd/reflex): resposta rápida idle→busy combinada com PELT.
 - **Marie LRU** — [firelzrd/lru_marie](https://github.com/firelzrd/lru_marie): reclaim adaptativo para desktops.
 - **ADIOS** — [firelzrd/adios](https://github.com/firelzrd/adios): scheduler de I/O adaptativo, embutido e padrão.
-- **ZRAM-IR** — [firelzrd/zram-ir](https://github.com/firelzrd/zram-ir): LZ4 primário e ZSTD como segunda prioridade.
+- **ZRAM-IR** — [firelzrd/zram-ir](https://github.com/firelzrd/zram-ir): LZ4
+  primário e ZSTD como recompressor de prioridade `1`. O pacote
+  `turbodecky-tuning` instala um *drop-in* para o `zram-generator` que substitui
+  a política de compressor da distribuição antes de `zram0` receber `disksize`,
+  preservando o tamanho e a prioridade de swap configurados pelo sistema. Um
+  `ExecStartPre` de `systemd-zram-setup@` reforça a configuração antes da
+  inicialização; o helper UDEV permanece apenas como contingência segura e
+  nunca redefine swap ativo.
 - **VRAM por cgroup / TTM** — política derivada dos patches de pixelcluster,
   agregada e fixada no commit
   [`ea739d734ec179864b21446856315bc49f7c52fa`](https://github.com/CachyOS/kernel-patches/tree/ea739d734ec179864b21446856315bc49f7c52fa/7.0/misc).

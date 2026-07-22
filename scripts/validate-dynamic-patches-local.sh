@@ -24,6 +24,7 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
   "$ROOT/tests/test_infinity_v46_cpu_series.py" \
   "$ROOT/tests/test_validation_modules.py"
+bash "$ROOT/tests/test_runtime_tuning.sh"
 
 grep -Fq '"infinity"' "$ROOT/config/patch-sources.json"
 grep -Fq '"v4.6-gpu"' "$ROOT/config/infinity-source.json"
@@ -48,7 +49,8 @@ grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/resolve-patch-sources.py"
 grep -Fq 'kvm.enable_virt_at_load=0' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_INTEL=m' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"
-grep -Fq 'Version: 1.3.0' "$ROOT/scripts/build-tuning-package.sh"
+grep -Fq 'TUNING_VERSION="1.3.1"' "$ROOT/scripts/build-tuning-package.sh"
+grep -Fq 'Version: ${TUNING_VERSION}' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Depends: clang, llvm, lld, make' "$ROOT/scripts/build-tuning-package.sh"
 
 echo "Dynamic patch source validation passed"
