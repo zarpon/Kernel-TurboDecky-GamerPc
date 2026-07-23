@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enable and validate CONFIG_ZEN_INTERACTIVE in the generated build."""
+"""Port, enable and validate CONFIG_ZEN_INTERACTIVE in the generated build."""
 
 from __future__ import annotations
 
@@ -24,22 +24,35 @@ def main() -> None:
 
     path = Path(sys.argv[1])
     source = path.read_text(encoding="utf-8")
-    marker = 'scripts/config --enable ZEN_INTERACTIVE\n'
+    port_marker = 'apply-zen-interactive-source.py" "$KERNELDIR"\n'
+    config_marker = 'scripts/config --enable ZEN_INTERACTIVE\n'
     assertion = 'assert_config "CONFIG_ZEN_INTERACTIVE=y"\n'
+    present = tuple(marker in source for marker in (port_marker, config_marker, assertion))
 
-    if marker in source and assertion in source:
+    if all(present):
         return
-    if marker in source or assertion in source:
+    if any(present):
         raise SystemExit("partial Zen interactive integration detected")
 
+    source = replace_once(
+        source,
+        "apply_requested_patch_series\n",
+        "apply_requested_patch_series\n"
+        "\n"
+        "# Port the non-conflicting Zen 7.1.4 interactive defaults only after all\n"
+        "# scheduler and memory patches are in place. The helper is fail-closed and\n"
+        "# rejects upstream layout changes rather than applying fuzzy edits.\n"
+        'python3 "$ROOT/scripts/apply-zen-interactive-source.py" "$KERNELDIR"\n'
+        "grep -Fq 'config ZEN_INTERACTIVE' init/Kconfig\n",
+        "Zen interactive source port",
+    )
     source = replace_once(
         source,
         'scripts/config --set-val MIN_BASE_SLICE_NS 2000000\n',
         'scripts/config --set-val MIN_BASE_SLICE_NS 2000000\n'
         '\n'
-        '# Enable the Zen/Liquorix responsiveness policy. The post-olddefconfig\n'
-        '# assertion below deliberately fails if the selected source stack no longer\n'
-        '# exposes the symbol, preventing a silently ignored configuration request.\n'
+        '# Enable the reviewed Zen responsiveness policy. The post-olddefconfig\n'
+        '# assertion below fails if the source port no longer exposes the symbol.\n'
         'scripts/config --enable ZEN_INTERACTIVE\n',
         "Zen interactive configuration",
     )
