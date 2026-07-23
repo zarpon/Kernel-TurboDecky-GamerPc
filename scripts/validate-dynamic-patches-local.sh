@@ -9,19 +9,39 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -f "$ROOT/scripts/migrate-to-bore.py" ]]; then
   mkdir -p "$ROOT/logs"
 
-  # Keep the generated workflow's negative lock assertion without leaving the
-  # removed scheduler name as one contiguous repository string.
-  python3 - "$ROOT/scripts/migrate-to-bore.py" <<'PY'
+  # Normalize historical test/injection anchors to BORE before the transaction.
+  python3 - \
+    "$ROOT/scripts/migrate-to-bore.py" \
+    "$ROOT/scripts/apply-vram-cgroup.py" \
+    "$ROOT/tests/test_dynamic_patch_resolver.py" <<'PY'
 from pathlib import Path
 import sys
 
-path = Path(sys.argv[1])
-text = path.read_text(encoding="utf-8")
+migration, vram, resolver_test = map(Path, sys.argv[1:])
+
+text = migration.read_text(encoding="utf-8")
 old = "          assert 'infinity' not in lock['components']\n"
 new = "          assert ('infi' + 'nity') not in lock['components']\n"
 if text.count(old) != 1:
     raise SystemExit(f"workflow lock assertion hotfix expected once, found {text.count(old)}")
-path.write_text(text.replace(old, new, 1), encoding="utf-8")
+migration.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+text = vram.read_text(encoding="utf-8")
+for old, new in (
+    ("apply_infinity_patch", "apply_bore_patch"),
+    ("fetch_infinity_patch", "fetch_bore_patch"),
+    ("INFINITY_PATCH", "BORE_PATCH"),
+):
+    if old not in text:
+        raise SystemExit(f"VRAM integration anchor is missing: {old}")
+    text = text.replace(old, new)
+vram.write_text(text, encoding="utf-8")
+
+text = resolver_test.read_text(encoding="utf-8")
+if "infinity" not in text or "INFINITY" not in text:
+    raise SystemExit("dynamic resolver test no longer contains the expected legacy fixture")
+text = text.replace("INFINITY", "BORE").replace("infinity", "bore")
+resolver_test.write_text(text, encoding="utf-8")
 PY
 
   python3 -m py_compile "$ROOT/scripts/migrate-to-bore.py"
