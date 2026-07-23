@@ -153,9 +153,9 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          grep -Fq 'Component: BORE scheduler 6.6.3' logs/01-bore-provenance.txt
+          grep -Fq 'Component: BORE scheduler 6.8.0-rc1' logs/01-bore-provenance.txt
           grep -Fq 'Component: BORE sched_ext coexistence fix' logs/01-bore-sched-ext-provenance.txt
-          grep -Fq 'BORE 6.6.3 Liquorix port applied successfully' logs/build.log
+          grep -Fq 'BORE 6.8.0-rc1 Linux port applied successfully' logs/build.log
           grep -Fq 'BORE sched_ext coexistence fix applied successfully' logs/build.log
           grep -Fq 'SCHED_BORE_VERSION' .resolved-patches/files/01-bore.patch
           grep -Fq 'void reweight_task(struct task_struct *p, int prio)' .resolved-patches/files/01-bore-sched-ext-coexistence-fix.patch
@@ -163,7 +163,7 @@ jobs:
           test -s work/linux/kernel/sched/bore.c
           grep -Fq 'sched_bore' work/linux/kernel/sched/fair.c
           grep -Fq 'void reweight_task(struct task_struct *p, int prio)' work/linux/kernel/sched/fair.c
-          grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' work/linux/kernel/sched/sched.h
+          grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' work/linux/include/linux/sched/bore.h
           grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
           grep -Fq 'CONFIG_SCHED_BORE=y' logs/final.config
           python3 - <<'PY'
@@ -173,8 +173,9 @@ jobs:
           bore = lock['components']['bore']
           assert bore['ref'] == 'main'
           assert bore['selection'] == 'exact'
-          assert bore['project_version'] == '6.6.3'
-          assert 'linux-7.1-bore' in bore['path']
+          assert bore['project_version'] == '6.8.0-rc1'
+          assert bore['path'] == 'patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch'
+          assert bore['sha256'] == '87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36'
           sched_ext = lock['components']['bore_sched_ext_coexistence']
           assert sched_ext['ref'] == 'main'
           assert sched_ext['selection'] == 'exact'

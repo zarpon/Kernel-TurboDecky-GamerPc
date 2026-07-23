@@ -1,0 +1,47 @@
+From 75b25599458bfc072d9f0ae54c9436363dd5201c Mon Sep 17 00:00:00 2001
+From: Codex Validation <noreply@localhost>
+Date: Thu, 23 Jul 2026 13:26:45 -0500
+Subject: [PATCH] sched: port 0002 sched-ext coexistence fix to Linux 7.1.4
+
+Keep the upstream reweight_task() helper separate from the BORE port.
+
+Upstream-sha256: cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c
+---
+ include/linux/sched/bore.h |  1 +
+ kernel/sched/fair.c        | 13 +++++++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/include/linux/sched/bore.h b/include/linux/sched/bore.h
+index 76afe1d25..071e56aaf 100644
+--- a/include/linux/sched/bore.h
++++ b/include/linux/sched/bore.h
+@@ -42,5 +42,6 @@ extern int  sched_burst_protect_slice_lv_update_handler(const struct ctl_table *
+ 
+ extern void reweight_entity(
+ 	struct cfs_rq *cfs_rq, struct sched_entity *se, unsigned long weight);
++extern void reweight_task(struct task_struct *p, int prio);
+ 
+ #endif /* _KERNEL_SCHED_BORE_H */
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index ed51ce22d..63d2a6cd8 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -14439,3 +14439,16 @@ __init void init_sched_fair_class(void)
+ 	zalloc_cpumask_var(&nohz.idle_cpus_mask, GFP_NOWAIT);
+ #endif
+ }
++
++#ifdef CONFIG_SCHED_BORE
++void reweight_task(struct task_struct *p, int prio)
++{
++	struct sched_entity *se = &p->se;
++	struct cfs_rq *cfs_rq = cfs_rq_of(se);
++	struct load_weight *load = &se->load;
++	unsigned long weight = scale_load(sched_prio_to_weight[prio]);
++
++	reweight_entity(cfs_rq, se, weight);
++	load->inv_weight = sched_prio_to_wmult[prio];
++}
++#endif /* CONFIG_SCHED_BORE */
+-- 
+2.51.1

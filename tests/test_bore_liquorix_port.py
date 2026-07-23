@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for the reviewed BORE port used by the Liquorix build."""
+"""Contract checks for the reviewed BORE port used by the stable Linux build."""
 
 from __future__ import annotations
 
@@ -10,25 +10,25 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PORT = ROOT / "patches/bore/7.1.3-lqx1-bore-6.6.3.patch"
-SCHED_EXT_PORT = ROOT / "patches/bore/7.1.3-lqx1-sched-ext-coexistence-fix.patch"
+PORT = ROOT / "patches/bore/7.1.4-bore-6.8.0-rc1.patch"
+SCHED_EXT_PORT = ROOT / "patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
 CORE = ROOT / "scripts/build-kernelnote-core.sh"
 WRAPPER = ROOT / "scripts/build-kernelnote.sh"
 MANIFEST = ROOT / "config/patch-sources.json"
 
 
-class BoreLiquorixPortTests(unittest.TestCase):
+class BoreLinuxPortTests(unittest.TestCase):
     def test_port_is_pinned_and_contains_the_scheduler_integration(self) -> None:
         data = PORT.read_bytes()
         self.assertEqual(
             hashlib.sha256(data).hexdigest(),
-            "981d631e2ec97f42b638d3717c81d3b32de2f5baeca52c5f2037d3beea9a805e",
+            "37aad7f129a09c4e858cf0017e5c801bd3415230715e97a98283bf3c21d603bd",
         )
         text = data.decode("utf-8")
         for marker in (
-            "Subject: [PATCH] sched: adapt BORE 6.6.3 for Liquorix 7.1.3",
+            "Subject: [PATCH] sched: port BORE 6.8.0-rc1 to Linux 7.1.4",
             "diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c",
-            "SCHED_BORE_VERSION  \"6.6.3\"",
+            "SCHED_BORE_VERSION  \"6.8.0-rc1\"",
             "obj-$(CONFIG_SCHED_BORE) += bore.o",
             "sched_update_min_base_slice",
         ):
@@ -37,8 +37,15 @@ class BoreLiquorixPortTests(unittest.TestCase):
     def test_build_tracks_upstream_but_applies_the_exact_local_port(self) -> None:
         core = CORE.read_text(encoding="utf-8")
         self.assertIn('BORE_REPO="https://github.com/firelzrd/bore-scheduler.git"', core)
-        self.assertIn('BORE_PATCH_PATH="patches/stable/linux-7.1-bore/', core)
-        self.assertIn('BORE_PATCH="$ROOT/patches/bore/7.1.3-lqx1-bore-6.6.3.patch"', core)
+        self.assertIn(
+            'BORE_PATCH_PATH="patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"',
+            core,
+        )
+        self.assertIn('BORE_PATCH="$ROOT/patches/bore/7.1.4-bore-6.8.0-rc1.patch"', core)
+        self.assertIn(
+            'BORE_PORT_UPSTREAM_SHA256="87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36"',
+            core,
+        )
         self.assertIn('apply_bore_patch "$BORE_PATCH"', core)
         function = core.split("apply_bore_patch() {", 1)[1].split("apply_adios_patch() {", 1)[0]
         self.assertIn("--dry-run", function)
@@ -48,11 +55,11 @@ class BoreLiquorixPortTests(unittest.TestCase):
         data = SCHED_EXT_PORT.read_bytes()
         self.assertEqual(
             hashlib.sha256(data).hexdigest(),
-            "4c7ccc616be9020b363f326e3b790618fed5f226e516bc4903c770ffce49d781",
+            "73556222dd3d720f99f353e84f30c858031ada7496bbfc88f96787482dcf5429",
         )
         text = data.decode("utf-8")
         for marker in (
-            "Subject: [PATCH] sched: port BORE sched-ext coexistence fix for Liquorix 7.1.3",
+            "Subject: [PATCH] sched: port 0002 sched-ext coexistence fix to Linux 7.1.4",
             "void reweight_task(struct task_struct *p, int prio)",
             "extern void reweight_task(struct task_struct *p, int prio);",
             "Upstream-sha256: cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c",
@@ -77,6 +84,7 @@ class BoreLiquorixPortTests(unittest.TestCase):
         )[1].split("apply_adios_patch() {", 1)[0]
         self.assertIn("--dry-run", function)
         self.assertNotIn("--fuzz", function)
+        self.assertIn("include/linux/sched/bore.h", function)
 
         wrapper = WRAPPER.read_text(encoding="utf-8")
         shared_anchor = '''apply_marie_testing_patch "$MARIE_PATCH"
@@ -98,7 +106,17 @@ apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
         self.assertEqual(component["ref"], "main")
         self.assertTrue(component["require_exact_series"])
         self.assertEqual(component["output"], "01-bore.patch")
-        self.assertIn("linux-{series}-bore", component["exact_globs"][0])
+        self.assertEqual(
+            component["exact_globs"],
+            [
+                "patches/testing/0001-linux{series}-rc*-bore-*.patch",
+                "patches/stable/linux-{series}-bore/0001-linux{series}-rc*-bore-*.patch",
+            ],
+        )
+        self.assertEqual(
+            component["approved_sha256"],
+            "87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36",
+        )
 
         sched_ext = json.loads(MANIFEST.read_text(encoding="utf-8"))[
             "components"

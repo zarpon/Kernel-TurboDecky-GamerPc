@@ -224,6 +224,48 @@ class ResolverTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("no exact compatible path", result.stderr)
 
+    def test_approved_sha_prevents_a_stale_local_port(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            repo = tmp / "repo"
+            init_repo(
+                repo,
+                {
+                    "patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch": patch(
+                        "bore 6.8.0-rc1", "kernel/sched/bore"
+                    )
+                },
+            )
+            manifest = {
+                "schema": 1,
+                "components": {
+                    "bore": {
+                        "kind": "git_patch",
+                        "repo": str(repo),
+                        "ref": "main",
+                        "exact_globs": ["patches/testing/*linux{series}*bore*.patch"],
+                        "fallback_globs": [],
+                        "require_exact_series": True,
+                        "output": "bore.patch",
+                        "approved_sha256": "0" * 64,
+                        "required_markers": ["kernel/sched/bore"],
+                    }
+                },
+            }
+            manifest_path = tmp / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "python3", str(RESOLVER), "--manifest", str(manifest_path),
+                    "--output-dir", str(tmp / "resolved"), "--kernel-version", "7.1.4",
+                    "--kernel-series", "7.1",
+                ],
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("reviewed local port requires", result.stderr)
+
 
 class RewriterTests(unittest.TestCase):
     def test_rewrite_is_idempotent_and_uses_local_lock(self) -> None:

@@ -12,28 +12,31 @@ MARIEDIR="$WORKDIR/lru_marie"
 JOBS="${JOBS:-$(nproc --all)}"
 MAKE=(make LLVM=1 LLVM_IAS=1)
 
-KERNEL_TAG="v7.1.3-lqx1"
-KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
+KERNEL_TAG="v7.1.4"
+KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
 
-# BORE 6.6.3 has an upstream Linux 7.1 patch. Liquorix 7.1.3 changes the
-# EEVDF/debugfs contexts it touches, so the reviewed, reproducible adaptation
-# stored in this repository is applied instead. The upstream patch is fetched
-# and recorded on every build for provenance and drift detection.
+# BORE 6.8.0-rc1 has an official Linux 7.1 patch. The generated build follows
+# the current stable Linux source, so the reviewed, reproducible 7.1.4 port is
+# applied instead. The official patch is fetched and recorded on every build;
+# its SHA-256 must match the reviewed port before the build can continue.
 BORE_REPO="https://github.com/firelzrd/bore-scheduler.git"
 BORE_BRANCH="main"
 BORE_COMMIT="16bf5baebbb42cdba393c501ba9c2af5f84e4749"
-BORE_PATCH_PATH="patches/stable/linux-7.1-bore/0001-linux7.1-rc1-bore-6.6.3.patch"
+BORE_PATCH_PATH="patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
 BORE_DIR="$WORKDIR/bore-scheduler"
 BORE_UPSTREAM_PATCH="$PATCHDIR/0001-bore-upstream.patch"
-BORE_PATCH="$ROOT/patches/bore/7.1.3-lqx1-bore-6.6.3.patch"
+BORE_PATCH="$ROOT/patches/bore/7.1.4-bore-6.8.0-rc1.patch"
+BORE_PORT_VERSION="6.8.0-rc1"
+BORE_PORT_UPSTREAM_SHA256="87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36"
 BORE_SCHED_EXT_REPO="https://github.com/firelzrd/bore-scheduler.git"
 BORE_SCHED_EXT_COMMIT="16bf5baebbb42cdba393c501ba9c2af5f84e4749"
 BORE_SCHED_EXT_PATCH_PATH="patches/additions/0002-sched-ext-coexistence-fix.patch"
 BORE_SCHED_EXT_DIR="$WORKDIR/bore-scheduler-sched-ext"
 BORE_SCHED_EXT_UPSTREAM_PATCH="$PATCHDIR/0002-bore-sched-ext-upstream.patch"
-BORE_SCHED_EXT_PATCH="$ROOT/patches/bore/7.1.3-lqx1-sched-ext-coexistence-fix.patch"
+BORE_SCHED_EXT_PATCH="$ROOT/patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
+BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c"
 
 # Marie is fetched as a pinned local Git checkout rather than through a raw
 # patch URL. Only the exact patch blob is materialized in the workspace.
@@ -94,7 +97,9 @@ fetch_marie_testing_patch() {
 }
 
 fetch_bore_source() {
-  echo "==> Fetching the pinned upstream BORE 6.6.3 source locally"
+  local upstream_sha256
+
+  echo "==> Fetching the pinned upstream BORE $BORE_PORT_VERSION source locally"
   rm -rf "$BORE_DIR"
   git init --quiet "$BORE_DIR"
   git -C "$BORE_DIR" remote add origin "$BORE_REPO"
@@ -106,28 +111,36 @@ fetch_bore_source() {
   git -C "$BORE_DIR" show "FETCH_HEAD:$BORE_PATCH_PATH" > "$BORE_UPSTREAM_PATCH"
   test -s "$BORE_UPSTREAM_PATCH"
   grep -Fq 'diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c' "$BORE_UPSTREAM_PATCH"
-  grep -Fq 'SCHED_BORE_VERSION' "$BORE_UPSTREAM_PATCH"
+  grep -Fq 'SCHED_BORE_VERSION  "6.8.0-rc1"' "$BORE_UPSTREAM_PATCH"
   grep -Fq 'sched_bore' "$BORE_UPSTREAM_PATCH"
+  upstream_sha256="$(sha256sum "$BORE_UPSTREAM_PATCH" | awk '{print $1}')"
+  if [[ "$upstream_sha256" != "$BORE_PORT_UPSTREAM_SHA256" ]]; then
+    echo "BORE upstream SHA-256 $upstream_sha256 no longer matches the reviewed $BORE_PORT_VERSION port ($BORE_PORT_UPSTREAM_SHA256)" >&2
+    return 1
+  fi
 
   test -s "$BORE_PATCH"
-  grep -Fq 'sched: adapt BORE 6.6.3 for Liquorix 7.1.3' "$BORE_PATCH"
+  grep -Fq 'sched: port BORE 6.8.0-rc1 to Linux 7.1.4' "$BORE_PATCH"
   grep -Fq 'diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c' "$BORE_PATCH"
   grep -Fq 'SCHED_BORE_VERSION' "$BORE_PATCH"
 
   {
-    echo "Component: BORE scheduler 6.6.3"
+    echo "Component: BORE scheduler $BORE_PORT_VERSION"
     echo "Repository: $BORE_REPO"
     echo "Branch: $BORE_BRANCH"
     echo "Commit: $BORE_COMMIT"
     echo "Upstream path: $BORE_PATCH_PATH"
-    echo "Upstream SHA256: $(sha256sum "$BORE_UPSTREAM_PATCH" | awk '{print $1}')"
-    echo "Liquorix port: ${BORE_PATCH#$ROOT/}"
-    echo "Liquorix port SHA256: $(sha256sum "$BORE_PATCH" | awk '{print $1}')"
+    echo "Upstream SHA256: $upstream_sha256"
+    echo "Reviewed port upstream SHA256: $BORE_PORT_UPSTREAM_SHA256"
+    echo "Linux port: ${BORE_PATCH#$ROOT/}"
+    echo "Linux port SHA256: $(sha256sum "$BORE_PATCH" | awk '{print $1}')"
     echo "Acquisition: pinned local partial Git checkout plus reviewed local port"
   } | tee "$LOGDIR/01-bore-provenance.txt"
 }
 
 fetch_bore_sched_ext_source() {
+  local upstream_sha256
+
   echo "==> Fetching the pinned upstream BORE sched_ext coexistence fix"
   rm -rf "$BORE_SCHED_EXT_DIR"
   git init --quiet "$BORE_SCHED_EXT_DIR"
@@ -140,9 +153,14 @@ fetch_bore_sched_ext_source() {
   test -s "$BORE_SCHED_EXT_UPSTREAM_PATCH"
   grep -Fq 'Subject: [PATCH] sched-ext-coexistence-fix' "$BORE_SCHED_EXT_UPSTREAM_PATCH"
   grep -Fq 'void reweight_task(struct task_struct *p, int prio)' "$BORE_SCHED_EXT_UPSTREAM_PATCH"
+  upstream_sha256="$(sha256sum "$BORE_SCHED_EXT_UPSTREAM_PATCH" | awk '{print $1}')"
+  if [[ "$upstream_sha256" != "$BORE_SCHED_EXT_PORT_UPSTREAM_SHA256" ]]; then
+    echo "BORE sched_ext upstream SHA-256 $upstream_sha256 no longer matches the reviewed port ($BORE_SCHED_EXT_PORT_UPSTREAM_SHA256)" >&2
+    return 1
+  fi
 
   test -s "$BORE_SCHED_EXT_PATCH"
-  grep -Fq 'sched: port BORE sched-ext coexistence fix for Liquorix 7.1.3' "$BORE_SCHED_EXT_PATCH"
+  grep -Fq 'sched: port 0002 sched-ext coexistence fix to Linux 7.1.4' "$BORE_SCHED_EXT_PATCH"
   grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' "$BORE_SCHED_EXT_PATCH"
 
   {
@@ -150,9 +168,10 @@ fetch_bore_sched_ext_source() {
     echo "Repository: $BORE_SCHED_EXT_REPO"
     echo "Commit: $BORE_SCHED_EXT_COMMIT"
     echo "Upstream path: $BORE_SCHED_EXT_PATCH_PATH"
-    echo "Upstream SHA256: $(sha256sum "$BORE_SCHED_EXT_UPSTREAM_PATCH" | awk '{print $1}')"
-    echo "Liquorix port: ${BORE_SCHED_EXT_PATCH#$ROOT/}"
-    echo "Liquorix port SHA256: $(sha256sum "$BORE_SCHED_EXT_PATCH" | awk '{print $1}')"
+    echo "Upstream SHA256: $upstream_sha256"
+    echo "Reviewed port upstream SHA256: $BORE_SCHED_EXT_PORT_UPSTREAM_SHA256"
+    echo "Linux port: ${BORE_SCHED_EXT_PATCH#$ROOT/}"
+    echo "Linux port SHA256: $(sha256sum "$BORE_SCHED_EXT_PATCH" | awk '{print $1}')"
     echo "Acquisition: pinned local partial Git checkout plus reviewed local port"
   } | tee "$LOGDIR/01-bore-sched-ext-provenance.txt"
 }
@@ -240,7 +259,7 @@ apply_marie_testing_patch() {
 report_bore_rejects() {
   local label="$1" output="$2"
   {
-    echo "==> Unresolved BORE Liquorix port rejects: $label"
+    echo "==> Unresolved BORE Linux port rejects: $label"
     find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort
     echo
     while IFS= read -r reject; do
@@ -253,14 +272,14 @@ report_bore_rejects() {
 apply_bore_patch() {
   local file="$1"
 
-  echo "==> Applying the reviewed BORE 6.6.3 Liquorix 7.1.3 port"
+  echo "==> Applying the reviewed BORE 6.8.0-rc1 Linux 7.1.4 port"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/01-bore.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
       | tee "$LOGDIR/01-bore.apply.log"
   else
     cat "$LOGDIR/01-bore.dry-run.log"
-    report_bore_rejects "BORE 6.6.3 for Liquorix 7.1.3" \
+    report_bore_rejects "BORE 6.8.0-rc1 for Linux 7.1.4" \
       "$LOGDIR/01-bore-port-rejects.log"
     return 1
   fi
@@ -274,7 +293,7 @@ apply_bore_patch() {
   grep -Fq 'sched_bore' kernel/sched/fair.c
   grep -Fq 'CONFIG_SCHED_BORE' kernel/sched/Makefile
   grep -Fq 'SCHED_BORE_VERSION' kernel/sched/bore.c
-  echo "==> BORE 6.6.3 Liquorix port applied successfully"
+  echo "==> BORE 6.8.0-rc1 Linux port applied successfully"
 }
 
 apply_bore_sched_ext_coexistence_fix() {
@@ -287,7 +306,7 @@ apply_bore_sched_ext_coexistence_fix() {
       | tee "$LOGDIR/01-bore-sched-ext.apply.log"
   else
     cat "$LOGDIR/01-bore-sched-ext.dry-run.log"
-    report_bore_rejects "BORE sched_ext coexistence fix for Liquorix 7.1.3" \
+    report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.4" \
       "$LOGDIR/01-bore-sched-ext-port-rejects.log"
     return 1
   fi
@@ -297,7 +316,7 @@ apply_bore_sched_ext_coexistence_fix() {
 
   grep -Fq 'void reweight_task(struct task_struct *p, int prio)' kernel/sched/fair.c
   grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' \
-    kernel/sched/sched.h
+    include/linux/sched/bore.h
   echo "==> BORE sched_ext coexistence fix applied successfully"
 }
 
@@ -388,7 +407,7 @@ assert_cmdline_token() {
   esac
 }
 
-echo "==> Cloning official Liquorix source tag $KERNEL_TAG"
+echo "==> Cloning current upstream Linux source tag $KERNEL_TAG"
 git clone --no-checkout --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 
@@ -406,7 +425,7 @@ apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
 cp "$WORKDIR/liquorix-amd64.config" .config
 
-# BORE augments CFS/EEVDF. Liquorix alternative schedulers remain disabled so
+# BORE augments CFS/EEVDF. Alternative schedulers remain disabled so
 # the BORE implementation selected above is the active fair scheduler path.
 scripts/config --disable SCHED_ALT
 scripts/config --disable SCHED_PDS
@@ -488,7 +507,7 @@ cp .config "$LOGDIR/final.config"
 
 if [[ "$MODE" == "package" ]]; then
   echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"
-  "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.3-1turbodecky1"
+  "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.4-1turbodecky1"
   find "$WORKDIR" -maxdepth 1 -type f -name '*.deb' -exec cp -v {} "$ARTIFACTS/" \;
   "$ROOT/scripts/build-tuning-package.sh"
 else

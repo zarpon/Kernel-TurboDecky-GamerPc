@@ -18,31 +18,34 @@ pelo workflow.
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
 
-## BORE 6.6.3 e coexistência com sched_ext para Liquorix 7.1.3
+## BORE 6.8.0-rc1 e coexistência com sched_ext para Linux 7.1.4
 
-O resolvedor exige o patch estável upstream de BORE para Linux 7.1 em
-[`firelzrd/bore-scheduler`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/stable/linux-6.18-bore).
-O lock registra seu commit, caminho e SHA-256. O fonte do TurboDecky, porém,
-é a tag Liquorix `v7.1.3-lqx1`, que muda os mesmos blocos EEVDF e debugfs; por
-isso o patch upstream puro não é aplicado diretamente.
+O resolvedor consulta os patches oficiais de BORE para Linux 7.1 nas árvores
+`testing` e `stable` de
+[`firelzrd/bore-scheduler`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/testing)
+e seleciona a versão mais nova. O lock registra seu commit, caminho e SHA-256.
+O build atual usa a tag estável Linux `v7.1.4`; por isso o patch upstream puro
+não é aplicado diretamente quando seu contexto diverge dessa revisão.
 
-O build usa `patches/bore/7.1.3-lqx1-bore-6.6.3.patch`, uma adaptação mínima
+O build usa `patches/bore/7.1.4-bore-6.8.0-rc1.patch`, uma adaptação mínima
 revisada contra essa tag. Antes de aplicá-la sem fuzz, ele baixa e verifica o
-patch upstream correspondente. A compilação local cobre `bore.o`, `fair.o`,
-`core.o` e `build_utility.o` com `CONFIG_SCHED_BORE=y`.
+patch upstream correspondente. O SHA-256 aprovado no manifesto e no script
+de build bloqueia uma versão oficial nova até que o port seja renovado e
+validado. A compilação local cobre `bore.o`, `fair.o`, `core.o` e
+`build_utility.o` com `CONFIG_SCHED_BORE=y`.
 
 O lock também resolve
 [`0002-sched-ext-coexistence-fix.patch`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/additions).
 Ele é aplicado imediatamente após BORE por
-`patches/bore/7.1.3-lqx1-sched-ext-coexistence-fix.patch`. O port preserva o
-helper upstream `reweight_task()`, fixa o contexto Liquorix sem fuzz e
-declara o helper em `kernel/sched/sched.h`, necessário porque este build
+`patches/bore/7.1.4-sched-ext-coexistence-fix.patch`. O port preserva o
+helper upstream `reweight_task()`, fixa o contexto Linux 7.1.4 sem fuzz e
+declara o helper em `include/linux/sched/bore.h`, necessário porque este build
 trata protótipos ausentes como erro.
 
 ## BORE e POC Selector
 
 O POC Selector continua sendo aplicado após BORE. A validação local confirma
-que ambos aplicam sem rejeitos sobre Liquorix 7.1.3 e que `fair.o` compila com
+que ambos aplicam sem rejeitos sobre Linux 7.1.4 e que `fair.o` compila com
 `CONFIG_SCHED_BORE=y` e `CONFIG_SCHED_POC_SELECTOR=y`. O arquivo
 `kernel/sched/poc_selector.c` é incluído por `fair.c`; não é uma unidade de
 compilação independente.
@@ -90,6 +93,6 @@ Os testes confirmam:
 - recuperação por commit histórico;
 - consumo do snapshot como repositório Git local autocontido;
 - rastreamento do patch BORE upstream, da correção de coexistência com
-  `sched_ext` e dos ports Liquorix versionados;
+  `sched_ext` e dos ports Linux versionados;
 - aplicação combinada de BORE e POC Selector;
 - reescrita das validações de build.

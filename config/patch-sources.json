@@ -6,12 +6,14 @@
       "repo": "https://github.com/firelzrd/bore-scheduler.git",
       "ref": "main",
       "exact_globs": [
-        "patches/stable/linux-{series}-bore/0001-linux{series}-rc1-bore-6.6.3.patch"
+        "patches/testing/0001-linux{series}-rc*-bore-*.patch",
+        "patches/stable/linux-{series}-bore/0001-linux{series}-rc*-bore-*.patch"
       ],
       "fallback_globs": [],
       "require_exact_series": true,
       "output": "01-bore.patch",
-      "project_version_regex": "bore[-_]?([0-9]+(?:\\.[0-9]+)+)",
+      "project_version_regex": "bore[-_]?([0-9]+(?:\\.[0-9]+)+(?:-rc[0-9]+)?)",
+      "approved_sha256": "87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36",
       "required_markers": [
         "kernel/sched/bore.c",
         "SCHED_BORE_VERSION",
