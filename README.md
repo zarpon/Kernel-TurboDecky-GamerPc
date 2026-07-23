@@ -65,6 +65,25 @@ Fonte: [Linux stable](https://git.kernel.org/pub/scm/linux/kernel/git/stable/lin
 O build clona a tag `v<versão>` e confirma a versão pelo Makefile antes de
 aplicar qualquer patch.
 
+## Compilação manual pelo GitHub
+
+Para gerar uma compilação nova sem alterar o repositório, abra
+[Build latest upstream TurboDecky GamerPc kernel](https://github.com/zarpon/Kernel-TurboDecky-GamerPc/actions/workflows/validate-kernel.yml),
+clique em **Run workflow** e selecione `main` quando desejar publicar uma
+release.
+
+- Mantenha **Publish the compiled packages as a GitHub release (main only)**
+  ativado para publicar a release depois que todas as validações passarem.
+- Desative essa opção para validar e empacotar o kernel sem criar release. Os
+  pacotes `.deb`, ZIP, checksums e o `patch-lock.json` ficam disponíveis como
+  artefato do workflow por 14 dias.
+- Uma execução manual fora de `main` nunca publica release, mesmo que a opção
+  permaneça ativada; os artefatos continuam disponíveis para inspeção.
+
+Cada execução manual resolve primeiro o kernel estável e os patches upstream
+compatíveis mais recentes, registrando commits e SHA-256 exatos no
+`patch-lock.json` antes de gerar os pacotes.
+
 ## Patchset de desempenho
 
 - **Infinity scheduler** — (https://github.com/galpt/infinity-scheduler): scheduler de CPU integrado ao CFS/EEVDF, modulação de vruntime e fatias por EMA, bypass futex e hooks de RT. 
