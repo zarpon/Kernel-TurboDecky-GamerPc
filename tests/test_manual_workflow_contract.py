@@ -11,6 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = (ROOT / ".github/workflows/validate-kernel.yml").read_text(
     encoding="utf-8"
 )
+DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
+    encoding="utf-8"
+)
 
 
 class ManualWorkflowContractTests(unittest.TestCase):
@@ -45,6 +48,11 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn("inputs.publish_release", release_step)
         self.assertIn("github.ref_name == 'integration/infinity-v46-full-gpu'", release_step)
         self.assertNotIn("env.BUILD_MODE == 'package'", release_step)
+
+    def test_main_dispatcher_uses_the_current_manual_input_contract(self) -> None:
+        self.assertIn("gh workflow run validate-kernel.yml", DISPATCHER)
+        self.assertIn("--field publish_release=true", DISPATCHER)
+        self.assertNotIn("--field mode=package", DISPATCHER)
 
 
 if __name__ == "__main__":
