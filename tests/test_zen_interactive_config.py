@@ -21,8 +21,9 @@ class ZenInteractiveConfigTests(unittest.TestCase):
         text = CONFIG.read_text(encoding="utf-8")
         self.assertEqual(text.count("CONFIG_ZEN_INTERACTIVE=y"), 1)
 
-    def test_generated_build_enables_and_asserts_symbol(self) -> None:
+    def test_generated_build_ports_enables_and_asserts_symbol(self) -> None:
         source = (
+            "apply_requested_patch_series\n"
             "scripts/config --set-val MIN_BASE_SLICE_NS 2000000\n"
             "assert_config \"CONFIG_SCHED_BORE=y\"\n"
         )
@@ -41,11 +42,13 @@ class ZenInteractiveConfigTests(unittest.TestCase):
                 module.sys.argv = original_argv
 
         self.assertEqual(first, second)
+        self.assertEqual(first.count("apply-zen-interactive-source.py"), 1)
         self.assertEqual(first.count("scripts/config --enable ZEN_INTERACTIVE"), 1)
         self.assertEqual(first.count('assert_config "CONFIG_ZEN_INTERACTIVE=y"'), 1)
 
     def test_partial_integration_is_rejected(self) -> None:
         source = (
+            "apply_requested_patch_series\n"
             "scripts/config --set-val MIN_BASE_SLICE_NS 2000000\n"
             "scripts/config --enable ZEN_INTERACTIVE\n"
             "assert_config \"CONFIG_SCHED_BORE=y\"\n"
