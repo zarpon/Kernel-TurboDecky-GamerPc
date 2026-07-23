@@ -230,7 +230,7 @@ class RewriterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             components = {}
-            git_names = {"infinity", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "vram", "liquorix_config"}
+            git_names = {"bore", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "vram", "liquorix_config"}
             requested = {
                 "c23_libbpf": "08-c23-libbpf.patch", "clear": "09-clear.patch",
                 "fsync": "10-fsync-futex-waitv.patch", "o3": "11-o3.patch",
@@ -288,7 +288,7 @@ class RewriterTests(unittest.TestCase):
                 '#!/bin/bash\nROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"\n'
                 'WORKDIR="$ROOT/work"\nLOGDIR="$ROOT/logs"\nARTIFACTS="$ROOT/artifacts"\nPATCHDIR="$WORKDIR/patches"\n'
                 'LIQUORIX_CONFIG_URL="old"\nADIOS_URL="old"\n'
-                'INFINITY_REPO="old"\nINFINITY_BRANCH="v3"\nINFINITY_COMMIT="old"\nINFINITY_PATCH_PATH="old"\n'
+                'BORE_REPO="old"\nBORE_BRANCH="main"\nBORE_COMMIT="old"\nBORE_PATCH_PATH="old"\n'
                 'MARIE_REPO="old"\nMARIE_COMMIT="old"\nMARIE_PATCH_PATH="old"\nMARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n'
                 'REFLEX_REPO="old"\nREFLEX_COMMIT="old"\nREFLEX_PATCH_PATH="old"\n'
                 'rm -rf "$WORKDIR" "$LOGDIR" "$ARTIFACTS"\nmkdir -p "$PATCHDIR" "$LOGDIR" "$ARTIFACTS"\n'
@@ -312,14 +312,14 @@ class RewriterTests(unittest.TestCase):
             self.assertEqual(first_wrapper, wrapper.read_text())
             self.assertIn("RESOLVED_PATCH_ROOT", first_core)
             self.assertIn("file://$RESOLVED_PATCH_ROOT/files/08-c23-libbpf.patch", first_core)
-            self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/infinity', first_core)
+            self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/bore', first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/vram', first_wrapper)
             rewritten_lock = json.loads(lock_path.read_text())
-            infinity = rewritten_lock["components"]["infinity"]
-            self.assertRegex(infinity["snapshot_commit"], r"^[0-9a-f]{40}$")
-            self.assertEqual(infinity["commit"], infinity["snapshot_commit"])
-            self.assertEqual(infinity["upstream_commit"], "a" * 40)
-            self.assertFalse((tmp / infinity["repo_dir"] / ".git/objects/info/alternates").exists())
+            bore = rewritten_lock["components"]["bore"]
+            self.assertRegex(bore["snapshot_commit"], r"^[0-9a-f]{40}$")
+            self.assertEqual(bore["commit"], bore["snapshot_commit"])
+            self.assertEqual(bore["upstream_commit"], "a" * 40)
+            self.assertFalse((tmp / bore["repo_dir"] / ".git/objects/info/alternates").exists())
 
 
 if __name__ == "__main__":

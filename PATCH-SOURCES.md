@@ -18,31 +18,26 @@ pelo workflow.
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
 
-## Infinity v4.6-gpu: série completa de teste
+## BORE 6.6.3 para Liquorix 7.1.3
 
-Nesta branch de teste, o Infinity é resolvido separadamente por
-`config/infinity-source.json`. Cada build consulta o HEAD atual da branch
-`v4.6-gpu` e exige exatamente os seis patches da série correspondente ao kernel:
+O resolvedor exige o patch estável upstream de BORE para Linux 7.1 em
+[`firelzrd/bore-scheduler`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/stable/linux-6.18-bore).
+O lock registra seu commit, caminho e SHA-256. O fonte do TurboDecky, porém,
+é a tag Liquorix `v7.1.3-lqx1`, que muda os mesmos blocos EEVDF e debugfs; por
+isso o patch upstream puro não é aplicado diretamente.
 
-1. `0001`: infraestrutura principal do Infinity;
-2. `0002`: agendamento CPU em CFS/EEVDF;
-3. `0003`: agendamento RT e proteção por requeue;
-4. `0004`: extensões do cabeçalho do DRM scheduler;
-5. `0005`: vtime GPU e acoplamento entre os schedulers CPU/GPU;
-6. `0006`: limpeza final dos campos removidos pela série.
+O build usa `patches/bore/7.1.3-lqx1-bore-6.6.3.patch`, uma adaptação mínima
+revisada contra essa tag. Antes de aplicá-la sem fuzz, ele baixa e verifica o
+patch upstream correspondente. A compilação local cobre `bore.o`, `fair.o`,
+`core.o` e `build_utility.o` com `CONFIG_SCHED_BORE=y`.
 
-Os seis arquivos são concatenados em um único mbox bloqueado por build. A
-resolução registra o commit exato do HEAD, os seis caminhos, o SHA-256 do mbox e
-a política `exact-branch-head-full-series`. A ausência de qualquer patch
-interrompe o build e `excluded_patches` deve permanecer vazio.
+## BORE e POC Selector
 
-## Infinity e POC Selector
-
-`scripts/validate-infinity-poc-compat.py` falha se os patches GPU deixarem de
-ficar restritos ao DRM, começarem a tocar arquivos do POC, escreverem estado
-`poc_*` ou perderem o acoplamento explícito com o estado CPU do Infinity.
-Também exige que o POC preserve o bypass em topologias de capacidade
-assimétrica. A análise está documentada em `INFINITY-POC-COMPATIBILITY.md`.
+O POC Selector continua sendo aplicado após BORE. A validação local confirma
+que ambos aplicam sem rejeitos sobre Liquorix 7.1.3 e que `fair.o` compila com
+`CONFIG_SCHED_BORE=y` e `CONFIG_SCHED_POC_SELECTOR=y`. O arquivo
+`kernel/sched/poc_selector.c` é incluído por `fair.c`; não é uma unidade de
+compilação independente.
 
 ## Lock por build
 
@@ -52,7 +47,7 @@ componente:
 - repositório e branch consultados;
 - commit upstream exato;
 - commit do repositório Git mínimo e autocontido usado pelo build;
-- caminho ou caminhos selecionados;
+- caminho selecionado;
 - série do kernel-alvo;
 - versão do patch, quando disponível;
 - SHA-256 e tamanho dos bytes aplicados;
@@ -64,9 +59,9 @@ selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 
 ## Componentes versionados
 
-A resolução dinâmica cobre Infinity v4.6-gpu completo, Marie LRU, ADIOS,
-ZRAM-IR, POC Selector, NAP, REFLEX, patches TTM/DMEM de VRAM, linux-tkg,
-CachyOS, OpenWrt e a configuração-base do Liquorix.
+A resolução dinâmica cobre BORE, Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP,
+REFLEX, patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a
+configuração-base do Liquorix.
 
 Patches de correção sem versão própria, como commits upstream específicos e
 séries enviadas por e-mail, são baixados novamente e registrados por SHA-256,
@@ -85,8 +80,6 @@ Os testes confirmam:
 - falha quando uma série exata obrigatória não existe;
 - recuperação por commit histórico;
 - consumo do snapshot como repositório Git local autocontido;
-- acompanhamento do HEAD da branch `v4.6-gpu`;
-- combinação obrigatória dos patches Infinity `0001`–`0006`;
-- falha fechada quando qualquer patch da série está ausente;
-- reescrita das validações de build;
-- ausência de sobreposição DRM/POC e preservação dos gates semânticos.
+- rastreamento do patch BORE upstream e do port Liquorix versionado;
+- aplicação combinada de BORE e POC Selector;
+- reescrita das validações de build.

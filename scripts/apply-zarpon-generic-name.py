@@ -155,7 +155,7 @@ grep -Fq 'ifeq ($(KBUILD_EXTMOD),)' Makefile
 def patch_wrapper(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
 
-    old_local = '-kn-marie-infinity-poc-nap-rfx-adios-zir-lto'
+    old_local = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
     source = replace_once(source, old_local, "", "generic TurboDecky localversion")
 
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"
@@ -198,9 +198,8 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
         raise SystemExit("KERNEL_VERSION and KERNEL_SERIES must be resolved before patch selection")
 
     manifest = root / "config/patch-sources.json"
-    resolver = root / "scripts/resolve-infinity-v46-cpu-series.py"
+    resolver = root / "scripts/resolve-patch-sources.py"
     rewriter = root / "scripts/apply-dynamic-patch-sources.py"
-    infinity_rewriter = root / "scripts/patch-infinity-v46-build.py"
     output = root / ".resolved-patches"
     logs = root / "logs"
     run_logged(
@@ -219,10 +218,6 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
     run_logged(
         [sys.executable, str(rewriter), str(core), str(wrapper), str(lock)],
         logs / "patch-source-rewrite.log",
-    )
-    run_logged(
-        [sys.executable, str(infinity_rewriter), str(core)],
-        logs / "infinity-v46-build-rewrite.log",
     )
 
 

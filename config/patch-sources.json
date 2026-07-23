@@ -1,20 +1,21 @@
 {
   "schema": 1,
   "components": {
-    "infinity": {
+    "bore": {
       "kind": "git_patch",
-      "repo": "https://github.com/galpt/infinity-scheduler.git",
-      "ref": "v3",
+      "repo": "https://github.com/firelzrd/bore-scheduler.git",
+      "ref": "main",
       "exact_globs": [
-        "patches/stable/linux-{series}-infinity/0001-infinity-scheduler.patch"
+        "patches/stable/linux-{series}-bore/0001-linux{series}-rc1-bore-6.6.3.patch"
       ],
       "fallback_globs": [],
       "require_exact_series": true,
-      "output": "01-infinity.patch",
+      "output": "01-bore.patch",
+      "project_version_regex": "bore[-_]?([0-9]+(?:\\.[0-9]+)+)",
       "required_markers": [
-        "infinity_sched.c",
-        "SCHED_FLAG_NO_INFINITY_RT",
-        "infinity_rt_consume"
+        "kernel/sched/bore.c",
+        "SCHED_BORE_VERSION",
+        "sched_bore"
       ]
     },
     "marie": {

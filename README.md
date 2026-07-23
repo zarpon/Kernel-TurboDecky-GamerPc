@@ -30,13 +30,13 @@ ou a verificação deve ser desativada.
 
 ## Benefícios esperados
 
-- **Responsividade e jogos:** Infinity CPU/EEVDF e POC Selector favorecem
-  tarefas interativas, controlam o orçamento de CPU por EMA e escolhem CPUs
-  ociosas considerando a topologia de cache, o que pode melhorar a latência
-  percebida e a consistência do frame time.
-- **Tarefas RT e espera:** Infinity também adiciona hooks de EMA para
-  SCHED_FIFO/SCHED_RR e bypass seguro da proteção de fatia para tarefas que
-  estão entrando em espera futex; isso não transforma o kernel em PREEMPT_RT.
+- **Responsividade e jogos:** BORE e POC Selector favorecem tarefas
+  interativas: BORE ajusta a prioridade CFS/EEVDF conforme o tempo de burst, e
+  POC escolhe CPUs ociosas considerando a topologia de cache. Isso pode
+  melhorar a latência percebida e a consistência do frame time sob carga.
+- **Tarefas RT e espera:** BORE atua no caminho CFS/EEVDF e preserva a espera
+  futex ao recalcular o deadline da tarefa. Ele não transforma o kernel em
+  PREEMPT_RT nem altera as classes SCHED_FIFO/SCHED_RR.
 - **Resposta de frequência:** REFLEX acelera a transição de ocioso para ativo,
   enquanto NAP escolhe estados de idle de forma adaptativa.
 - **I/O e carregamento:** ADIOS ajusta deadlines e lotes conforme a latência
@@ -86,7 +86,7 @@ compatíveis mais recentes, registrando commits e SHA-256 exatos no
 
 ## Patchset de desempenho
 
-- **Infinity scheduler** — (https://github.com/galpt/infinity-scheduler): scheduler de CPU integrado ao CFS/EEVDF, modulação de vruntime e fatias por EMA, bypass futex e hooks de RT. 
+- **BORE scheduler 6.6.3** — [firelzrd/bore-scheduler](https://github.com/firelzrd/bore-scheduler/tree/main/patches/stable/linux-6.18-bore): ajuste de prioridade CFS/EEVDF orientado pelo tempo de burst. O patch upstream de Linux 7.1 é rastreado no lock de build; como o Liquorix 7.1.3 altera os mesmos contextos EEVDF/debugfs, o repositório aplica uma adaptação revisada e compilada localmente em `patches/bore/7.1.3-lqx1-bore-6.6.3.patch`.
 - **POC Selector** — [firelzrd/poc-selector](https://github.com/firelzrd/poc-selector): seleção eficiente de CPU ociosa considerando LLC e topologia.
 - **NAP CPUIdle** — [firelzrd/nap](https://github.com/firelzrd/nap): predição adaptativa do estado de idle.
 - **REFLEX CPUFreq** — [firelzrd/reflex](https://github.com/firelzrd/reflex): resposta rápida idle→busy combinada com PELT.

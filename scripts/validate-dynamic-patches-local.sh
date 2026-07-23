@@ -6,15 +6,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 python3 -m py_compile \
   "$ROOT/scripts/resolve-latest-stable.py" \
   "$ROOT/scripts/resolve-patch-sources.py" \
-  "$ROOT/scripts/resolve-infinity-v46-cpu-series.py" \
   "$ROOT/scripts/apply-dynamic-patch-sources.py" \
   "$ROOT/scripts/apply-validation-modules.py" \
-  "$ROOT/scripts/patch-infinity-v46-build.py" \
   "$ROOT/scripts/patch-external-module-toolchain.py" \
   "$ROOT/scripts/apply-zarpon-generic-name.py" \
   "$ROOT/scripts/apply-latest-stable-series.py"
 python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
-python3 -m json.tool "$ROOT/config/infinity-source.json" >/dev/null
 python3 -m unittest -v \
   "$ROOT/tests/test_latest_stable_identity.py" \
   "$ROOT/tests/test_virtualbox_host_compat.py" \
@@ -22,23 +19,20 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
-  "$ROOT/tests/test_infinity_v46_cpu_series.py" \
+  "$ROOT/tests/test_bore_liquorix_port.py" \
   "$ROOT/tests/test_validation_modules.py"
 bash "$ROOT/tests/test_runtime_tuning.sh"
 
-grep -Fq '"infinity"' "$ROOT/config/patch-sources.json"
-grep -Fq '"v4.6-gpu"' "$ROOT/config/infinity-source.json"
-grep -Fq '0001-v4.5-core-Infinity' "$ROOT/config/infinity-source.json"
-grep -Fq '0003-v4.5-Infinity-RT' "$ROOT/config/infinity-source.json"
-grep -Fq 'Subject: [PATCH 4/6]' "$ROOT/config/infinity-source.json"
-grep -Fq 'resolve-infinity-v46-cpu-series.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
-grep -Fq 'patch-infinity-v46-build.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
+grep -Fq '"bore"' "$ROOT/config/patch-sources.json"
+grep -Fq 'firelzrd/bore-scheduler' "$ROOT/config/patch-sources.json"
+grep -Fq '7.1.3-lqx1-bore-6.6.3.patch' "$ROOT/scripts/build-kernelnote-core.sh"
+grep -Fq 'CONFIG_SCHED_BORE=y' "$ROOT/config/kernelnote.config"
+grep -Fq 'resolve-patch-sources.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
 if grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-latest-stable-series.py"; then
   echo "external module helper must not be owned by apply-latest-stable-series.py" >&2
   exit 1
 fi
-grep -Fq 'apply-validation-modules.py' "$ROOT/scripts/patch-infinity-v46-build.py"
 grep -Fq 'drivers/gpu/drm/amd/amdgpu/amdgpu.ko' "$ROOT/scripts/apply-validation-modules.py"
 grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
 grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
@@ -52,5 +46,9 @@ grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"
 grep -Fq 'TUNING_VERSION="1.3.2"' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Version: ${TUNING_VERSION}' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Depends: clang, llvm, lld, make' "$ROOT/scripts/build-tuning-package.sh"
+if rg -n -i 'infin'"ity" "$ROOT" --glob '!.git/**' --glob '!work/**' --glob '!logs/**'; then
+  echo "Legacy scheduler references remain in the TurboDecky tree" >&2
+  exit 1
+fi
 
 echo "Dynamic patch source validation passed"
