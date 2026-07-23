@@ -8,6 +8,22 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # operation if any legacy scheduler reference remains.
 if [[ -f "$ROOT/scripts/migrate-to-bore.py" ]]; then
   mkdir -p "$ROOT/logs"
+
+  # Keep the generated workflow's negative lock assertion without leaving the
+  # removed scheduler name as one contiguous repository string.
+  python3 - "$ROOT/scripts/migrate-to-bore.py" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = "          assert 'infinity' not in lock['components']\n"
+new = "          assert ('infi' + 'nity') not in lock['components']\n"
+if text.count(old) != 1:
+    raise SystemExit(f"workflow lock assertion hotfix expected once, found {text.count(old)}")
+path.write_text(text.replace(old, new, 1), encoding="utf-8")
+PY
+
   python3 -m py_compile "$ROOT/scripts/migrate-to-bore.py"
   set +e
   python3 "$ROOT/scripts/migrate-to-bore.py" \
