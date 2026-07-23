@@ -46,7 +46,12 @@ grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"
 grep -Fq 'TUNING_VERSION="1.3.2"' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Version: ${TUNING_VERSION}' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Depends: clang, llvm, lld, make' "$ROOT/scripts/build-tuning-package.sh"
-if rg -n -i 'infin'"ity" "$ROOT" --glob '!.git/**' --glob '!work/**' --glob '!logs/**'; then
+if grep -RIn --binary-files=without-match \
+  --exclude-dir=.git \
+  --exclude-dir=work \
+  --exclude-dir=logs \
+  --exclude-dir=__pycache__ \
+  -e 'infin'"ity" "$ROOT"; then
   echo "Legacy scheduler references remain in the TurboDecky tree" >&2
   exit 1
 fi
