@@ -23,19 +23,32 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Transform, validate and commit BORE migration
+      - name: Transform and validate BORE migration
         shell: bash
         run: |
           set -Eeuo pipefail
           chmod +x scripts/validate-dynamic-patches-local.sh
-          scripts/validate-dynamic-patches-local.sh
+          GITHUB_ACTIONS=false scripts/validate-dynamic-patches-local.sh
 
-      - name: Confirm committed branch state
-        if: success()
+      - name: Commit validated non-workflow changes
         shell: bash
         run: |
           set -Eeuo pipefail
-          git status --short
+          # GITHUB_TOKEN may update repository contents but cannot modify workflow
+          # files. Restore them here; the connector applies those two changes next.
+          git restore --source=HEAD -- \
+            .github/workflows/validate-kernel.yml \
+            .github/workflows/migrate-to-bore.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && {
+            echo "Migration produced no non-workflow changes" >&2
+            exit 1
+          }
+          git commit -m "Replace Infinity with BORE testing scheduler"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
 
       - name: Pack transaction state
         if: always()
