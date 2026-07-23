@@ -7,12 +7,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # with the final BORE validator, removes its own bootstrap files and rejects the
 # operation if any legacy scheduler reference remains.
 if [[ -f "$ROOT/scripts/migrate-to-bore.py" ]]; then
+  mkdir -p "$ROOT/logs"
   python3 -m py_compile "$ROOT/scripts/migrate-to-bore.py"
-  python3 "$ROOT/scripts/migrate-to-bore.py"
+  set +e
+  python3 "$ROOT/scripts/migrate-to-bore.py" \
+    > >(tee "$ROOT/logs/bore-migration-transaction.log") \
+    2> >(tee "$ROOT/logs/bore-migration-transaction.err" >&2)
+  migration_status=$?
+  set -e
+  ((migration_status == 0)) || exit "$migration_status"
 
   chmod +x "$ROOT/scripts/validate-dynamic-patches-local.sh"
-  "$ROOT/scripts/validate-dynamic-patches-local.sh"
-  python3 -m unittest discover -s "$ROOT/tests" -v
+  "$ROOT/scripts/validate-dynamic-patches-local.sh" \
+    2>&1 | tee "$ROOT/logs/bore-local-validation.log"
+  python3 -m unittest discover -s "$ROOT/tests" -v \
+    2>&1 | tee "$ROOT/logs/bore-unittest-discovery.log"
   git -C "$ROOT" diff --check
 
   if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
