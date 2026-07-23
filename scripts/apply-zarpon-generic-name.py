@@ -224,6 +224,7 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
     # a side effect of the removed Infinity-specific rewriter, which left BORE
     # validation without the configured module build and warning corrections.
     for helper_name, log_name in (
+        ("apply-zen-interactive-config.py", "zen-interactive-config-rewrite.log"),
         ("apply-known-warning-fixes.py", "known-warning-fixes-rewrite.log"),
         ("apply-validation-modules.py", "validation-modules-rewrite.log"),
     ):
