@@ -220,6 +220,18 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
         logs / "patch-source-rewrite.log",
     )
 
+    # These transformations are common to every scheduler. They used to run as
+    # a side effect of the removed Infinity-specific rewriter, which left BORE
+    # validation without the configured module build and warning corrections.
+    for helper_name, log_name in (
+        ("apply-known-warning-fixes.py", "known-warning-fixes-rewrite.log"),
+        ("apply-validation-modules.py", "validation-modules-rewrite.log"),
+    ):
+        run_logged(
+            [sys.executable, str(root / "scripts" / helper_name), str(core)],
+            logs / log_name,
+        )
+
 
 def main() -> None:
     if len(sys.argv) != 3:
