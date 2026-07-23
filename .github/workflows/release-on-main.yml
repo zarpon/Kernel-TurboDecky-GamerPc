@@ -26,4 +26,4 @@ jobs:
           gh workflow run validate-kernel.yml \
             --repo "$GITHUB_REPOSITORY" \
             --ref main \
-            --field mode=package
+            --field publish_release=true
