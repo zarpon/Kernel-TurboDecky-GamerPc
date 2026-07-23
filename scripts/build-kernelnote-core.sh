@@ -17,15 +17,14 @@ KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
 
-# Correct Infinity scheduler v3 patch for Linux 7.1. This is the single
-# cumulative patch from the upstream v3/stable/linux-7.1-infinity tree; it
-# includes the CPU, futex and RT hooks. No separate Infinity GPU series is used.
-INFINITY_REPO="https://github.com/galpt/infinity-scheduler.git"
-INFINITY_BRANCH="v3"
-INFINITY_COMMIT="2cc72b8a3caf4ed75638893306c3e319819e2a42"
-INFINITY_PATCH_PATH="patches/stable/linux-7.1-infinity/0001-infinity-scheduler.patch"
-INFINITY_DIR="$WORKDIR/infinity-scheduler"
-INFINITY_PATCH="$PATCHDIR/0001-infinity-scheduler.patch"
+# BORE is resolved from the developer's testing tree for the exact Linux 7.1
+# series. These defaults document the current upstream revision; the dynamic
+# resolver replaces them with the branch-head snapshot locked for each build.
+BORE_REPO="https://github.com/firelzrd/bore-scheduler.git"
+BORE_COMMIT="16bf5baebbb42cdba393c501ba9c2af5f84e4749"
+BORE_PATCH_PATH="patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
+BORE_DIR="$WORKDIR/bore-scheduler"
+BORE_PATCH="$PATCHDIR/0001-bore-testing.patch"
 
 # Marie is fetched as a pinned local Git checkout rather than through a raw
 # patch URL. Only the exact patch blob is materialized in the workspace.
@@ -85,35 +84,30 @@ fetch_marie_testing_patch() {
   } | tee "$LOGDIR/02-lru-marie-provenance.txt"
 }
 
-fetch_infinity_patch() {
-  echo "==> Fetching the pinned correct Infinity CPU scheduler patch locally"
-  rm -rf "$INFINITY_DIR"
-  git init --quiet "$INFINITY_DIR"
-  git -C "$INFINITY_DIR" remote add origin "$INFINITY_REPO"
-  git -C "$INFINITY_DIR" config remote.origin.promisor true
-  git -C "$INFINITY_DIR" config remote.origin.partialclonefilter blob:none
-  git -C "$INFINITY_DIR" fetch --no-tags --depth=1 --filter=blob:none origin "$INFINITY_COMMIT" \
-    2>&1 | tee "$LOGDIR/01-infinity-fetch.log"
+fetch_bore_patch() {
+  echo "==> Fetching build-locked BORE testing patch for Linux 7.1"
+  rm -rf "$BORE_DIR"
+  git init --quiet "$BORE_DIR"
+  git -C "$BORE_DIR" remote add origin "$BORE_REPO"
+  git -C "$BORE_DIR" config remote.origin.promisor true
+  git -C "$BORE_DIR" config remote.origin.partialclonefilter blob:none
+  git -C "$BORE_DIR" fetch --no-tags --depth=1 --filter=blob:none origin "$BORE_COMMIT" \
+    2>&1 | tee "$LOGDIR/01-bore-fetch.log"
 
-  git -C "$INFINITY_DIR" show "FETCH_HEAD:$INFINITY_PATCH_PATH" > "$INFINITY_PATCH"
-  test -s "$INFINITY_PATCH"
-  grep -Fq 'diff --git a/kernel/sched/infinity_sched.c b/kernel/sched/infinity_sched.c' \
-    "$INFINITY_PATCH"
-  grep -Fq 'infinity_consume' "$INFINITY_PATCH"
-  grep -Fq 'SCHED_FLAG_NO_INFINITY_RT' "$INFINITY_PATCH"
-  grep -Fq 'infinity_rt_consume' "$INFINITY_PATCH"
-  grep -Fq 'futex_waiting' "$INFINITY_PATCH"
-  grep -Fq 'Subject: [PATCH] infinity-scheduler v3' "$INFINITY_PATCH"
+  git -C "$BORE_DIR" show "FETCH_HEAD:$BORE_PATCH_PATH" > "$BORE_PATCH"
+  test -s "$BORE_PATCH"
+  grep -Fq 'diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c' "$BORE_PATCH"
+  grep -Fq 'SCHED_BORE_VERSION' "$BORE_PATCH"
+  grep -Fq 'config SCHED_BORE' "$BORE_PATCH"
 
   {
-    echo "Component: Infinity scheduler v3"
-    echo "Repository: $INFINITY_REPO"
-    echo "Branch: $INFINITY_BRANCH"
-    echo "Commit: $INFINITY_COMMIT"
-    echo "Path: $INFINITY_PATCH_PATH"
-    echo "SHA256: $(sha256sum "$INFINITY_PATCH" | awk '{print $1}')"
-    echo "Acquisition: pinned local partial Git checkout"
-  } | tee "$LOGDIR/01-infinity-provenance.txt"
+    echo "Component: BORE scheduler testing"
+    echo "Repository: $BORE_REPO"
+    echo "Commit: $BORE_COMMIT"
+    echo "Path: $BORE_PATCH_PATH"
+    echo "SHA256: $(sha256sum "$BORE_PATCH" | awk '{print $1}')"
+    echo "Acquisition: build-locked local Git snapshot"
+  } | tee "$LOGDIR/01-bore-provenance.txt"
 }
 
 normalize_changed_whitespace() {
@@ -196,57 +190,49 @@ apply_marie_testing_patch() {
   echo "==> Marie LRU 0.7.7 testing patch applied successfully"
 }
 
-report_infinity_rejects() {
-  local label="$1" output="$2"
-  {
-    echo "==> Unresolved Infinity port rejects: $label"
-    find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort
-    echo
-    while IFS= read -r reject; do
-      echo "### ${reject#$KERNELDIR/}"
-      cat "$reject"
-    done < <(find "$KERNELDIR" -name '*.rej' -type f | sort)
-  } | tee "$output"
-}
-
-apply_infinity_patch() {
+apply_bore_patch() {
   local file="$1" status=0
 
-  echo "==> Applying the correct Infinity v3 CPU/RT scheduler patch"
+  echo "==> Applying BORE testing patch on Linux $KERNEL_VERSION"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
-      > "$LOGDIR/01-infinity.dry-run.log" 2>&1; then
+      > "$LOGDIR/01-bore.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
-      | tee "$LOGDIR/01-infinity.apply.log"
+      | tee "$LOGDIR/01-bore.apply.log"
   else
-    cat "$LOGDIR/01-infinity.dry-run.log"
-    echo "==> Retrying Infinity with controlled port fuzz <= 3"
+    cat "$LOGDIR/01-bore.dry-run.log"
+    echo "==> Retrying BORE with controlled port fuzz <= 3"
     set +e
     patch --batch --forward --fuzz=3 --strip=1 < "$file" \
-      > "$LOGDIR/01-infinity.fuzz-apply.log" 2>&1
+      > "$LOGDIR/01-bore.fuzz-apply.log" 2>&1
     status=$?
     set -e
-    cat "$LOGDIR/01-infinity.fuzz-apply.log"
+    cat "$LOGDIR/01-bore.fuzz-apply.log"
 
     if ((status != 0)) || find "$KERNELDIR" -name '*.rej' -print -quit | grep -q .; then
-      report_infinity_rejects "correct CPU scheduler patch" \
-        "$LOGDIR/01-infinity-port-rejects.log"
+      {
+        echo "==> Unresolved BORE port rejects"
+        find "$KERNELDIR" -name '*.rej' -printf '%P
+' | sort
+        echo
+        while IFS= read -r reject; do
+          echo "### ${reject#$KERNELDIR/}"
+          cat "$reject"
+        done < <(find "$KERNELDIR" -name '*.rej' -type f | sort)
+      } | tee "$LOGDIR/01-bore-port-rejects.log"
       return 1
     fi
   fi
 
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
-  git diff --check | tee "$LOGDIR/01-infinity-diff-check.log"
+  git diff --check | tee "$LOGDIR/01-bore-diff-check.log"
 
-  test -s kernel/sched/infinity_sched.c
-  test -s kernel/sched/infinity_sched.h
-  grep -Fq 'struct infinity_ctx' include/linux/sched.h
-  grep -Fq 'infinity_slice' kernel/sched/fair.c
-  grep -Fq 'infinity_consume' kernel/sched/fair.c
-  grep -Fq 'infinity_rt_consume' kernel/sched/rt.c
-  grep -Fq 'SCHED_FLAG_NO_INFINITY_RT' include/uapi/linux/sched.h
-  grep -Fq 'futex_waiting' kernel/futex/waitwake.c
-  grep -Fq 'Infinity scheduler active' kernel/sched/infinity_sched.c
-  echo "==> Correct Infinity v3 CPU/RT scheduler patch applied successfully"
+  test -s kernel/sched/bore.c
+  test -s include/linux/sched/bore.h
+  grep -Fq 'struct bore_ctx' include/linux/sched.h
+  grep -Fq 'SCHED_BORE_VERSION' include/linux/sched/bore.h
+  grep -Fq 'sched_bore' kernel/sched/bore.c
+  grep -Fq 'config SCHED_BORE' init/Kconfig
+  echo "==> BORE testing patch applied successfully"
 }
 
 apply_adios_patch() {
@@ -341,22 +327,23 @@ git clone --no-checkout --depth 1 --single-branch --no-tags --branch "$KERNEL_TA
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 
 fetch_marie_testing_patch
-fetch_infinity_patch
+fetch_bore_patch
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
 download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
 apply_marie_testing_patch "$MARIE_PATCH"
-apply_infinity_patch "$INFINITY_PATCH"
+apply_bore_patch "$BORE_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
 cp "$WORKDIR/liquorix-amd64.config" .config
 
-# Infinity v3 is integrated directly into CFS/EEVDF and the RT class.
-# Liquorix alternative schedulers must remain disabled so Infinity is effective.
+# BORE enhances the upstream CFS/EEVDF path. Alternative schedulers
+# remain disabled so BORE is the effective fair-scheduler enhancement.
 scripts/config --disable SCHED_ALT
 scripts/config --disable SCHED_PDS
 scripts/config --disable SCHED_BMQ
+scripts/config --enable SCHED_BORE
 scripts/config --set-val MIN_BASE_SLICE_NS 2000000
 
 # Memory and I/O policy for responsive desktop and gaming workloads.
@@ -375,7 +362,7 @@ scripts/config --enable LTO_CLANG_THIN
 
 # Reproducible generic AMD64 build for LMDE. Avoid distro certificate paths and
 # Rust toolchain coupling from the upstream Liquorix generated configuration.
-scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-infinity-adios-thinlto"
+scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"
 scripts/config --disable LOCALVERSION_AUTO
 scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
 scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
@@ -400,7 +387,7 @@ fi
 assert_disabled_or_absent SCHED_ALT
 assert_disabled_or_absent SCHED_PDS
 assert_disabled_or_absent SCHED_BMQ
-assert_disabled_or_absent SCHED_BORE
+assert_config "CONFIG_SCHED_BORE=y"
 assert_disabled_or_absent LTO_NONE
 assert_disabled_or_absent LTO_CLANG_FULL
 assert_disabled_or_absent CMDLINE_OVERRIDE

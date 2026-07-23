@@ -1,0 +1,34 @@
+test_kernel_identity_is_debian_compatible_and_has_no_release_suffix (tests.test_latest_stable_identity.LatestStableIdentityTest.test_kernel_identity_is_debian_compatible_and_has_no_release_suffix) ... ok
+test_static_config_contains_virtualbox_requirements (tests.test_virtualbox_host_compat.VirtualBoxHostCompatibilityTest.test_static_config_contains_virtualbox_requirements) ... ok
+test_wrapper_enforces_virtualbox_host_requirements (tests.test_virtualbox_host_compat.VirtualBoxHostCompatibilityTest.test_wrapper_enforces_virtualbox_host_requirements) ... ok
+test_external_modules_default_to_llvm_and_skip_polly (tests.test_external_module_toolchain.ExternalModuleToolchainTest.test_external_modules_default_to_llvm_and_skip_polly) ... ok
+test_helper_is_owned_by_polly_integrator (tests.test_external_module_toolchain.ExternalModuleToolchainTest.test_helper_is_owned_by_polly_integrator) ... ok
+test_exact_required_fails (tests.test_dynamic_patch_resolver.ResolverTests.test_exact_required_fails) ... ok
+test_fallback_ref_restores_exact_series (tests.test_dynamic_patch_resolver.ResolverTests.test_fallback_ref_restores_exact_series) ... ok
+test_git_symlink_patch_is_followed (tests.test_dynamic_patch_resolver.ResolverTests.test_git_symlink_patch_is_followed) ... ok
+test_latest_exact_version_and_nearest_fallback (tests.test_dynamic_patch_resolver.ResolverTests.test_latest_exact_version_and_nearest_fallback) ... ok
+test_rewrite_is_idempotent_and_uses_local_lock (tests.test_dynamic_patch_resolver.RewriterTests.test_rewrite_is_idempotent_and_uses_local_lock) ... ok
+test_repository_relative_patch_symlink_is_followed (tests.test_dynamic_patch_symlinks.GitSymlinkTests.test_repository_relative_patch_symlink_is_followed) ... ok
+test_one_line_relative_patch_pointer_is_followed (tests.test_dynamic_patch_indirections.RegularIndirectionTests.test_one_line_relative_patch_pointer_is_followed) ... ok
+test_missing_71_testing_patch_fails_closed (tests.test_bore_testing_source.BoreTestingSourceTests.test_missing_71_testing_patch_fails_closed) ... warning: filtering not recognized by server, ignoring
+From /tmp/tmpvgo4wg_z/bore
+ * branch            main       -> FETCH_HEAD
+ * [new branch]      main       -> origin/main
+ok
+test_repository_configuration_enables_bore (tests.test_bore_testing_source.BoreTestingSourceTests.test_repository_configuration_enables_bore) ... ok
+test_selects_exact_71_testing_patch_and_ignores_stable (tests.test_bore_testing_source.BoreTestingSourceTests.test_selects_exact_71_testing_patch_and_ignores_stable) ... warning: filtering not recognized by server, ignoring
+From /tmp/tmp05w_1tzd/bore
+ * branch            main       -> FETCH_HEAD
+ * [new branch]      main       -> origin/main
+ok
+test_injects_full_module_build_and_key_product_checks (tests.test_validation_modules.ValidationModuleRewriteTests.test_injects_full_module_build_and_key_product_checks) ... ok
+test_requires_the_exact_validation_anchor (tests.test_validation_modules.ValidationModuleRewriteTests.test_requires_the_exact_validation_anchor) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 1.500s
+
+OK
+THP admission simulation passed: zero-fill cap 1.60 MiB -> 0.25 MiB; swap candidate cap 32 KiB -> 0 KiB
+dpkg-deb: building package 'turbodecky-tuning' in '/tmp/tmp.4iaUkIvI7c/artifacts/turbodecky-tuning_1.3.2_all.deb'.
+runtime tuning validation passed
+Dynamic BORE patch source validation passed

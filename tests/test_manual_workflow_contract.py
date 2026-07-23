@@ -46,7 +46,8 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn("github.event_name == 'workflow_dispatch'", release_step)
         self.assertIn("github.ref_name == 'main'", release_step)
         self.assertIn("inputs.publish_release", release_step)
-        self.assertIn("github.ref_name == 'integration/infinity-v46-full-gpu'", release_step)
+        self.assertNotIn("github.event_name == 'push'", release_step)
+        self.assertNotIn("integration/", WORKFLOW)
         self.assertNotIn("env.BUILD_MODE == 'package'", release_step)
 
     def test_main_dispatcher_uses_the_current_manual_input_contract(self) -> None:

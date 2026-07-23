@@ -1,0 +1,33 @@
+test_missing_71_testing_patch_fails_closed (test_bore_testing_source.BoreTestingSourceTests.test_missing_71_testing_patch_fails_closed) ... warning: filtering not recognized by server, ignoring
+From /tmp/tmpmba71bqr/bore
+ * branch            main       -> FETCH_HEAD
+ * [new branch]      main       -> origin/main
+ok
+test_repository_configuration_enables_bore (test_bore_testing_source.BoreTestingSourceTests.test_repository_configuration_enables_bore) ... ok
+test_selects_exact_71_testing_patch_and_ignores_stable (test_bore_testing_source.BoreTestingSourceTests.test_selects_exact_71_testing_patch_and_ignores_stable) ... warning: filtering not recognized by server, ignoring
+From /tmp/tmp56nmfnq7/bore
+ * branch            main       -> FETCH_HEAD
+ * [new branch]      main       -> origin/main
+ok
+test_one_line_relative_patch_pointer_is_followed (test_dynamic_patch_indirections.RegularIndirectionTests.test_one_line_relative_patch_pointer_is_followed) ... ok
+test_exact_required_fails (test_dynamic_patch_resolver.ResolverTests.test_exact_required_fails) ... ok
+test_fallback_ref_restores_exact_series (test_dynamic_patch_resolver.ResolverTests.test_fallback_ref_restores_exact_series) ... ok
+test_git_symlink_patch_is_followed (test_dynamic_patch_resolver.ResolverTests.test_git_symlink_patch_is_followed) ... ok
+test_latest_exact_version_and_nearest_fallback (test_dynamic_patch_resolver.ResolverTests.test_latest_exact_version_and_nearest_fallback) ... ok
+test_rewrite_is_idempotent_and_uses_local_lock (test_dynamic_patch_resolver.RewriterTests.test_rewrite_is_idempotent_and_uses_local_lock) ... ok
+test_repository_relative_patch_symlink_is_followed (test_dynamic_patch_symlinks.GitSymlinkTests.test_repository_relative_patch_symlink_is_followed) ... ok
+test_external_modules_default_to_llvm_and_skip_polly (test_external_module_toolchain.ExternalModuleToolchainTest.test_external_modules_default_to_llvm_and_skip_polly) ... ok
+test_helper_is_owned_by_polly_integrator (test_external_module_toolchain.ExternalModuleToolchainTest.test_helper_is_owned_by_polly_integrator) ... ok
+test_kernel_identity_is_debian_compatible_and_has_no_release_suffix (test_latest_stable_identity.LatestStableIdentityTest.test_kernel_identity_is_debian_compatible_and_has_no_release_suffix) ... ok
+test_main_dispatcher_uses_the_current_manual_input_contract (test_manual_workflow_contract.ManualWorkflowContractTests.test_main_dispatcher_uses_the_current_manual_input_contract) ... ok
+test_manual_runs_package_artifacts_and_gate_release_to_main (test_manual_workflow_contract.ManualWorkflowContractTests.test_manual_runs_package_artifacts_and_gate_release_to_main) ... ok
+test_injects_full_module_build_and_key_product_checks (test_validation_modules.ValidationModuleRewriteTests.test_injects_full_module_build_and_key_product_checks) ... ok
+test_requires_the_exact_validation_anchor (test_validation_modules.ValidationModuleRewriteTests.test_requires_the_exact_validation_anchor) ... ok
+test_static_config_contains_virtualbox_requirements (test_virtualbox_host_compat.VirtualBoxHostCompatibilityTest.test_static_config_contains_virtualbox_requirements) ... ok
+test_wrapper_enforces_virtualbox_host_requirements (test_virtualbox_host_compat.VirtualBoxHostCompatibilityTest.test_wrapper_enforces_virtualbox_host_requirements) ... ok
+test_injects_source_and_config_warning_fixes_idempotently (test_warning_fixes.KnownWarningRewriteTests.test_injects_source_and_config_warning_fixes_idempotently) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 1.525s
+
+OK

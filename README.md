@@ -30,13 +30,13 @@ ou a verificação deve ser desativada.
 
 ## Benefícios esperados
 
-- **Responsividade e jogos:** Infinity CPU/EEVDF e POC Selector favorecem
-  tarefas interativas, controlam o orçamento de CPU por EMA e escolhem CPUs
-  ociosas considerando a topologia de cache, o que pode melhorar a latência
-  percebida e a consistência do frame time.
-- **Tarefas RT e espera:** Infinity também adiciona hooks de EMA para
-  SCHED_FIFO/SCHED_RR e bypass seguro da proteção de fatia para tarefas que
-  estão entrando em espera futex; isso não transforma o kernel em PREEMPT_RT.
+- **Responsividade e jogos:** BORE modifica o CFS/EEVDF usando o tempo de
+  rajada de cada tarefa para favorecer cargas interativas sob concorrência. O
+  POC Selector continua escolhendo CPUs ociosas considerando LLC e topologia,
+  o que pode melhorar a latência percebida e a consistência do frame time.
+- **Carga em segundo plano:** a herança de rajada do BORE reduz a vantagem de
+  processos que geram muitos filhos CPU-bound, preservando melhor a resposta do
+  sistema durante compilação, descompressão e outras cargas paralelas.
 - **Resposta de frequência:** REFLEX acelera a transição de ocioso para ativo,
   enquanto NAP escolhe estados de idle de forma adaptativa.
 - **I/O e carregamento:** ADIOS ajusta deadlines e lotes conforme a latência
@@ -86,7 +86,7 @@ compatíveis mais recentes, registrando commits e SHA-256 exatos no
 
 ## Patchset de desempenho
 
-- **Infinity scheduler** — (https://github.com/galpt/infinity-scheduler): scheduler de CPU integrado ao CFS/EEVDF, modulação de vruntime e fatias por EMA, bypass futex e hooks de RT. 
+- **BORE testing** — [firelzrd/bore-scheduler](https://github.com/firelzrd/bore-scheduler/tree/main/patches/testing): aprimoramento do CFS/EEVDF orientado ao comportamento de rajada. O resolvedor exige um patch da série Linux 7.1, acompanha a árvore `testing` e registra commit e SHA-256 exatos em cada build.
 - **POC Selector** — [firelzrd/poc-selector](https://github.com/firelzrd/poc-selector): seleção eficiente de CPU ociosa considerando LLC e topologia.
 - **NAP CPUIdle** — [firelzrd/nap](https://github.com/firelzrd/nap): predição adaptativa do estado de idle.
 - **REFLEX CPUFreq** — [firelzrd/reflex](https://github.com/firelzrd/reflex): resposta rápida idle→busy combinada com PELT.
@@ -188,7 +188,7 @@ uname -r
 ```
 
 O resultado deve seguir o formato
-`linux.<versão>.turbodecky.release`.
+`<versão>.turbodecky`.
 
 ### Steam
 

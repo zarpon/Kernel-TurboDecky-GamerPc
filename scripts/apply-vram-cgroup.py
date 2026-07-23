@@ -78,7 +78,7 @@ normalize_changed_whitespace() {
 )
 
 replace_once(
-    'apply_infinity_patch() {\n',
+    'apply_bore_patch() {\n',
     r'''apply_vram_patch() {
   local file="$1"
   local markers=0
@@ -139,18 +139,18 @@ VRAMPY
   echo "==> VRAM cgroup/TTM policy applied successfully"
 }
 
-apply_infinity_patch() {
+apply_bore_patch() {
 '''
 )
 
 replace_once(
-    'fetch_infinity_patch\n',
-    'fetch_infinity_patch\nfetch_vram_patch\n'
+    'fetch_bore_patch\n',
+    'fetch_bore_patch\nfetch_vram_patch\n'
 )
 
 replace_once(
-    'apply_infinity_patch "$INFINITY_PATCH"\n',
-    'apply_infinity_patch "$INFINITY_PATCH"\napply_vram_patch "$VRAM_PATCH"\n'
+    'apply_bore_patch "$BORE_PATCH"\n',
+    'apply_bore_patch "$BORE_PATCH"\napply_vram_patch "$VRAM_PATCH"\n'
 )
 
 replace_once(

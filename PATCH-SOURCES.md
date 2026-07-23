@@ -18,31 +18,23 @@ pelo workflow.
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
 
-## Infinity v4.6-gpu: série completa de teste
+## BORE testing para Linux 7.1
 
-Nesta branch de teste, o Infinity é resolvido separadamente por
-`config/infinity-source.json`. Cada build consulta o HEAD atual da branch
-`v4.6-gpu` e exige exatamente os seis patches da série correspondente ao kernel:
+O componente `bore` consulta o HEAD da branch `main` de
+`firelzrd/bore-scheduler`, mas seleciona exclusivamente arquivos sob
+`patches/testing/` cujo nome identifique a série Linux 7.1. O build falha se não
+existir correspondência exata; patches de 6.18, 7.0 ou 7.2 não são portados
+silenciosamente.
 
-1. `0001`: infraestrutura principal do Infinity;
-2. `0002`: agendamento CPU em CFS/EEVDF;
-3. `0003`: agendamento RT e proteção por requeue;
-4. `0004`: extensões do cabeçalho do DRM scheduler;
-5. `0005`: vtime GPU e acoplamento entre os schedulers CPU/GPU;
-6. `0006`: limpeza final dos campos removidos pela série.
+Entre candidatos 7.1 válidos, o resolvedor escolhe a versão BORE mais nova pelo
+nome do arquivo. O patch precisa conter `SCHED_BORE_VERSION`,
+`CONFIG_SCHED_BORE` e `kernel/sched/bore.c`. A configuração final força
+`CONFIG_SCHED_BORE=y` e mantém PDS/BMQ desativados.
 
-Os seis arquivos são concatenados em um único mbox bloqueado por build. A
-resolução registra o commit exato do HEAD, os seis caminhos, o SHA-256 do mbox e
-a política `exact-branch-head-full-series`. A ausência de qualquer patch
-interrompe o build e `excluded_patches` deve permanecer vazio.
-
-## Infinity e POC Selector
-
-`scripts/validate-infinity-poc-compat.py` falha se os patches GPU deixarem de
-ficar restritos ao DRM, começarem a tocar arquivos do POC, escreverem estado
-`poc_*` ou perderem o acoplamento explícito com o estado CPU do Infinity.
-Também exige que o POC preserve o bypass em topologias de capacidade
-assimétrica. A análise está documentada em `INFINITY-POC-COMPATIBILITY.md`.
+O registro contém o commit upstream, caminho selecionado, versão BORE extraída,
+SHA-256 e tamanho. A aplicação tenta primeiro `patch --dry-run` sem fuzz; um port
+controlado com fuzz máximo 3 só é aceito sem arquivos `.rej` e após verificações
+semânticas dos arquivos e símbolos do BORE.
 
 ## Lock por build
 
@@ -52,7 +44,7 @@ componente:
 - repositório e branch consultados;
 - commit upstream exato;
 - commit do repositório Git mínimo e autocontido usado pelo build;
-- caminho ou caminhos selecionados;
+- caminho selecionado;
 - série do kernel-alvo;
 - versão do patch, quando disponível;
 - SHA-256 e tamanho dos bytes aplicados;
@@ -64,9 +56,9 @@ selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 
 ## Componentes versionados
 
-A resolução dinâmica cobre Infinity v4.6-gpu completo, Marie LRU, ADIOS,
-ZRAM-IR, POC Selector, NAP, REFLEX, patches TTM/DMEM de VRAM, linux-tkg,
-CachyOS, OpenWrt e a configuração-base do Liquorix.
+A resolução dinâmica cobre BORE testing, Marie LRU, ADIOS, ZRAM-IR, POC
+Selector, NAP, REFLEX, patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a
+configuração-base do Liquorix.
 
 Patches de correção sem versão própria, como commits upstream específicos e
 séries enviadas por e-mail, são baixados novamente e registrados por SHA-256,
@@ -81,12 +73,12 @@ scripts/validate-dynamic-patches-local.sh
 Os testes confirmam:
 
 - escolha da versão mais nova para a série exata;
-- escolha da série anterior compatível mais próxima;
-- falha quando uma série exata obrigatória não existe;
+- recusa de uma série BORE incompatível quando a série exata é obrigatória;
+- uso exclusivo da árvore `patches/testing` para o BORE;
+- escolha da série anterior compatível mais próxima somente nos componentes que
+  permitem port;
 - recuperação por commit histórico;
 - consumo do snapshot como repositório Git local autocontido;
-- acompanhamento do HEAD da branch `v4.6-gpu`;
-- combinação obrigatória dos patches Infinity `0001`–`0006`;
-- falha fechada quando qualquer patch da série está ausente;
-- reescrita das validações de build;
-- ausência de sobreposição DRM/POC e preservação dos gates semânticos.
+- preservação do lock e dos SHA-256;
+- reescrita idempotente dos scripts de build;
+- habilitação obrigatória de `CONFIG_SCHED_BORE=y`.
