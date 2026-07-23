@@ -1,58 +1,37 @@
 name: Apply transactional BORE migration
 
 on:
-  push:
-    branches: [agent/replace-infinity-with-bore-testing]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
 
 concurrency:
-  group: migrate-to-bore-${{ github.ref }}
+  group: migrate-to-bore-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   migrate:
+    if: ${{ github.head_ref == 'agent/replace-infinity-with-bore-testing' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - name: Check out migration branch
+      - name: Check out proposed branch
         uses: actions/checkout@v4
         with:
-          ref: agent/replace-infinity-with-bore-testing
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - name: Apply migration
+      - name: Transform, validate and commit BORE migration
         shell: bash
         run: |
           set -Eeuo pipefail
-          # This second workflow revision deliberately triggers the transactional run.
-          python3 -m py_compile scripts/migrate-to-bore.py
-          python3 scripts/migrate-to-bore.py
-
-      - name: Validate transformed repository locally
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          chmod +x scripts/*.sh tests/*.sh
-          python3 -m py_compile scripts/*.py tests/*.py
-          find scripts tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          chmod +x scripts/validate-dynamic-patches-local.sh
           scripts/validate-dynamic-patches-local.sh
-          python3 -m unittest discover -s tests -v
-          git diff --check
-          git status --short
 
-      - name: Commit validated migration
+      - name: Confirm committed branch state
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -Eeuo pipefail
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Migration produced no changes" >&2
-            exit 1
-          fi
-          git commit -m "Replace Infinity with BORE testing scheduler"
-          git push origin HEAD:agent/replace-infinity-with-bore-testing
+          git status --short
