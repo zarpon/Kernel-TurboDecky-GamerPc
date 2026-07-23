@@ -1,289 +1,37 @@
-name: Build latest upstream TurboDecky GamerPc kernel
+name: Validate transactional BORE migration
 
 on:
   pull_request:
-    branches: [main]
-  push:
-    branches: [integration/infinity-v46-full-gpu]
-  workflow_dispatch:
-    inputs:
-      publish_release:
-        description: Publish the compiled packages as a GitHub release (main only)
-        required: true
-        default: true
-        type: boolean
+    branches: [validation/bore-migration-base]
 
 permissions:
   contents: write
 
 concurrency:
-  group: turbodecky-generic-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  group: bore-migration-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  migrate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    env:
-      # A manual run must create installable artifacts even when publication is
-      # disabled. Pull requests retain the lean validation build.
-      BUILD_MODE: ${{ github.event_name == 'pull_request' && 'validate' || 'package' }}
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 8G
-      CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_COMPILERCHECK: content
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_SLOPPINESS: include_file_ctime,include_file_mtime,time_macros
-      KBUILD_BUILD_USER: turbodecky
-      KBUILD_BUILD_HOST: github-actions
-      KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
-      KBUILD_BUILD_VERSION: "1"
-      SOURCE_DATE_EPOCH: "1767225600"
-      LC_ALL: C
-      TZ: UTC
-
+    timeout-minutes: 30
     steps:
-      - name: Free runner space
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
-      - name: Check out project
+      - name: Check out proposed branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
 
-      - name: Resolve latest stable Linux
-        id: kernel
+      - name: Transform, validate and commit BORE migration
         shell: bash
         run: |
           set -Eeuo pipefail
-          mkdir -p logs
-          python3 scripts/resolve-latest-stable.py \
-            --github-env "$GITHUB_ENV" \
-            --github-output "$GITHUB_OUTPUT" \
-            --log-dir logs
-
-      - name: Configure resources
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          JOBS="$(nproc --all)"
-          echo "JOBS=$JOBS" >> "$GITHUB_ENV"
-          echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
-          parameters=/sys/module/zswap/parameters
-          echo zstd | sudo tee "$parameters/compressor"
-          echo 90 | sudo tee "$parameters/max_pool_percent"
-          echo 1 | sudo tee "$parameters/shrinker_enabled"
-          echo 1 | sudo tee "$parameters/enabled"
-
-      - name: Configure 16 GiB swap
-        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
-        with:
-          swap-size-gb: 16
-
-      - name: Restore compiler cache
-        uses: actions/cache@v4
-        with:
-          path: .ccache
-          key: turbodecky-full-gpu-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'scripts/*.sh', 'config/*.json', 'config/kernelnote.config') }}
-          restore-keys: |
-            turbodecky-full-gpu-${{ steps.kernel.outputs.series }}-${{ runner.os }}-${{ runner.arch }}-
-            turbodecky-full-gpu-
-
-      - name: Install build dependencies and Polly
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get install -y --no-install-recommends software-properties-common
-          sudo add-apt-repository -y universe
-          sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get install -y --no-install-recommends \
-            bc bison build-essential ccache clang-18 cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
-            kmod libdw-dev libelf-dev libssl-dev lld-18 llvm-18 llvm-18-dev libpolly-18-dev \
-            pahole patchutils python3 rsync unzip xz-utils zip zstd
-          echo "/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
-          POLLY_SO="$(find /usr/lib/llvm-18 /usr/lib/x86_64-linux-gnu -type f -name 'LLVMPolly.so*' 2>/dev/null | head -n 1)"
-          test -n "$POLLY_SO"
-          echo "LLVM_POLLY_SO=$(readlink -f "$POLLY_SO")" >> "$GITHUB_ENV"
-          ccache --set-config=max_size="$CCACHE_MAXSIZE"
-          ccache --set-config=compression=true
-          ccache --set-config=compiler_check=content
-          ccache --set-config=base_dir="$CCACHE_BASEDIR"
-          ccache --set-config=hash_dir=false
-          ccache --set-config=depend_mode=true
-          ccache --zero-stats
-
-      - name: Configure cached Clang 18
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mkdir -p .ci-bin
-          printf '#!/usr/bin/env bash\nexec ccache /usr/bin/clang-18 "$@"\n' > .ci-bin/clang
-          chmod +x .ci-bin/clang
-          echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
-
-      - name: Validate and build kernel
-        shell: bash
-        run: |
-          set -Eeuo pipefail
+          chmod +x scripts/validate-dynamic-patches-local.sh
           scripts/validate-dynamic-patches-local.sh
-          python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
-          python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
-          python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
-          python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
-          python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
-          python3 -m py_compile scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py
-          chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
-          scripts/build-kernelnote.sh "$BUILD_MODE"
 
-      - name: Verify complete Infinity series and POC compatibility
+      - name: Confirm clean validated checkout
         shell: bash
         run: |
           set -Eeuo pipefail
-          grep -Fq 'Component: Infinity scheduler v4.6-gpu full CPU/RT/DRM/GPU series' logs/01-infinity-provenance.txt
-          grep -Fq 'Infinity v4.6-gpu full series applied successfully' logs/build.log
-          for n in 1 2 3 4 5 6; do
-            grep -Fq "Subject: [PATCH $n/6]" .resolved-patches/files/01-infinity.patch
-          done
-          grep -Fq 'infinity_update_weight' work/linux/kernel/sched/fair.c
-          grep -Fq 'INFINITY_RT_DEMOTE_THRESHOLD' work/linux/kernel/sched/infinity_sched.h
-          grep -Fq 'cached_gpu_vtime' work/linux/include/drm/gpu_scheduler.h
-          grep -Fq 'drm_sched_entity_calc_vtime' work/linux/drivers/gpu/drm/scheduler/sched_main.c
-          grep -Fq 'drm_sched_rq_select_entity_infinity' work/linux/drivers/gpu/drm/scheduler/sched_main.c
-          grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
-          ! grep -Eq '^CONFIG_SCHED_BORE=[ym]$' logs/final.config
-          python3 scripts/validate-infinity-poc-compat.py \
-            .resolved-patches/files/01-infinity.patch \
-            .resolved-patches/files/05-poc-selector.patch \
-            --report logs/infinity-poc-compatibility.txt
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          lock = json.loads(Path('logs/patch-lock.json').read_text(encoding='utf-8'))
-          infinity = lock['components']['infinity']
-          assert infinity['ref'] == 'v4.6-gpu'
-          assert infinity['selection'] == 'exact-branch-head-full-series'
-          assert infinity['series_count'] == 6
-          assert infinity['excluded_patches'] == []
-          assert [Path(path).name[:4] for path in infinity['selected_paths']] == ['0001','0002','0003','0004','0005','0006']
-          PY
-
-      - name: Verify validation module coverage
-        if: ${{ env.BUILD_MODE == 'validate' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          test -s logs/modules-build.log
-          test -s logs/modules-products.txt
-
-      - name: Prepare release files
-        if: ${{ env.BUILD_MODE == 'package' }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          shopt -s nullglob
-          packages=(artifacts/*.deb)
-          (( ${#packages[@]} > 0 ))
-          cd artifacts
-          sha256sum -- *.deb > SHA256SUMS
-          sha256sum --check SHA256SUMS
-          zip -q -9 "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip" -- *.deb SHA256SUMS
-          unzip -tq "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip"
-
-      - name: Upload Debian packages
-        if: ${{ env.BUILD_MODE == 'package' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.kernel.outputs.artifact_name }}
-          path: |
-            artifacts/*.deb
-            artifacts/SHA256SUMS
-            artifacts/turbodecky-linux-*.zip
-            logs/patch-lock.json
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
-      - name: Publish GitHub release
-        if: >-
-          (github.event_name == 'push' &&
-           github.ref_name == 'integration/infinity-v46-full-gpu') ||
-          (github.event_name == 'workflow_dispatch' &&
-           github.ref_name == 'main' &&
-           inputs.publish_release)
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TARGET: ${{ github.sha }}
-        run: |
-          set -Eeuo pipefail
-          shopt -s nullglob
-
-          short_sha="${RELEASE_TARGET:0:7}"
-          tag="${KERNEL_RELEASE_NAME}-${short_sha}"
-          packages=(artifacts/*.deb)
-          if ((${#packages[@]} == 0)); then
-            echo "No Debian packages are available for release" >&2
-            exit 1
-          fi
-          assets=(
-            "${packages[@]}"
-            artifacts/SHA256SUMS
-            artifacts/turbodecky-linux-*.zip
-          )
-          for asset in "${assets[@]}"; do
-            if [[ ! -f "$asset" ]]; then
-              echo "Release asset is missing: $asset" >&2
-              exit 1
-            fi
-          done
-
-          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
-            git fetch --force origin "+refs/tags/${tag}:refs/tags/${tag}"
-            existing_tag_commit="$(git rev-list -n 1 "$tag")"
-            if [[ "$existing_tag_commit" != "$RELEASE_TARGET" ]]; then
-              echo "Remote tag ${tag} points to ${existing_tag_commit}, expected ${RELEASE_TARGET}" >&2
-              exit 1
-            fi
-            echo "Reusing existing release tag ${tag}"
-          else
-            git tag "$tag" "$RELEASE_TARGET"
-            git push origin "refs/tags/${tag}"
-          fi
-
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$KERNEL_RELEASE_NAME"
-          else
-            gh release create "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$KERNEL_RELEASE_NAME" \
-              --generate-notes \
-              --verify-tag
-          fi
-
-          gh release upload "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber \
-            "${assets[@]}"
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY"
-
-      - name: Upload validation logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: turbodecky-upstream-validation-logs
-          path: logs/
-          if-no-files-found: warn
+          git diff --check
+          git status --short
