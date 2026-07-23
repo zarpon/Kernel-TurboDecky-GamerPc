@@ -25,9 +25,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      # A manual run must create installable artifacts even when publication is
-      # disabled. Pull requests retain the lean validation build.
-      BUILD_MODE: ${{ github.event_name == 'pull_request' && 'validate' || 'package' }}
+      # Validation branches exercise the complete package path without publishing
+      # a release. Ordinary pull requests retain the lean built-in-kernel build.
+      BUILD_MODE: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'validation/') && 'package' || github.event_name == 'pull_request' && 'validate' || 'package' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 8G
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -142,6 +142,7 @@ jobs:
           python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-zen-interactive.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
           shopt -s nullglob
           python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py)
@@ -166,6 +167,7 @@ jobs:
           grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' work/linux/include/linux/sched/bore.h
           grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
           grep -Fq 'CONFIG_SCHED_BORE=y' logs/final.config
+          grep -Fq 'CONFIG_ZEN_INTERACTIVE=y' logs/final.config
           python3 - <<'PY'
           import json
           from pathlib import Path
