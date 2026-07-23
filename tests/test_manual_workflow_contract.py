@@ -14,6 +14,7 @@ WORKFLOW = (ROOT / ".github/workflows/validate-kernel.yml").read_text(
 DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
     encoding="utf-8"
 )
+CONFIG = (ROOT / "config/kernelnote.config").read_text(encoding="utf-8")
 
 
 class ManualWorkflowContractTests(unittest.TestCase):
@@ -30,7 +31,7 @@ class ManualWorkflowContractTests(unittest.TestCase):
         )
         self.assertNotIn("\n      mode:\n        description: Build mode", WORKFLOW)
         self.assertIn(
-            "BUILD_MODE: ${{ github.event_name == 'pull_request' && 'validate' || 'package' }}",
+            "BUILD_MODE: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'validation/') && 'package' || github.event_name == 'pull_request' && 'validate' || 'package' }}",
             WORKFLOW,
         )
 
@@ -61,6 +62,14 @@ class ManualWorkflowContractTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn('python3 -m py_compile "${python_sources[@]}"', WORKFLOW)
+
+    def test_zen_interactive_is_persistent_and_verified(self) -> None:
+        self.assertIn("CONFIG_ZEN_INTERACTIVE=y", CONFIG)
+        self.assertIn(
+            "python3 scripts/apply-zen-interactive.py scripts/build-kernelnote-core.sh",
+            WORKFLOW,
+        )
+        self.assertIn("grep -Fq 'CONFIG_ZEN_INTERACTIVE=y' logs/final.config", WORKFLOW)
 
 
 if __name__ == "__main__":
