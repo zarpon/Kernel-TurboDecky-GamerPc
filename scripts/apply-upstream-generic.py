@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Switch the generated build from Liquorix to kernel.org latest stable Linux."""
+"""Configure the generated build for kernel.org latest stable Linux."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def main() -> None:
 
     source = replace_once(
         source,
-        'KERNEL_TAG="v7.1.3-lqx1"\n',
+        'KERNEL_TAG="v7.1.4"\n',
         ''': "${KERNEL_VERSION:?latest stable version was not resolved}"
 : "${KERNEL_SERIES:?latest stable series was not resolved}"
 : "${KERNEL_TAG:?latest stable tag was not resolved}"
@@ -33,13 +33,13 @@ def main() -> None:
     )
     source = replace_once(
         source,
-        'KERNEL_REPO="https://github.com/zen-kernel/zen-kernel.git"\n',
+        'KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"\n',
         'KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"\n',
         "upstream repository",
     )
     source = replace_once(
         source,
-        'echo "==> Cloning official Liquorix source tag $KERNEL_TAG"\n',
+        'echo "==> Cloning current upstream Linux source tag $KERNEL_TAG"\n',
         'echo "==> Cloning kernel.org latest stable source tag $KERNEL_TAG"\n',
         "clone description",
     )
@@ -134,7 +134,7 @@ cp .config "$LOGDIR/final.config"
     )
 
     source = source.replace(
-        'KDEB_PKGVERSION="7.1.3-1turbodecky1"',
+        'KDEB_PKGVERSION="7.1.4-1turbodecky1"',
         'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"',
     )
     source = source.replace(

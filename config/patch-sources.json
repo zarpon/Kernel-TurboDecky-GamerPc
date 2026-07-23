@@ -1,20 +1,38 @@
 {
   "schema": 1,
   "components": {
-    "infinity": {
+    "bore": {
       "kind": "git_patch",
-      "repo": "https://github.com/galpt/infinity-scheduler.git",
-      "ref": "v3",
+      "repo": "https://github.com/firelzrd/bore-scheduler.git",
+      "ref": "main",
       "exact_globs": [
-        "patches/stable/linux-{series}-infinity/0001-infinity-scheduler.patch"
+        "patches/testing/0001-linux{series}-rc*-bore-*.patch",
+        "patches/stable/linux-{series}-bore/0001-linux{series}-rc*-bore-*.patch"
       ],
       "fallback_globs": [],
       "require_exact_series": true,
-      "output": "01-infinity.patch",
+      "output": "01-bore.patch",
+      "project_version_regex": "bore[-_]?([0-9]+(?:\\.[0-9]+)+(?:-rc[0-9]+)?)",
+      "approved_sha256": "87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36",
       "required_markers": [
-        "infinity_sched.c",
-        "SCHED_FLAG_NO_INFINITY_RT",
-        "infinity_rt_consume"
+        "kernel/sched/bore.c",
+        "SCHED_BORE_VERSION",
+        "sched_bore"
+      ]
+    },
+    "bore_sched_ext_coexistence": {
+      "kind": "git_patch",
+      "repo": "https://github.com/firelzrd/bore-scheduler.git",
+      "ref": "main",
+      "exact_globs": [
+        "patches/additions/0002-sched-ext-coexistence-fix.patch"
+      ],
+      "fallback_globs": [],
+      "require_exact_series": false,
+      "output": "01-bore-sched-ext-coexistence-fix.patch",
+      "required_markers": [
+        "void reweight_task(struct task_struct *p, int prio)",
+        "reweight_entity"
       ]
     },
     "marie": {

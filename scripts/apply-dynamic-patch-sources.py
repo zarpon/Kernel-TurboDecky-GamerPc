@@ -165,7 +165,7 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
     text = replace_assignment(text, "LIQUORIX_CONFIG_URL", file_url(component(lock, "liquorix_config")))
     text = replace_assignment(text, "ADIOS_URL", file_url(component(lock, "adios")))
 
-    for prefix, name in (("INFINITY", "infinity"), ("MARIE", "marie"), ("REFLEX", "reflex")):
+    for prefix, name in (("BORE", "bore"), ("MARIE", "marie"), ("REFLEX", "reflex")):
         record = component(lock, name)
         text = replace_assignment(text, f"{prefix}_REPO", repo_value(record))
         if f"{prefix}_COMMIT=" in text:
@@ -174,8 +174,18 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
             )
         if f"{prefix}_PATCH_PATH=" in text:
             text = replace_assignment(text, f"{prefix}_PATCH_PATH", str(record["path"]))
-        if prefix == "INFINITY" and "INFINITY_BRANCH=" in text:
-            text = replace_assignment(text, "INFINITY_BRANCH", str(record.get("ref", "v3")))
+        if prefix == "BORE" and "BORE_BRANCH=" in text:
+            text = replace_assignment(text, "BORE_BRANCH", str(record.get("ref", "main")))
+
+    bore_sched_ext = component(lock, "bore_sched_ext_coexistence")
+    for suffix, value in (
+        ("REPO", repo_value(bore_sched_ext)),
+        ("COMMIT", str(bore_sched_ext.get("snapshot_commit", bore_sched_ext["commit"]))),
+        ("PATCH_PATH", str(bore_sched_ext["path"])),
+    ):
+        variable = f"BORE_SCHED_EXT_{suffix}"
+        if f"{variable}=" in text:
+            text = replace_assignment(text, variable, value)
 
     versions = {
         "MARIE": project_version(component(lock, "marie"), "unknown"),
@@ -270,7 +280,7 @@ def validate_lock(lock: dict[str, Any]) -> None:
     if lock.get("schema") != 1:
         raise RewriteError("unsupported patch lock schema")
     required = {
-        "infinity", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
+        "bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
         "vram", "liquorix_config", *REQUESTED.keys(),
     }
     missing = sorted(required - set(lock.get("components", {})))

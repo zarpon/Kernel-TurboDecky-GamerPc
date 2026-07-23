@@ -143,7 +143,7 @@ normalize_changed_whitespace() {
 )
 
 replace_once(
-    'apply_infinity_patch() {\n',
+    'apply_bore_patch() {\n',
     r'''apply_zram_ir_patch() {
   local file="$1" status=0
 
@@ -187,7 +187,7 @@ apply_poc_patch() {
       | tee "$LOGDIR/05-poc-selector.apply.log"
   else
     cat "$LOGDIR/05-poc-selector.dry-run.log"
-    echo "==> Porting POC Selector across Liquorix/Infinity offsets with fuzz <= 3"
+    echo "==> Porting POC Selector across Liquorix/BORE offsets with fuzz <= 3"
     set +e
     patch --batch --forward --fuzz=3 --strip=1 < "$file" \
       > "$LOGDIR/05-poc-selector.fuzz-apply.log" 2>&1
@@ -244,7 +244,7 @@ apply_nap_patch() {
   echo "==> NAP 0.5.0 Linux 7.1 port applied successfully"
 }
 
-apply_infinity_patch() {
+apply_bore_patch() {
 '''
 )
 
@@ -259,11 +259,13 @@ fetch_nap_patch
 
 replace_once(
     '''apply_marie_testing_patch "$MARIE_PATCH"
-apply_infinity_patch "$INFINITY_PATCH"
+apply_bore_patch "$BORE_PATCH"
+apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 ''',
     '''apply_marie_testing_patch "$MARIE_PATCH"
-apply_infinity_patch "$INFINITY_PATCH"
+apply_bore_patch "$BORE_PATCH"
+apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_poc_patch "$POC_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 apply_zram_ir_patch "$ZRAM_IR_PATCH"
@@ -350,8 +352,8 @@ assert_disabled_or_absent GDB_SCRIPTS
 )
 
 replace_once(
-    'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-infinity-adios-thinlto"\n',
-    'scripts/config --set-str LOCALVERSION "-kn-marie-infinity-poc-nap-rfx-adios-zir-lto"\n'
+    'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"\n',
+    'scripts/config --set-str LOCALVERSION "-kn-marie-bore-poc-nap-rfx-adios-zir-lto"\n'
 )
 
 replace_once(

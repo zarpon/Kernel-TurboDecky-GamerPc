@@ -396,6 +396,14 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                     )
                 if kind == "git_patch":
                     validate_patch(data, component, list(spec.get("required_markers", [])))
+                approved_sha256 = spec.get("approved_sha256")
+                actual_sha256 = sha256(data)
+                if approved_sha256 and actual_sha256 != approved_sha256:
+                    raise ResolverError(
+                        f"{component} selected current official source with SHA-256 "
+                        f"{actual_sha256}, but the reviewed local port requires "
+                        f"{approved_sha256}; refresh and validate the port"
+                    )
                 write_bytes(output_path, data)
                 record.update(
                     {
@@ -422,6 +430,14 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                     try:
                         candidate = fetch_url(url)
                         validate_patch(candidate, component, list(spec.get("required_markers", [])))
+                        approved_sha256 = spec.get("approved_sha256")
+                        actual_sha256 = sha256(candidate)
+                        if approved_sha256 and actual_sha256 != approved_sha256:
+                            raise ResolverError(
+                                f"{component} selected current official source with SHA-256 "
+                                f"{actual_sha256}, but the reviewed local port requires "
+                                f"{approved_sha256}; refresh and validate the port"
+                            )
                         data = candidate
                         selected_url = url
                         break

@@ -46,13 +46,21 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn("github.event_name == 'workflow_dispatch'", release_step)
         self.assertIn("github.ref_name == 'main'", release_step)
         self.assertIn("inputs.publish_release", release_step)
-        self.assertIn("github.ref_name == 'integration/infinity-v46-full-gpu'", release_step)
+        self.assertIn("github.ref_name == 'integration/bore-7.1'", release_step)
         self.assertNotIn("env.BUILD_MODE == 'package'", release_step)
 
     def test_main_dispatcher_uses_the_current_manual_input_contract(self) -> None:
         self.assertIn("gh workflow run validate-kernel.yml", DISPATCHER)
         self.assertIn("--field publish_release=true", DISPATCHER)
         self.assertNotIn("--field mode=package", DISPATCHER)
+
+    def test_python_validation_allows_an_empty_optional_glob(self) -> None:
+        self.assertIn("shopt -s nullglob", WORKFLOW)
+        self.assertIn(
+            "python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py)",
+            WORKFLOW,
+        )
+        self.assertIn('python3 -m py_compile "${python_sources[@]}"', WORKFLOW)
 
 
 if __name__ == "__main__":
