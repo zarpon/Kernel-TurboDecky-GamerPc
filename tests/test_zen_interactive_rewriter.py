@@ -107,7 +107,7 @@ index 5555555555555555555555555555555555555555..66666666666666666666666666666666
         self.assertEqual(excluded, 1)
         self.assertIn("config ZEN_INTERACTIVE", filtered)
         self.assertIn("CONFIG_ZEN_INTERACTIVE", filtered)
-        self.assertIn("Transparent hugepage policy.......: unchanged", filtered)
+        self.assertIn("Transparent memory-page policy....: unchanged", filtered)
         self.assertNotIn("mm/huge_memory.c", filtered)
         self.assertNotIn("TRANSPARENT_HUGEPAGE", filtered)
         self.assertNotIn("THP_DEFAULT", filtered)
