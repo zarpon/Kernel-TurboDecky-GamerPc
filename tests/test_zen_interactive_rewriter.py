@@ -34,6 +34,8 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
             self.assertIn('ZEN_INTERACTIVE_REF="7.0/zen-sauce"', result)
             self.assertIn("fetch_zen_interactive_profile", result)
             self.assertIn("apply_zen_interactive_profile", result)
+            self.assertIn("assert_zen_patch_does_not_touch_thp", result)
+            self.assertIn("00-zen-interactive-thp-preserved.sha256", result)
             self.assertIn("scripts/config --enable ZEN_INTERACTIVE", result)
             self.assertIn('assert_config "CONFIG_ZEN_INTERACTIVE=y"', result)
             rewriter.rewrite(path)
@@ -66,22 +68,20 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
             with self.assertRaises(rewriter.RewriteError):
                 rewriter.rewrite(path)
 
-    def test_resolver_keeps_only_symbol_gated_hunks(self) -> None:
+    def test_resolver_keeps_symbol_hunks_and_excludes_thp(self) -> None:
         diff = """diff --git a/init/Kconfig b/init/Kconfig
 index 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -1,2 +1,6 @@
+@@ -1,2 +1,8 @@
  menu \"General setup\"
 +config ZEN_INTERACTIVE
 +\tbool \"Tune kernel for interactivity\"
 +\tdefault y
++\thelp
++\t    Background-reclaim hugepages...: no -> yes
 +
  config OTHER
-@@ -20,2 +24,3 @@ config OTHER
- value
-+unrelated change
- end
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
 index 3333333333333333333333333333333333333333..4444444444444444444444444444444444444444 100644
 --- a/mm/page_alloc.c
@@ -91,17 +91,38 @@ index 3333333333333333333333333333333333333333..44444444444444444444444444444444
 +#define DEFAULT_BOOST 0
 +#endif
  value
-@@ -20,2 +22,3 @@
+diff --git a/mm/huge_memory.c b/mm/huge_memory.c
+index 5555555555555555555555555555555555555555..6666666666666666666666666666666666666666 100644
+--- a/mm/huge_memory.c
++++ b/mm/huge_memory.c
+@@ -1,2 +1,6 @@
++#ifdef CONFIG_ZEN_INTERACTIVE
++#define THP_DEFAULT CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS
++#endif
  value
-+unrelated change
- end
 """
-        filtered, files, hunks = resolver.filter_symbol_hunks(diff)
+        filtered, files, hunks, excluded = resolver.filter_symbol_hunks(diff)
         self.assertEqual(files, ["init/Kconfig", "mm/page_alloc.c"])
         self.assertEqual(hunks, 2)
+        self.assertEqual(excluded, 1)
         self.assertIn("config ZEN_INTERACTIVE", filtered)
         self.assertIn("CONFIG_ZEN_INTERACTIVE", filtered)
-        self.assertNotIn("unrelated change", filtered)
+        self.assertIn("Transparent hugepage policy.......: unchanged", filtered)
+        self.assertNotIn("mm/huge_memory.c", filtered)
+        self.assertNotIn("TRANSPARENT_HUGEPAGE", filtered)
+        self.assertNotIn("THP_DEFAULT", filtered)
+        resolver.assert_thp_untouched(filtered)
+
+    def test_thp_guard_rejects_functional_thp_changes(self) -> None:
+        patch = """diff --git a/mm/Kconfig b/mm/Kconfig
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -1 +1 @@
+-CONFIG_TRANSPARENT_HUGEPAGE_MADVISE=y
++CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS=y
+"""
+        with self.assertRaises(resolver.ResolveError):
+            resolver.assert_thp_untouched(patch)
 
 
 if __name__ == "__main__":
