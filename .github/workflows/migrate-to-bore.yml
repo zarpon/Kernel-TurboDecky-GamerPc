@@ -25,6 +25,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          # This second workflow revision deliberately triggers the transactional run.
           python3 -m py_compile scripts/migrate-to-bore.py
           python3 scripts/migrate-to-bore.py
 
