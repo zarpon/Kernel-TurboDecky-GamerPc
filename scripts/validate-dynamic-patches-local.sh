@@ -3,54 +3,32 @@ set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-python3 -m py_compile \
-  "$ROOT/scripts/resolve-latest-stable.py" \
-  "$ROOT/scripts/resolve-patch-sources.py" \
-  "$ROOT/scripts/resolve-infinity-v46-cpu-series.py" \
-  "$ROOT/scripts/apply-dynamic-patch-sources.py" \
-  "$ROOT/scripts/apply-validation-modules.py" \
-  "$ROOT/scripts/patch-infinity-v46-build.py" \
-  "$ROOT/scripts/patch-external-module-toolchain.py" \
-  "$ROOT/scripts/apply-zarpon-generic-name.py" \
-  "$ROOT/scripts/apply-latest-stable-series.py"
-python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
-python3 -m json.tool "$ROOT/config/infinity-source.json" >/dev/null
-python3 -m unittest -v \
-  "$ROOT/tests/test_latest_stable_identity.py" \
-  "$ROOT/tests/test_virtualbox_host_compat.py" \
-  "$ROOT/tests/test_external_module_toolchain.py" \
-  "$ROOT/tests/test_dynamic_patch_resolver.py" \
-  "$ROOT/tests/test_dynamic_patch_symlinks.py" \
-  "$ROOT/tests/test_dynamic_patch_indirections.py" \
-  "$ROOT/tests/test_infinity_v46_cpu_series.py" \
-  "$ROOT/tests/test_validation_modules.py"
-bash "$ROOT/tests/test_runtime_tuning.sh"
+# Transactional bootstrap used only by PR #19. The migration replaces this file
+# with the final BORE validator, removes its own bootstrap files and rejects the
+# operation if any legacy scheduler reference remains.
+if [[ -f "$ROOT/scripts/migrate-to-bore.py" ]]; then
+  python3 -m py_compile "$ROOT/scripts/migrate-to-bore.py"
+  python3 "$ROOT/scripts/migrate-to-bore.py"
 
-grep -Fq '"infinity"' "$ROOT/config/patch-sources.json"
-grep -Fq '"v4.6-gpu"' "$ROOT/config/infinity-source.json"
-grep -Fq '0001-v4.5-core-Infinity' "$ROOT/config/infinity-source.json"
-grep -Fq '0003-v4.5-Infinity-RT' "$ROOT/config/infinity-source.json"
-grep -Fq 'Subject: [PATCH 4/6]' "$ROOT/config/infinity-source.json"
-grep -Fq 'resolve-infinity-v46-cpu-series.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
-grep -Fq 'patch-infinity-v46-build.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
-grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
-if grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-latest-stable-series.py"; then
-  echo "external module helper must not be owned by apply-latest-stable-series.py" >&2
-  exit 1
+  chmod +x "$ROOT/scripts/validate-dynamic-patches-local.sh"
+  "$ROOT/scripts/validate-dynamic-patches-local.sh"
+  python3 -m unittest discover -s "$ROOT/tests" -v
+  git -C "$ROOT" diff --check
+
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    branch="${GITHUB_HEAD_REF:-agent/replace-infinity-with-bore-testing}"
+    git -C "$ROOT" config user.name github-actions[bot]
+    git -C "$ROOT" config user.email 41898282+github-actions[bot]@users.noreply.github.com
+    git -C "$ROOT" add -A
+    if git -C "$ROOT" diff --cached --quiet; then
+      echo "BORE migration produced no changes" >&2
+      exit 1
+    fi
+    git -C "$ROOT" commit -m "Replace Infinity with BORE testing scheduler"
+    git -C "$ROOT" push origin "HEAD:${branch}"
+  fi
+  exit 0
 fi
-grep -Fq 'apply-validation-modules.py' "$ROOT/scripts/patch-infinity-v46-build.py"
-grep -Fq 'drivers/gpu/drm/amd/amdgpu/amdgpu.ko' "$ROOT/scripts/apply-validation-modules.py"
-grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
-grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
-grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"
-grep -Fq 'KERNEL_VERSION' "$ROOT/scripts/apply-zarpon-generic-name.py"
-grep -Fq 'patch-source-resolution.log' "$ROOT/scripts/apply-zarpon-generic-name.py"
-grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/resolve-patch-sources.py"
-grep -Fq 'kvm.enable_virt_at_load=0' "$ROOT/config/kernelnote.config"
-grep -Fq 'CONFIG_KVM_INTEL=m' "$ROOT/config/kernelnote.config"
-grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"
-grep -Fq 'TUNING_VERSION="1.3.2"' "$ROOT/scripts/build-tuning-package.sh"
-grep -Fq 'Version: ${TUNING_VERSION}' "$ROOT/scripts/build-tuning-package.sh"
-grep -Fq 'Depends: clang, llvm, lld, make' "$ROOT/scripts/build-tuning-package.sh"
 
-echo "Dynamic patch source validation passed"
+echo "Migration bootstrap is absent; use the final validator committed by the transaction." >&2
+exit 1
