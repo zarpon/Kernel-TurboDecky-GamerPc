@@ -7,12 +7,11 @@ on:
     branches: [integration/infinity-v46-full-gpu]
   workflow_dispatch:
     inputs:
-      mode:
-        description: Build mode
+      publish_release:
+        description: Publish the compiled packages as a GitHub release (main only)
         required: true
-        default: validate
-        type: choice
-        options: [validate, package]
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -26,7 +25,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || github.event_name == 'push' && 'package' || 'validate' }}
+      # A manual run must create installable artifacts even when publication is
+      # disabled. Pull requests retain the lean validation build.
+      BUILD_MODE: ${{ github.event_name == 'pull_request' && 'validate' || 'package' }}
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 8G
       CCACHE_BASEDIR: ${{ github.workspace }}
@@ -209,11 +210,18 @@ jobs:
             artifacts/*.deb
             artifacts/SHA256SUMS
             artifacts/turbodecky-linux-*.zip
+            logs/patch-lock.json
           if-no-files-found: error
           compression-level: 0
+          retention-days: 14
 
       - name: Publish GitHub release
-        if: ${{ env.BUILD_MODE == 'package' }}
+        if: >-
+          (github.event_name == 'push' &&
+           github.ref_name == 'integration/infinity-v46-full-gpu') ||
+          (github.event_name == 'workflow_dispatch' &&
+           github.ref_name == 'main' &&
+           inputs.publish_release)
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
