@@ -62,7 +62,7 @@ def sanitize_init_kconfig(hunk: str) -> str:
         if "Background-reclaim hugepages" in line:
             prefix = line[:1] if line[:1] in {"+", "-", " "} else ""
             ending = "\n" if line.endswith("\n") else ""
-            lines.append(prefix + "\t    Transparent hugepage policy.......: unchanged" + ending)
+            lines.append(prefix + "\t    Transparent memory-page policy....: unchanged" + ending)
         else:
             lines.append(line)
     return "".join(lines)
