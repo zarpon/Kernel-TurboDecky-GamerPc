@@ -97,13 +97,12 @@ apply_zen_interactive_profile() {
 
     fetch_marker = "fetch_zen_interactive_profile\n\ncd \"$KERNELDIR\"\n"
     if fetch_marker not in text:
-        anchor = 'download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"\n\ncd "$KERNELDIR"\n'
-        replacement = (
-            'download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"\n'
-            'fetch_zen_interactive_profile\n\n'
-            'cd "$KERNELDIR"\n'
-        )
-        text = replace_once(text, anchor, replacement, "Zen fetch call")
+        # Other rewriters may add their own fetch calls before this point.  The
+        # kernel-directory transition is the stable ordering boundary: every
+        # source must be resolved before entering the Linux tree.
+        anchor = '\ncd "$KERNELDIR"\n'
+        replacement = '\nfetch_zen_interactive_profile\n\ncd "$KERNELDIR"\n'
+        text = replace_once(text, anchor, replacement, "Zen fetch boundary")
 
     apply_marker = 'apply_zen_interactive_profile "$ZEN_INTERACTIVE_PATCH"\n\ncp '
     if apply_marker not in text:
