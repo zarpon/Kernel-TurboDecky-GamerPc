@@ -2,6 +2,8 @@
 set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+mkdir -p "$ROOT/logs"
+exec > >(tee "$ROOT/logs/local-validation.log") 2>&1
 
 python3 -m py_compile \
   "$ROOT/scripts/resolve-latest-stable.py" \
