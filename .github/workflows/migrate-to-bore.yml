@@ -1,0 +1,57 @@
+name: Apply transactional BORE migration
+
+on:
+  push:
+    branches: [agent/replace-infinity-with-bore-testing]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: migrate-to-bore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out migration branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/replace-infinity-with-bore-testing
+          fetch-depth: 0
+
+      - name: Apply migration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/migrate-to-bore.py
+          python3 scripts/migrate-to-bore.py
+
+      - name: Validate transformed repository locally
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          chmod +x scripts/*.sh tests/*.sh
+          python3 -m py_compile scripts/*.py tests/*.py
+          find scripts tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          scripts/validate-dynamic-patches-local.sh
+          python3 -m unittest discover -s tests -v
+          git diff --check
+          git status --short
+
+      - name: Commit validated migration
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Migration produced no changes" >&2
+            exit 1
+          fi
+          git commit -m "Replace Infinity with BORE testing scheduler"
+          git push origin HEAD:agent/replace-infinity-with-bore-testing
