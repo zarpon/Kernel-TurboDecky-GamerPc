@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PORT = ROOT / "patches/bore/7.1.3-lqx1-bore-6.6.3.patch"
 SCHED_EXT_PORT = ROOT / "patches/bore/7.1.3-lqx1-sched-ext-coexistence-fix.patch"
 CORE = ROOT / "scripts/build-kernelnote-core.sh"
+WRAPPER = ROOT / "scripts/build-kernelnote.sh"
 MANIFEST = ROOT / "config/patch-sources.json"
 
 
@@ -76,6 +77,20 @@ class BoreLiquorixPortTests(unittest.TestCase):
         )[1].split("apply_adios_patch() {", 1)[0]
         self.assertIn("--dry-run", function)
         self.assertNotIn("--fuzz", function)
+
+        wrapper = WRAPPER.read_text(encoding="utf-8")
+        shared_anchor = '''apply_marie_testing_patch "$MARIE_PATCH"
+apply_bore_patch "$BORE_PATCH"
+apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
+apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
+'''
+        self.assertIn(shared_anchor, core)
+        self.assertIn(shared_anchor, wrapper)
+        self.assertIn(
+            'apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"\n'
+            'apply_poc_patch "$POC_PATCH"',
+            wrapper,
+        )
 
     def test_dynamic_manifest_requires_native_bore_71_source(self) -> None:
         component = json.loads(MANIFEST.read_text(encoding="utf-8"))["components"]["bore"]
