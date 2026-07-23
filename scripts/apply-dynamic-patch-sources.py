@@ -177,6 +177,16 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         if prefix == "BORE" and "BORE_BRANCH=" in text:
             text = replace_assignment(text, "BORE_BRANCH", str(record.get("ref", "main")))
 
+    bore_sched_ext = component(lock, "bore_sched_ext_coexistence")
+    for suffix, value in (
+        ("REPO", repo_value(bore_sched_ext)),
+        ("COMMIT", str(bore_sched_ext.get("snapshot_commit", bore_sched_ext["commit"]))),
+        ("PATCH_PATH", str(bore_sched_ext["path"])),
+    ):
+        variable = f"BORE_SCHED_EXT_{suffix}"
+        if f"{variable}=" in text:
+            text = replace_assignment(text, variable, value)
+
     versions = {
         "MARIE": project_version(component(lock, "marie"), "unknown"),
         "REFLEX": project_version(component(lock, "reflex"), "unknown"),
@@ -270,7 +280,7 @@ def validate_lock(lock: dict[str, Any]) -> None:
     if lock.get("schema") != 1:
         raise RewriteError("unsupported patch lock schema")
     required = {
-        "bore", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
+        "bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
         "vram", "liquorix_config", *REQUESTED.keys(),
     }
     missing = sorted(required - set(lock.get("components", {})))

@@ -24,8 +24,10 @@ python3 -m unittest -v \
 bash "$ROOT/tests/test_runtime_tuning.sh"
 
 grep -Fq '"bore"' "$ROOT/config/patch-sources.json"
+grep -Fq '"bore_sched_ext_coexistence"' "$ROOT/config/patch-sources.json"
 grep -Fq 'firelzrd/bore-scheduler' "$ROOT/config/patch-sources.json"
 grep -Fq '7.1.3-lqx1-bore-6.6.3.patch' "$ROOT/scripts/build-kernelnote-core.sh"
+grep -Fq '7.1.3-lqx1-sched-ext-coexistence-fix.patch' "$ROOT/scripts/build-kernelnote-core.sh"
 grep -Fq 'CONFIG_SCHED_BORE=y' "$ROOT/config/kernelnote.config"
 grep -Fq 'resolve-patch-sources.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-zarpon-generic-name.py"

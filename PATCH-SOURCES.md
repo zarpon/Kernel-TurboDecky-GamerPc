@@ -18,7 +18,7 @@ pelo workflow.
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
 
-## BORE 6.6.3 para Liquorix 7.1.3
+## BORE 6.6.3 e coexistência com sched_ext para Liquorix 7.1.3
 
 O resolvedor exige o patch estável upstream de BORE para Linux 7.1 em
 [`firelzrd/bore-scheduler`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/stable/linux-6.18-bore).
@@ -30,6 +30,14 @@ O build usa `patches/bore/7.1.3-lqx1-bore-6.6.3.patch`, uma adaptação mínima
 revisada contra essa tag. Antes de aplicá-la sem fuzz, ele baixa e verifica o
 patch upstream correspondente. A compilação local cobre `bore.o`, `fair.o`,
 `core.o` e `build_utility.o` com `CONFIG_SCHED_BORE=y`.
+
+O lock também resolve
+[`0002-sched-ext-coexistence-fix.patch`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/additions).
+Ele é aplicado imediatamente após BORE por
+`patches/bore/7.1.3-lqx1-sched-ext-coexistence-fix.patch`. O port preserva o
+helper upstream `reweight_task()`, fixa o contexto Liquorix sem fuzz e
+declara o helper em `kernel/sched/sched.h`, necessário porque este build
+trata protótipos ausentes como erro.
 
 ## BORE e POC Selector
 
@@ -59,7 +67,8 @@ selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 
 ## Componentes versionados
 
-A resolução dinâmica cobre BORE, Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP,
+A resolução dinâmica cobre BORE, sua correção de coexistência com `sched_ext`,
+Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP,
 REFLEX, patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a
 configuração-base do Liquorix.
 
@@ -80,6 +89,7 @@ Os testes confirmam:
 - falha quando uma série exata obrigatória não existe;
 - recuperação por commit histórico;
 - consumo do snapshot como repositório Git local autocontido;
-- rastreamento do patch BORE upstream e do port Liquorix versionado;
+- rastreamento do patch BORE upstream, da correção de coexistência com
+  `sched_ext` e dos ports Liquorix versionados;
 - aplicação combinada de BORE e POC Selector;
 - reescrita das validações de build.

@@ -86,7 +86,7 @@ compatíveis mais recentes, registrando commits e SHA-256 exatos no
 
 ## Patchset de desempenho
 
-- **BORE scheduler 6.6.3** — [firelzrd/bore-scheduler](https://github.com/firelzrd/bore-scheduler/tree/main/patches/stable/linux-6.18-bore): ajuste de prioridade CFS/EEVDF orientado pelo tempo de burst. O patch upstream de Linux 7.1 é rastreado no lock de build; como o Liquorix 7.1.3 altera os mesmos contextos EEVDF/debugfs, o repositório aplica uma adaptação revisada e compilada localmente em `patches/bore/7.1.3-lqx1-bore-6.6.3.patch`.
+- **BORE scheduler 6.6.3** — [firelzrd/bore-scheduler](https://github.com/firelzrd/bore-scheduler/tree/main/patches/stable/linux-6.18-bore): ajuste de prioridade CFS/EEVDF orientado pelo tempo de burst. O patch upstream de Linux 7.1 é rastreado no lock de build; como o Liquorix 7.1.3 altera os mesmos contextos EEVDF/debugfs, o repositório aplica uma adaptação revisada e compilada localmente em `patches/bore/7.1.3-lqx1-bore-6.6.3.patch`. O lock também acompanha `0002-sched-ext-coexistence-fix.patch`; seu port local é aplicado logo após BORE, restaura `reweight_task()` e inclui o protótipo necessário para a compilação estrita do Liquorix.
 - **POC Selector** — [firelzrd/poc-selector](https://github.com/firelzrd/poc-selector): seleção eficiente de CPU ociosa considerando LLC e topologia.
 - **NAP CPUIdle** — [firelzrd/nap](https://github.com/firelzrd/nap): predição adaptativa do estado de idle.
 - **REFLEX CPUFreq** — [firelzrd/reflex](https://github.com/firelzrd/reflex): resposta rápida idle→busy combinada com PELT.

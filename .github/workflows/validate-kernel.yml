@@ -154,11 +154,16 @@ jobs:
         run: |
           set -Eeuo pipefail
           grep -Fq 'Component: BORE scheduler 6.6.3' logs/01-bore-provenance.txt
+          grep -Fq 'Component: BORE sched_ext coexistence fix' logs/01-bore-sched-ext-provenance.txt
           grep -Fq 'BORE 6.6.3 Liquorix port applied successfully' logs/build.log
+          grep -Fq 'BORE sched_ext coexistence fix applied successfully' logs/build.log
           grep -Fq 'SCHED_BORE_VERSION' .resolved-patches/files/01-bore.patch
+          grep -Fq 'void reweight_task(struct task_struct *p, int prio)' .resolved-patches/files/01-bore-sched-ext-coexistence-fix.patch
           grep -Fq 'struct bore_ctx' work/linux/include/linux/sched.h
           test -s work/linux/kernel/sched/bore.c
           grep -Fq 'sched_bore' work/linux/kernel/sched/fair.c
+          grep -Fq 'void reweight_task(struct task_struct *p, int prio)' work/linux/kernel/sched/fair.c
+          grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' work/linux/kernel/sched/sched.h
           grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
           grep -Fq 'CONFIG_SCHED_BORE=y' logs/final.config
           python3 - <<'PY'
@@ -170,6 +175,10 @@ jobs:
           assert bore['selection'] == 'exact'
           assert bore['project_version'] == '6.6.3'
           assert 'linux-7.1-bore' in bore['path']
+          sched_ext = lock['components']['bore_sched_ext_coexistence']
+          assert sched_ext['ref'] == 'main'
+          assert sched_ext['selection'] == 'exact'
+          assert sched_ext['path'] == 'patches/additions/0002-sched-ext-coexistence-fix.patch'
           PY
 
       - name: Verify validation module coverage

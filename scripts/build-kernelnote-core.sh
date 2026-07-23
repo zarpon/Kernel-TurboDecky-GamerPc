@@ -28,6 +28,12 @@ BORE_PATCH_PATH="patches/stable/linux-7.1-bore/0001-linux7.1-rc1-bore-6.6.3.patc
 BORE_DIR="$WORKDIR/bore-scheduler"
 BORE_UPSTREAM_PATCH="$PATCHDIR/0001-bore-upstream.patch"
 BORE_PATCH="$ROOT/patches/bore/7.1.3-lqx1-bore-6.6.3.patch"
+BORE_SCHED_EXT_REPO="https://github.com/firelzrd/bore-scheduler.git"
+BORE_SCHED_EXT_COMMIT="16bf5baebbb42cdba393c501ba9c2af5f84e4749"
+BORE_SCHED_EXT_PATCH_PATH="patches/additions/0002-sched-ext-coexistence-fix.patch"
+BORE_SCHED_EXT_DIR="$WORKDIR/bore-scheduler-sched-ext"
+BORE_SCHED_EXT_UPSTREAM_PATCH="$PATCHDIR/0002-bore-sched-ext-upstream.patch"
+BORE_SCHED_EXT_PATCH="$ROOT/patches/bore/7.1.3-lqx1-sched-ext-coexistence-fix.patch"
 
 # Marie is fetched as a pinned local Git checkout rather than through a raw
 # patch URL. Only the exact patch blob is materialized in the workspace.
@@ -119,6 +125,36 @@ fetch_bore_source() {
     echo "Liquorix port SHA256: $(sha256sum "$BORE_PATCH" | awk '{print $1}')"
     echo "Acquisition: pinned local partial Git checkout plus reviewed local port"
   } | tee "$LOGDIR/01-bore-provenance.txt"
+}
+
+fetch_bore_sched_ext_source() {
+  echo "==> Fetching the pinned upstream BORE sched_ext coexistence fix"
+  rm -rf "$BORE_SCHED_EXT_DIR"
+  git init --quiet "$BORE_SCHED_EXT_DIR"
+  git -C "$BORE_SCHED_EXT_DIR" remote add origin "$BORE_SCHED_EXT_REPO"
+  git -C "$BORE_SCHED_EXT_DIR" config remote.origin.promisor true
+  git -C "$BORE_SCHED_EXT_DIR" config remote.origin.partialclonefilter blob:none
+  git -C "$BORE_SCHED_EXT_DIR" fetch --no-tags --depth=1 --filter=blob:none origin "$BORE_SCHED_EXT_COMMIT" 2>&1 | tee "$LOGDIR/01-bore-sched-ext-fetch.log"
+
+  git -C "$BORE_SCHED_EXT_DIR" show "FETCH_HEAD:$BORE_SCHED_EXT_PATCH_PATH" > "$BORE_SCHED_EXT_UPSTREAM_PATCH"
+  test -s "$BORE_SCHED_EXT_UPSTREAM_PATCH"
+  grep -Fq 'Subject: [PATCH] sched-ext-coexistence-fix' "$BORE_SCHED_EXT_UPSTREAM_PATCH"
+  grep -Fq 'void reweight_task(struct task_struct *p, int prio)' "$BORE_SCHED_EXT_UPSTREAM_PATCH"
+
+  test -s "$BORE_SCHED_EXT_PATCH"
+  grep -Fq 'sched: port BORE sched-ext coexistence fix for Liquorix 7.1.3' "$BORE_SCHED_EXT_PATCH"
+  grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' "$BORE_SCHED_EXT_PATCH"
+
+  {
+    echo "Component: BORE sched_ext coexistence fix"
+    echo "Repository: $BORE_SCHED_EXT_REPO"
+    echo "Commit: $BORE_SCHED_EXT_COMMIT"
+    echo "Upstream path: $BORE_SCHED_EXT_PATCH_PATH"
+    echo "Upstream SHA256: $(sha256sum "$BORE_SCHED_EXT_UPSTREAM_PATCH" | awk '{print $1}')"
+    echo "Liquorix port: ${BORE_SCHED_EXT_PATCH#$ROOT/}"
+    echo "Liquorix port SHA256: $(sha256sum "$BORE_SCHED_EXT_PATCH" | awk '{print $1}')"
+    echo "Acquisition: pinned local partial Git checkout plus reviewed local port"
+  } | tee "$LOGDIR/01-bore-sched-ext-provenance.txt"
 }
 
 normalize_changed_whitespace() {
@@ -241,6 +277,30 @@ apply_bore_patch() {
   echo "==> BORE 6.6.3 Liquorix port applied successfully"
 }
 
+apply_bore_sched_ext_coexistence_fix() {
+  local file="$1"
+
+  echo "==> Applying the reviewed BORE sched_ext coexistence fix"
+  if patch --batch --forward --strip=1 --dry-run < "$file" \
+      > "$LOGDIR/01-bore-sched-ext.dry-run.log" 2>&1; then
+    patch --batch --forward --strip=1 < "$file" \
+      | tee "$LOGDIR/01-bore-sched-ext.apply.log"
+  else
+    cat "$LOGDIR/01-bore-sched-ext.dry-run.log"
+    report_bore_rejects "BORE sched_ext coexistence fix for Liquorix 7.1.3" \
+      "$LOGDIR/01-bore-sched-ext-port-rejects.log"
+    return 1
+  fi
+
+  find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
+  git diff --check | tee "$LOGDIR/01-bore-sched-ext-diff-check.log"
+
+  grep -Fq 'void reweight_task(struct task_struct *p, int prio)' kernel/sched/fair.c
+  grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' \
+    kernel/sched/sched.h
+  echo "==> BORE sched_ext coexistence fix applied successfully"
+}
+
 apply_adios_patch() {
   local file="$1" status
   local -a rejects expected
@@ -334,12 +394,14 @@ git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 
 fetch_marie_testing_patch
 fetch_bore_source
+fetch_bore_sched_ext_source
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
 download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
 apply_marie_testing_patch "$MARIE_PATCH"
 apply_bore_patch "$BORE_PATCH"
+apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
 cp "$WORKDIR/liquorix-amd64.config" .config

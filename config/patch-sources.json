@@ -18,6 +18,21 @@
         "sched_bore"
       ]
     },
+    "bore_sched_ext_coexistence": {
+      "kind": "git_patch",
+      "repo": "https://github.com/firelzrd/bore-scheduler.git",
+      "ref": "main",
+      "exact_globs": [
+        "patches/additions/0002-sched-ext-coexistence-fix.patch"
+      ],
+      "fallback_globs": [],
+      "require_exact_series": false,
+      "output": "01-bore-sched-ext-coexistence-fix.patch",
+      "required_markers": [
+        "void reweight_task(struct task_struct *p, int prio)",
+        "reweight_entity"
+      ]
+    },
     "marie": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/lru_marie.git",
