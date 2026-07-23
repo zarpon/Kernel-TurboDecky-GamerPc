@@ -61,10 +61,25 @@ report_zen_interactive_rejects() {
   } | tee "$LOGDIR/00-zen-interactive-port-rejects.log"
 }
 
-apply_zen_interactive_profile() {
-  local file="$1" status=0
+assert_zen_patch_does_not_touch_thp() {
+  local file="$1"
+  if grep -Fq 'diff --git a/mm/huge_memory.c b/mm/huge_memory.c' "$file"; then
+    echo "Zen profile must not modify mm/huge_memory.c" >&2
+    return 1
+  fi
+  if grep -E '^[+-].*(TRANSPARENT_HUGEPAGE|khugepaged|THP_)' "$file"; then
+    echo "Zen profile must not modify THP symbols or defaults" >&2
+    return 1
+  fi
+}
 
-  echo "==> Applying the official CONFIG_ZEN_INTERACTIVE profile"
+apply_zen_interactive_profile() {
+  local file="$1" status=0 thp_before thp_after
+
+  assert_zen_patch_does_not_touch_thp "$file"
+  thp_before="$(sha256sum mm/huge_memory.c | awk '{print $1}')"
+
+  echo "==> Applying the official CONFIG_ZEN_INTERACTIVE profile without THP changes"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/00-zen-interactive.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -87,9 +102,18 @@ apply_zen_interactive_profile() {
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
   normalize_changed_whitespace
   git diff --check | tee "$LOGDIR/00-zen-interactive-diff-check.log"
+
+  thp_after="$(sha256sum mm/huge_memory.c | awk '{print $1}')"
+  if [[ "$thp_before" != "$thp_after" ]]; then
+    echo "Zen profile changed mm/huge_memory.c despite the THP exclusion policy" >&2
+    return 1
+  fi
+  printf '%s  mm/huge_memory.c\n' "$thp_after" \
+    | tee "$LOGDIR/00-zen-interactive-thp-preserved.sha256"
+
   grep -Fq 'config ZEN_INTERACTIVE' init/Kconfig
   grep -R -Fq 'CONFIG_ZEN_INTERACTIVE' arch block drivers init kernel mm
-  echo "==> Zen interactive profile applied successfully"
+  echo "==> Zen interactive profile applied successfully; THP preserved unchanged"
 }
 
 '''
@@ -97,9 +121,6 @@ apply_zen_interactive_profile() {
 
     fetch_marker = "fetch_zen_interactive_profile\n\ncd \"$KERNELDIR\"\n"
     if fetch_marker not in text:
-        # Other rewriters may add their own fetch calls before this point.  The
-        # kernel-directory transition is the stable ordering boundary: every
-        # source must be resolved before entering the Linux tree.
         anchor = '\ncd "$KERNELDIR"\n'
         replacement = '\nfetch_zen_interactive_profile\n\ncd "$KERNELDIR"\n'
         text = replace_once(text, anchor, replacement, "Zen fetch boundary")
