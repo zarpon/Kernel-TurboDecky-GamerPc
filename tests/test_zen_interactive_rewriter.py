@@ -39,6 +39,26 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
             rewriter.rewrite(path)
             self.assertEqual(result, path.read_text(encoding="utf-8"))
 
+    def test_rewriter_survives_prior_fetch_injections(self) -> None:
+        original = CORE.read_text(encoding="utf-8")
+        old = 'download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"\n'
+        self.assertEqual(original.count(old), 1)
+        transformed = original.replace(
+            old,
+            old + "fetch_requested_patch_series\nfetch_reflex_patch\n",
+            1,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "build-core.sh"
+            path.write_text(transformed, encoding="utf-8")
+            rewriter.rewrite(path)
+            result = path.read_text(encoding="utf-8")
+            self.assertIn(
+                "fetch_requested_patch_series\nfetch_reflex_patch\n\n"
+                "fetch_zen_interactive_profile\n\ncd \"$KERNELDIR\"",
+                result,
+            )
+
     def test_rewriter_rejects_missing_anchor(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "build-core.sh"
