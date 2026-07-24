@@ -207,7 +207,7 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
             raise PortError("swap page-cluster semantic port is duplicated")
         if result.count("page_cluster = 0;") != 1:
             raise PortError("swap page-cluster semantic port is malformed")
-    assert_added_conditionals_balanced(result)
+    assert_added_conditionals_balanced(result, paths=SEMANTIC_PORT_PATHS)
     return result, exclusions
 
 
