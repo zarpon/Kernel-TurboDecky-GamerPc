@@ -113,12 +113,13 @@ def sanitize_kconfig_help(hunk: str) -> str:
 def assert_added_conditionals_balanced(
     text: str, *, paths: set[str] | None = None
 ) -> None:
-    """Reject generated hunks that add incomplete C preprocessor groups.
+    """Reject generated hunks that produce incomplete preprocessor groups.
 
-    The upstream resolver deliberately selects only symbol-bearing hunks. A
-    closing ``#endif`` can therefore be omitted when Git splits one logical
-    change into multiple hunks. Check every file after all semantic ports have
-    been appended so malformed patches fail before touching the kernel tree.
+    Evaluate added and unchanged context lines, because a selected upstream hunk
+    can add an opening directive while retaining its matching ``#endif`` as
+    context. Removed lines are ignored because they are absent after applying
+    the patch. This catches genuinely malformed generated sections without
+    rejecting valid context-paired conditionals.
     """
     opening = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef)\b")
     closing = re.compile(r"^\s*#\s*endif\b")
@@ -130,7 +131,9 @@ def assert_added_conditionals_balanced(
             continue
         depth = 0
         for raw_line in section.splitlines():
-            if not raw_line.startswith("+") or raw_line.startswith("+++"):
+            if raw_line.startswith(("+++", "---")):
+                continue
+            if raw_line[:1] not in {"+", " "}:
                 continue
             line = raw_line[1:]
             if opening.match(line):
@@ -139,11 +142,11 @@ def assert_added_conditionals_balanced(
                 depth -= 1
                 if depth < 0:
                     raise PortError(
-                        f"{path}: added preprocessor group closes without an opener"
+                        f"{path}: preprocessor group closes without an opener"
                     )
         if depth:
             raise PortError(
-                f"{path}: added preprocessor group is unterminated ({depth} open)"
+                f"{path}: preprocessor group is unterminated ({depth} open)"
             )
 
 
@@ -204,7 +207,7 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
             raise PortError("swap page-cluster semantic port is duplicated")
         if result.count("page_cluster = 0;") != 1:
             raise PortError("swap page-cluster semantic port is malformed")
-    assert_added_conditionals_balanced(result, paths=SEMANTIC_PORT_PATHS)
+    assert_added_conditionals_balanced(result)
     return result, exclusions
 
 
