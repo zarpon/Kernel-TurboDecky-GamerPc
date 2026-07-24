@@ -50,6 +50,25 @@ que ambos aplicam sem rejeitos sobre Linux 7.1.4 e que `fair.o` compila com
 `kernel/sched/poc_selector.c` é incluído por `fair.c`; não é uma unidade de
 compilação independente.
 
+## Perfil Zen interativo sem alterações em THP
+
+`CONFIG_ZEN_INTERACTIVE=y` é obtido da branch oficial
+[`zen-kernel/zen-kernel:7.0/zen-sauce`](https://github.com/zen-kernel/zen-kernel/tree/7.0/zen-sauce),
+pois ainda não existe uma branch `7.1/zen-sauce`. O resolvedor segue o HEAD
+dessa branch, localiza o commit que introduziu o perfil e gera um patch mínimo
+apenas com hunks condicionados por `CONFIG_ZEN_INTERACTIVE`.
+
+A política de THP permanece independente do perfil Zen:
+
+- qualquer hunk que altere `mm/huge_memory.c`, `TRANSPARENT_HUGEPAGE`,
+  `khugepaged` ou símbolos `THP_*` é removido do patch gerado;
+- o SHA-256 de `mm/huge_memory.c` é calculado antes e depois da aplicação e o
+  build falha se houver qualquer diferença;
+- o lock registra `thp_policy: preserved-unchanged` e a quantidade de hunks THP
+  excluídos;
+- a configuração e os parâmetros THP já definidos pelo projeto não são
+  substituídos, redefinidos nem condicionados por `CONFIG_ZEN_INTERACTIVE`.
+
 ## Lock por build
 
 O resolvedor cria `.resolved-patches/patch-lock.json` contendo, para cada
@@ -71,9 +90,9 @@ selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 ## Componentes versionados
 
 A resolução dinâmica cobre BORE, sua correção de coexistência com `sched_ext`,
-Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP,
-REFLEX, patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a
-configuração-base do Liquorix.
+Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP, REFLEX, o perfil Zen interativo,
+patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a configuração-base do
+Liquorix.
 
 Patches de correção sem versão própria, como commits upstream específicos e
 séries enviadas por e-mail, são baixados novamente e registrados por SHA-256,
@@ -95,4 +114,5 @@ Os testes confirmam:
 - rastreamento do patch BORE upstream, da correção de coexistência com
   `sched_ext` e dos ports Linux versionados;
 - aplicação combinada de BORE e POC Selector;
+- aplicação do perfil Zen com exclusão e invariância verificável de THP;
 - reescrita das validações de build.
