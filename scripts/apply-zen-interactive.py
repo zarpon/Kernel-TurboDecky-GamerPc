@@ -42,7 +42,7 @@ ZEN_INTERACTIVE_PROVENANCE="$LOGDIR/00-zen-interactive-provenance.txt"
         anchor = "assert_config() {\n"
         functions = r'''fetch_zen_interactive_profile() {
   echo "==> Resolving the current official Zen interactive profile"
-  python3 "$ROOT/scripts/resolve-zen-interactive.py" \
+  python3 "$ROOT/scripts/resolve-zen-interactive-fast.py" \
     --checkout "$ZEN_INTERACTIVE_DIR" \
     --output "$ZEN_INTERACTIVE_PATCH" \
     --provenance "$ZEN_INTERACTIVE_PROVENANCE" \
