@@ -124,7 +124,9 @@ diff --git a/init/Kconfig b/init/Kconfig
         self.assertEqual(adapted.count("page_cluster = 0;"), 1)
         self.assertIn("+#else", adapted)
         self.assertIn("+#endif", adapted)
-        port.assert_added_conditionals_balanced(adapted)
+        port.assert_added_conditionals_balanced(
+            adapted, paths={"mm/swap.c"}
+        )
         self.assertTrue(any("balanced semantic hunk" in item for item in exclusions))
 
     def test_unterminated_added_conditional_is_rejected(self) -> None:
@@ -138,6 +140,24 @@ diff --git a/init/Kconfig b/init/Kconfig
 """
         with self.assertRaisesRegex(port.PortError, "unterminated"):
             port.assert_added_conditionals_balanced(malformed)
+
+    def test_context_paired_conditionals_outside_semantic_ports_are_allowed(self) -> None:
+        patch = """diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1,3 +1,4 @@
++#ifdef CONFIG_ZEN_INTERACTIVE
+ value
+ #endif
+diff --git a/init/Kconfig b/init/Kconfig
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1 +1,2 @@
++config ZEN_INTERACTIVE
+ value
+"""
+        adapted, _ = port.prepare_patch(patch)
+        self.assertIn("kernel/sched/sched.h", port.patch_files(adapted))
 
     def test_fast_resolver_updates_adapted_lock_and_provenance(self) -> None:
         source = FAST_RESOLVER.read_text(encoding="utf-8")
