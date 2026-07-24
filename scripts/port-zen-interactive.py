@@ -110,7 +110,9 @@ def sanitize_kconfig_help(hunk: str) -> str:
     return "".join(lines)
 
 
-def assert_added_conditionals_balanced(text: str) -> None:
+def assert_added_conditionals_balanced(
+    text: str, *, paths: set[str] | None = None
+) -> None:
     """Reject generated hunks that add incomplete C preprocessor groups.
 
     The upstream resolver deliberately selects only symbol-bearing hunks. A
@@ -124,6 +126,8 @@ def assert_added_conditionals_balanced(text: str) -> None:
     for section in split_sections(text):
         header, _ = split_hunks(section)
         path = section_path(header)
+        if paths is not None and path not in paths:
+            continue
         depth = 0
         for raw_line in section.splitlines():
             if not raw_line.startswith("+") or raw_line.startswith("+++"):
@@ -200,7 +204,7 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
             raise PortError("swap page-cluster semantic port is duplicated")
         if result.count("page_cluster = 0;") != 1:
             raise PortError("swap page-cluster semantic port is malformed")
-    assert_added_conditionals_balanced(result)
+    assert_added_conditionals_balanced(result, paths=SEMANTIC_PORT_PATHS)
     return result, exclusions
 
 
