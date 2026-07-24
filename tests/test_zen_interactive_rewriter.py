@@ -5,6 +5,7 @@ import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 REWRITER = ROOT / "scripts/apply-zen-interactive.py"
@@ -123,6 +124,35 @@ index 5555555555555555555555555555555555555555..66666666666666666666666666666666
 """
         with self.assertRaises(resolver.ResolveError):
             resolver.assert_thp_untouched(patch)
+
+    def test_resolver_discovers_only_introduction_commit_files(self) -> None:
+        paths = "init/Kconfig\nmm/page_alloc.c\nREADME\n"
+        contents = {
+            "init/Kconfig": "config ZEN_INTERACTIVE\n",
+            "mm/page_alloc.c": "#ifdef CONFIG_ZEN_INTERACTIVE\n#endif\n",
+            "README": "unrelated\n",
+        }
+
+        def read_file_at(_checkout: Path, _head: str, path: str) -> str:
+            return contents[path]
+
+        with mock.patch.object(resolver, "run", return_value=paths) as run_mock:
+            with mock.patch.object(resolver, "read_file_at", side_effect=read_file_at):
+                selected = resolver.discover_symbol_files(
+                    Path("checkout"), intro="intro", head="head"
+                )
+
+        self.assertEqual(selected, ["init/Kconfig", "mm/page_alloc.c"])
+        command = run_mock.call_args.args[0]
+        self.assertEqual(command[:2], ["git", "diff-tree"])
+        self.assertNotIn("grep", command)
+
+    def test_resolver_has_bounded_commands_and_total_deadline(self) -> None:
+        source = RESOLVER.read_text(encoding="utf-8")
+        self.assertIn("TOTAL_RESOLVE_TIMEOUT = 600", source)
+        self.assertIn("subprocess.TimeoutExpired", source)
+        self.assertIn('f"{intro}^"', source)
+        self.assertNotIn('["git", "grep", "-l", SYMBOL, head, "--"]', source)
 
 
 if __name__ == "__main__":
