@@ -100,13 +100,75 @@ diff --git a/init/Kconfig b/init/Kconfig
             ["init/Kconfig", "kernel/sched/fair.c"],
         )
 
+    def test_swap_hunk_is_replaced_with_balanced_semantic_port(self) -> None:
+        patch = """diff --git a/mm/swap.c b/mm/swap.c
+--- a/mm/swap.c
++++ b/mm/swap.c
+@@ -1,3 +1,6 @@
+ void __init swap_setup(void)
+ {
++#ifdef CONFIG_ZEN_INTERACTIVE
++\tpage_cluster = 0;
++#else
+ \tunsigned long megs = PAGES_TO_MB(totalram_pages());
+diff --git a/init/Kconfig b/init/Kconfig
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1 +1,2 @@
++config ZEN_INTERACTIVE
+ value
+"""
+        adapted, exclusions = port.prepare_patch(patch)
+
+        self.assertEqual(adapted.count("diff --git a/mm/swap.c b/mm/swap.c"), 1)
+        self.assertEqual(adapted.count("page_cluster = 0;"), 1)
+        self.assertIn("+#else", adapted)
+        self.assertIn("+#endif", adapted)
+        port.assert_added_conditionals_balanced(
+            adapted, paths={"mm/swap.c"}
+        )
+        self.assertTrue(any("balanced semantic hunk" in item for item in exclusions))
+
+    def test_unterminated_added_conditional_is_rejected(self) -> None:
+        malformed = """diff --git a/mm/swap.c b/mm/swap.c
+--- a/mm/swap.c
++++ b/mm/swap.c
+@@ -1 +1,3 @@
++#ifdef CONFIG_ZEN_INTERACTIVE
++\tpage_cluster = 0;
+ value
+"""
+        with self.assertRaisesRegex(port.PortError, "unterminated"):
+            port.assert_added_conditionals_balanced(malformed)
+
+    def test_context_paired_conditionals_outside_semantic_ports_are_allowed(self) -> None:
+        patch = """diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -1,3 +1,4 @@
++#ifdef CONFIG_ZEN_INTERACTIVE
+ value
+ #endif
+diff --git a/init/Kconfig b/init/Kconfig
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1 +1,2 @@
++config ZEN_INTERACTIVE
+ value
+"""
+        adapted, _ = port.prepare_patch(patch)
+        self.assertIn("kernel/sched/sched.h", port.patch_files(adapted))
+
     def test_fast_resolver_updates_adapted_lock_and_provenance(self) -> None:
         source = FAST_RESOLVER.read_text(encoding="utf-8")
         self.assertIn("apply_project_policy()", source)
         self.assertIn('"io_scheduler_policy": "ADIOS-preserved"', source)
         self.assertIn('"base_slice_policy": "BORE-preserved"', source)
         self.assertIn('"migration_cost_ns": 300000', source)
-        self.assertLess(source.index("resolver.main()"), source.index("apply_project_policy()", source.index("resolver.main()")))
+        self.assertLess(
+            source.index("resolver.main()"),
+            source.index("apply_project_policy()", source.index("resolver.main()")),
+        )
 
 
 if __name__ == "__main__":

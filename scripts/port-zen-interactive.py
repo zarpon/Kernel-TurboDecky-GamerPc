@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 PROJECT_OWNED_PATHS = {"block/elevator.c"}
+SEMANTIC_PORT_PATHS = {"mm/swap.c"}
 BASE_SLICE_TOKEN = "sysctl_sched_base_slice"
 MIGRATION_SECTION = """diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
 --- a/kernel/sched/fair.c
@@ -20,6 +21,31 @@ MIGRATION_SECTION = """diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
 +#endif
  
  static int __init setup_sched_thermal_decay_shift(char *str)
+"""
+SWAP_SETUP_SECTION = """diff --git a/mm/swap.c b/mm/swap.c
+--- a/mm/swap.c
++++ b/mm/swap.c
+@@ -1098,15 +1098,20 @@ void __init swap_setup(void)
+ {
++#ifdef CONFIG_ZEN_INTERACTIVE
++\t/* Only swap-in pages requested, avoid readahead */
++\tpage_cluster = 0;
++#else
+ \tunsigned long megs = PAGES_TO_MB(totalram_pages());
+ 
+ \t/* Use a smaller cluster for small-memory machines */
+ \tif (megs < 16)
+ \t\tpage_cluster = 2;
+ \telse
+ \t\tpage_cluster = 3;
+ \t/*
+ \t * Right now other parts of the system means that we
+ \t * _really_ don't want to cluster much more
+ \t */
++#endif
+ 
+ \tregister_sysctl_init("vm", swap_sysctl_table);
+ }
 """
 
 
@@ -84,10 +110,51 @@ def sanitize_kconfig_help(hunk: str) -> str:
     return "".join(lines)
 
 
+def assert_added_conditionals_balanced(
+    text: str, *, paths: set[str] | None = None
+) -> None:
+    """Reject generated hunks that produce incomplete preprocessor groups.
+
+    Evaluate added and unchanged context lines, because a selected upstream hunk
+    can add an opening directive while retaining its matching ``#endif`` as
+    context. Removed lines are ignored because they are absent after applying
+    the patch. This catches genuinely malformed generated sections without
+    rejecting valid context-paired conditionals.
+    """
+    opening = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef)\b")
+    closing = re.compile(r"^\s*#\s*endif\b")
+
+    for section in split_sections(text):
+        header, _ = split_hunks(section)
+        path = section_path(header)
+        if paths is not None and path not in paths:
+            continue
+        depth = 0
+        for raw_line in section.splitlines():
+            if raw_line.startswith(("+++", "---")):
+                continue
+            if raw_line[:1] not in {"+", " "}:
+                continue
+            line = raw_line[1:]
+            if opening.match(line):
+                depth += 1
+            elif closing.match(line):
+                depth -= 1
+                if depth < 0:
+                    raise PortError(
+                        f"{path}: preprocessor group closes without an opener"
+                    )
+        if depth:
+            raise PortError(
+                f"{path}: preprocessor group is unterminated ({depth} open)"
+            )
+
+
 def prepare_patch(text: str) -> tuple[str, list[str]]:
     output: list[str] = []
     exclusions: list[str] = []
     migration_needed = False
+    swap_setup_needed = False
 
     for section in split_sections(text):
         header, hunks = split_hunks(section)
@@ -97,6 +164,12 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
         path = section_path(header)
         if path in PROJECT_OWNED_PATHS:
             exclusions.append(f"{path}: ADIOS project policy preserved")
+            continue
+        if path in SEMANTIC_PORT_PATHS:
+            swap_setup_needed = True
+            exclusions.append(
+                "mm/swap.c: page-cluster tuning ported as a balanced semantic hunk"
+            )
             continue
 
         selected: list[str] = []
@@ -117,6 +190,8 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
 
     if migration_needed:
         output.append(MIGRATION_SECTION)
+    if swap_setup_needed:
+        output.append(SWAP_SETUP_SECTION)
 
     result = "".join(output)
     if "diff --git a/block/elevator.c b/block/elevator.c" in result:
@@ -127,6 +202,12 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
         raise PortError("Zen Kconfig definition was lost while adapting the patch")
     if migration_needed and result.count("sysctl_sched_migration_cost") != 3:
         raise PortError("migration-cost semantic port is malformed")
+    if swap_setup_needed:
+        if result.count("diff --git a/mm/swap.c b/mm/swap.c") != 1:
+            raise PortError("swap page-cluster semantic port is duplicated")
+        if result.count("page_cluster = 0;") != 1:
+            raise PortError("swap page-cluster semantic port is malformed")
+    assert_added_conditionals_balanced(result, paths=SEMANTIC_PORT_PATHS)
     return result, exclusions
 
 
