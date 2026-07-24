@@ -12,40 +12,82 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shlex
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 REPO = "https://github.com/zen-kernel/zen-kernel.git"
 REF = "7.0/zen-sauce"
 KERNEL_TARGET = "7.0"
 SYMBOL = "ZEN_INTERACTIVE"
+SYMBOL_DEFINITION = "config ZEN_INTERACTIVE"
 THP_PATHS = {"mm/huge_memory.c"}
 THP_TOKENS = re.compile(
     r"TRANSPARENT_HUGEPAGE|khugepaged|\bTHP(?:_|\b)|transparent[ -]hugepage",
     re.IGNORECASE,
 )
+DEFAULT_COMMAND_TIMEOUT = 90
+FETCH_TIMEOUT = 180
+TOTAL_RESOLVE_TIMEOUT = 600
+MAX_HISTORY_DEPTH = 2048
+_RESOLVE_DEADLINE: float | None = None
 
 
 class ResolveError(RuntimeError):
     pass
 
 
-def run(args: list[str], *, cwd: Path | None = None) -> str:
-    completed = subprocess.run(
-        args,
-        cwd=cwd,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+def _remaining_timeout(requested: int) -> int:
+    if _RESOLVE_DEADLINE is None:
+        return requested
+    remaining = int(_RESOLVE_DEADLINE - time.monotonic())
+    if remaining <= 0:
+        raise ResolveError(
+            f"Zen interactive resolution exceeded {TOTAL_RESOLVE_TIMEOUT} seconds"
+        )
+    return max(1, min(requested, remaining))
+
+
+def run(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    timeout: int = DEFAULT_COMMAND_TIMEOUT,
+) -> str:
+    effective_timeout = _remaining_timeout(timeout)
+    command = shlex.join(args)
+    print(f"==> Zen resolver: {command} (timeout {effective_timeout}s)", flush=True)
+    started = time.monotonic()
+    env = os.environ.copy()
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    env.setdefault("GIT_HTTP_LOW_SPEED_LIMIT", "1024")
+    env.setdefault("GIT_HTTP_LOW_SPEED_TIME", "30")
+    try:
+        completed = subprocess.run(
+            args,
+            cwd=cwd,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=effective_timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ResolveError(
+            f"command timed out after {effective_timeout}s: {command}"
+        ) from exc
+    elapsed = time.monotonic() - started
     if completed.returncode:
         raise ResolveError(
-            f"command failed ({completed.returncode}): {' '.join(args)}\n"
+            f"command failed ({completed.returncode}) after {elapsed:.1f}s: {command}\n"
             f"{completed.stdout}{completed.stderr}"
         )
+    print(f"==> Zen resolver command completed in {elapsed:.1f}s", flush=True)
     return completed.stdout
 
 
@@ -126,12 +168,73 @@ def filter_symbol_hunks(diff: str) -> tuple[str, list[str], int, int]:
         output.append(header + "".join(selected))
 
     result = "".join(output)
-    if "config ZEN_INTERACTIVE" not in result:
+    if SYMBOL_DEFINITION not in result:
         raise ResolveError("official profile patch does not define config ZEN_INTERACTIVE")
     if result.count(SYMBOL) < 2:
         raise ResolveError("official profile contains too few ZEN_INTERACTIVE references")
     assert_thp_untouched(result)
     return result, files, kept_hunks, excluded_thp_hunks
+
+
+def read_file_at(checkout: Path, commit: str, path: str) -> str:
+    return run(["git", "show", f"{commit}:{path}"], cwd=checkout)
+
+
+def locate_introduction(checkout: Path) -> str | None:
+    commits = run(
+        ["git", "log", "--reverse", "--format=%H", "FETCH_HEAD", "--", "init/Kconfig"],
+        cwd=checkout,
+    ).splitlines()
+    if not commits:
+        raise ResolveError("official branch has no init/Kconfig history")
+
+    previous_has_symbol: bool | None = None
+    for commit in commits:
+        has_symbol = SYMBOL_DEFINITION in read_file_at(checkout, commit, "init/Kconfig")
+        if has_symbol and previous_has_symbol is False:
+            return commit
+        if has_symbol and previous_has_symbol is None:
+            # The shallow boundary already contains the symbol; deepen history.
+            return None
+        previous_has_symbol = has_symbol
+    return None
+
+
+def discover_symbol_files(checkout: Path, *, intro: str, head: str) -> list[str]:
+    # The introduction commit is the authoritative profile boundary. Inspect only
+    # the files changed by that commit at current HEAD. This avoids `git grep` over
+    # the entire Linux tree, which causes a blob-less partial clone to lazily fetch
+    # tens of thousands of objects and can stall GitHub-hosted runners for hours.
+    introduced_paths = run(
+        [
+            "git",
+            "diff-tree",
+            "--no-commit-id",
+            "--name-only",
+            "-r",
+            intro,
+        ],
+        cwd=checkout,
+    ).splitlines()
+    if not introduced_paths:
+        raise ResolveError("ZEN_INTERACTIVE introduction commit changed no files")
+
+    selected: list[str] = []
+    for path in introduced_paths:
+        try:
+            content = read_file_at(checkout, head, path)
+        except ResolveError as exc:
+            if "does not exist" in str(exc):
+                continue
+            raise
+        if SYMBOL in content:
+            selected.append(path)
+
+    if "init/Kconfig" not in selected:
+        raise ResolveError("current official profile no longer defines ZEN_INTERACTIVE")
+    if len(selected) < 2:
+        raise ResolveError("official profile resolves to too few symbol-bearing files")
+    return sorted(set(selected))
 
 
 def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, int]:
@@ -144,7 +247,8 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
 
     depth = 128
     intro = ""
-    while depth <= 2048:
+    while depth <= MAX_HISTORY_DEPTH:
+        print(f"==> Zen resolver: fetching {REF} at depth {depth}", flush=True)
         run(
             [
                 "git",
@@ -157,29 +261,17 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
                 f"refs/heads/{REF}",
             ],
             cwd=checkout,
+            timeout=FETCH_TIMEOUT,
         )
-        candidates = run(
-            [
-                "git",
-                "log",
-                "--reverse",
-                "--format=%H",
-                "-S",
-                "config ZEN_INTERACTIVE",
-                "FETCH_HEAD",
-                "--",
-                "init/Kconfig",
-            ],
-            cwd=checkout,
-        ).splitlines()
-        if candidates:
-            intro = candidates[0]
+        intro = locate_introduction(checkout) or ""
+        if intro:
             parent_check = subprocess.run(
-                ["git", "cat-file", "-e", f"{intro}^{{commit}}"],
+                ["git", "cat-file", "-e", f"{intro}^"],
                 cwd=checkout,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 check=False,
+                timeout=_remaining_timeout(DEFAULT_COMMAND_TIMEOUT),
             )
             if parent_check.returncode == 0:
                 break
@@ -189,9 +281,7 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
 
     head = run(["git", "rev-parse", "FETCH_HEAD"], cwd=checkout).strip()
     base = run(["git", "rev-parse", f"{intro}^"], cwd=checkout).strip()
-    symbol_files = run(["git", "grep", "-l", SYMBOL, head, "--"], cwd=checkout).splitlines()
-    if not symbol_files:
-        raise ResolveError("official branch contains no ZEN_INTERACTIVE users")
+    symbol_files = discover_symbol_files(checkout, intro=intro, head=head)
 
     full_diff = run(
         [
@@ -199,12 +289,14 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
             "diff",
             "--full-index",
             "--no-ext-diff",
+            "--no-renames",
             base,
             head,
             "--",
             *symbol_files,
         ],
         cwd=checkout,
+        timeout=FETCH_TIMEOUT,
     )
     patch, selected_files, hunks, excluded = filter_symbol_hunks(full_diff)
     return patch, head, intro, base, selected_files, hunks, excluded
@@ -252,6 +344,9 @@ def main() -> None:
     parser.add_argument("--lock", type=Path, required=True)
     args = parser.parse_args()
 
+    global _RESOLVE_DEADLINE
+    _RESOLVE_DEADLINE = time.monotonic() + TOTAL_RESOLVE_TIMEOUT
+
     try:
         patch, head, intro, base, files, hunks, excluded = fetch_profile(args.checkout)
     except ResolveError as exc:
@@ -272,6 +367,7 @@ def main() -> None:
                 f"Diff base: {base}",
                 f"Kernel target: {KERNEL_TARGET}",
                 "Selection: nearest official series; symbol-gated hunks only",
+                "Discovery: introduction-commit files at current HEAD",
                 "THP policy: preserved unchanged; all THP hunks excluded",
                 f"Excluded THP hunks: {excluded}",
                 f"Files: {', '.join(files)}",
@@ -294,7 +390,8 @@ def main() -> None:
     )
     print(
         f"Resolved official Zen interactive profile {head}: {hunks} hunks in "
-        f"{len(files)} files; excluded {excluded} THP hunks"
+        f"{len(files)} files; excluded {excluded} THP hunks",
+        flush=True,
     )
 
 
