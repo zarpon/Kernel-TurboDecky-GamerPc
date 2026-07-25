@@ -29,7 +29,6 @@ class BoreStablePortTests(unittest.TestCase):
             "util_est_update(&rq->cfs, p, flags & DEQUEUE_SLEEP);",
             adapted,
         )
-        self.assertEqual(adapted.count("restart_burst_bore(p);"), 1)
         self.assertEqual(
             adapted.count("static bool dequeue_task_fair(struct rq *rq"), 1
         )
@@ -37,6 +36,7 @@ class BoreStablePortTests(unittest.TestCase):
         hunk = adapted.split(
             "@@ -7427,6 +7523,19 @@ static bool dequeue_task_fair", 1
         )[1].split("@@ ", 1)[0]
+        self.assertEqual(hunk.count("restart_burst_bore(p);"), 1)
         self.assertLess(
             hunk.index("restart_burst_bore(p);"),
             hunk.index("dequeue_entities(rq, &p->se, flags)"),
