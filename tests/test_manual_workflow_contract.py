@@ -99,7 +99,7 @@ class ManualWorkflowContractTests(unittest.TestCase):
             finalizer.validate_port(port, "7.1.5")
             text = port.read_text(encoding="utf-8")
             hunk = text.split(
-                "@@ -7427,6 +7523,20 @@ static bool dequeue_task_fair", 1
+                "@@ -7427,6 +7523,19 @@ static bool dequeue_task_fair", 1
             )[1].split("@@ ", 1)[0]
             self.assertNotIn("util_est_update(", hunk)
             self.assertIn("restart_burst_bore(p);", hunk)
