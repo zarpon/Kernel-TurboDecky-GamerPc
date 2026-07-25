@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
 
@@ -15,6 +16,15 @@ DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
     encoding="utf-8"
 )
 CONFIG = (ROOT / "config/kernelnote.config").read_text(encoding="utf-8")
+FINALIZER_PATH = ROOT / "scripts/finalize-bore-stable-port.py"
+
+
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 class ManualWorkflowContractTests(unittest.TestCase):
@@ -58,7 +68,7 @@ class ManualWorkflowContractTests(unittest.TestCase):
     def test_python_validation_allows_an_empty_optional_glob(self) -> None:
         self.assertIn("shopt -s nullglob", WORKFLOW)
         self.assertIn(
-            "python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py)",
+            "python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)",
             WORKFLOW,
         )
         self.assertIn('python3 -m py_compile "${python_sources[@]}"', WORKFLOW)
@@ -70,6 +80,31 @@ class ManualWorkflowContractTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn("grep -Fq 'CONFIG_ZEN_INTERACTIVE=y' logs/final.config", WORKFLOW)
+
+    def test_bore_port_is_finalized_after_dynamic_source_resolution(self) -> None:
+        dynamic = (
+            "python3 scripts/apply-zarpon-generic-name.py "
+            "scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh"
+        )
+        final = (
+            "python3 scripts/finalize-bore-stable-port.py "
+            "scripts/build-kernelnote-core.sh"
+        )
+        self.assertIn(final, WORKFLOW)
+        self.assertLess(WORKFLOW.index(dynamic), WORKFLOW.index(final))
+
+        finalizer = load_module("finalize_bore_stable_port_contract", FINALIZER_PATH)
+        port = finalizer.stable.materialize_bore_port("7.1.5")
+        try:
+            finalizer.validate_port(port, "7.1.5")
+            text = port.read_text(encoding="utf-8")
+            hunk = text.split(
+                "@@ -7427,6 +7523,20 @@ static bool dequeue_task_fair", 1
+            )[1].split("@@ ", 1)[0]
+            self.assertNotIn("util_est_update(", hunk)
+            self.assertIn("restart_burst_bore(p);", hunk)
+        finally:
+            port.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
