@@ -83,7 +83,7 @@ def adapt_bore_text(text: str, kernel_version: str) -> str:
             f"unexpected BORE dequeue_task_fair hunk layout; missing {missing}"
         )
 
-    new_hunk = """@@ -7427,6 +7523,20 @@ static bool dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+    new_hunk = """@@ -7427,6 +7523,19 @@ static bool dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
  \tif (!p->se.sched_delayed)
  \t\tutil_est_dequeue(&rq->cfs, p);
  
