@@ -144,8 +144,9 @@ jobs:
           python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-zen-interactive.py scripts/build-kernelnote-core.sh
           python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 scripts/finalize-bore-stable-port.py scripts/build-kernelnote-core.sh
           shopt -s nullglob
-          python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py)
+          python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)
           python3 -m py_compile "${python_sources[@]}"
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
           scripts/build-kernelnote.sh "$BUILD_MODE"
