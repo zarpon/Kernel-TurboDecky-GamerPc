@@ -14,6 +14,7 @@ python3 -m py_compile \
   "$ROOT/scripts/patch-external-module-toolchain.py" \
   "$ROOT/scripts/apply-zarpon-generic-name.py" \
   "$ROOT/scripts/apply-latest-stable-series.py" \
+  "$ROOT/scripts/finalize-bore-stable-port.py" \
   "$ROOT/scripts/apply-zen-interactive.py"
 python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
 python3 -m unittest -v \
@@ -24,6 +25,8 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
   "$ROOT/tests/test_bore_liquorix_port.py" \
+  "$ROOT/tests/test_bore_stable_port.py" \
+  "$ROOT/tests/test_bore_stable_finalizer.py" \
   "$ROOT/tests/test_validation_modules.py" \
   "$ROOT/tests/test_manual_workflow_contract.py" \
   "$ROOT/tests/test_zen_interactive_rewriter.py"
@@ -62,7 +65,7 @@ if grep -RIn --binary-files=without-match \
   --exclude-dir=work \
   --exclude-dir=logs \
   --exclude-dir=__pycache__ \
-  -e 'infin'"ity" "$ROOT"; then
+  -e 'infinity' "$ROOT"; then
   echo "Legacy scheduler references remain in the TurboDecky tree" >&2
   exit 1
 fi
