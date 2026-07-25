@@ -65,7 +65,7 @@ if grep -RIn --binary-files=without-match \
   --exclude-dir=work \
   --exclude-dir=logs \
   --exclude-dir=__pycache__ \
-  -e 'infinity' "$ROOT"; then
+  -e 'infin'"ity" "$ROOT"; then
   echo "Legacy scheduler references remain in the TurboDecky tree" >&2
   exit 1
 fi
