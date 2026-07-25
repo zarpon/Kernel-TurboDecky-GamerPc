@@ -35,7 +35,7 @@ class BoreStablePortTests(unittest.TestCase):
         )
 
         hunk = adapted.split(
-            "@@ -7427,6 +7523,20 @@ static bool dequeue_task_fair", 1
+            "@@ -7427,6 +7523,19 @@ static bool dequeue_task_fair", 1
         )[1].split("@@ ", 1)[0]
         self.assertLess(
             hunk.index("restart_burst_bore(p);"),
