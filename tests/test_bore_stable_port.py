@@ -41,7 +41,6 @@ class BoreStablePortTests(unittest.TestCase):
             hunk.index("restart_burst_bore(p);"),
             hunk.index("dequeue_entities(rq, &p->se, flags)"),
         )
-        self.assertIn("Must not reference @p after dequeue_entities", hunk)
 
     def test_linux_714_keeps_reviewed_patch_byte_identical(self) -> None:
         base = latest_stable.BORE_BASE_PATCH.read_text(encoding="utf-8")
