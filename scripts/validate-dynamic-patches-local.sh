@@ -95,7 +95,7 @@ if [[ -n "${KERNEL_VERSION:-}" && -n "${KERNEL_SERIES:-}" ]]; then
   preflight_dir="$(mktemp -d)"
   trap 'rm -rf "$preflight_dir"' EXIT
   cp "$ROOT/scripts/build-kernelnote-core.sh" "$preflight_dir/core.sh"
-  cp "$ROOT/scripts/build-kernelnote.sh" "$preflight_dir/wrapper.sh"
+  cp "$ROOT/scripts/build-kernelnote.sh" "$preflight_dir/build-kernelnote.sh"
 
   run_rewriter() {
     local label="$1"
@@ -106,7 +106,7 @@ if [[ -n "${KERNEL_VERSION:-}" && -n "${KERNEL_SERIES:-}" ]]; then
 
   run_rewriter reflex \
     python3 "$ROOT/scripts/apply-reflex-core.py" \
-      "$preflight_dir/core.sh" "$preflight_dir/wrapper.sh"
+      "$preflight_dir/core.sh" "$preflight_dir/build-kernelnote.sh"
   run_rewriter upstream-generic \
     python3 "$ROOT/scripts/apply-upstream-generic.py" "$preflight_dir/core.sh"
   run_rewriter requested-series \
@@ -117,10 +117,10 @@ if [[ -n "${KERNEL_VERSION:-}" && -n "${KERNEL_SERIES:-}" ]]; then
     python3 "$ROOT/scripts/apply-zen-interactive.py" "$preflight_dir/core.sh"
   run_rewriter generic-name-and-dynamic-sources \
     python3 "$ROOT/scripts/apply-zarpon-generic-name.py" \
-      "$preflight_dir/core.sh" "$preflight_dir/wrapper.sh"
+      "$preflight_dir/core.sh" "$preflight_dir/build-kernelnote.sh"
   run_rewriter final-bore-port \
     python3 "$ROOT/scripts/finalize-bore-stable-port.py" "$preflight_dir/core.sh"
-  bash -n "$preflight_dir/core.sh" "$preflight_dir/wrapper.sh"
+  bash -n "$preflight_dir/core.sh" "$preflight_dir/build-kernelnote.sh"
   rm -rf "$preflight_dir"
   trap - EXIT
 fi
