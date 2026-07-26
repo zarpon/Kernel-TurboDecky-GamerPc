@@ -360,11 +360,43 @@ c refs/heads/6.18/zen-sauce
     def test_resolver_has_bounded_commands_and_total_deadline(self) -> None:
         source = RESOLVER.read_text(encoding="utf-8")
         self.assertIn("TOTAL_RESOLVE_TIMEOUT = 600", source)
+        self.assertIn("REMOTE_FETCH_RETRIES = 3", source)
+        self.assertIn('REMOTE_LOW_SPEED_TIME = "120"', source)
         self.assertIn("subprocess.TimeoutExpired", source)
         self.assertIn('f"{intro}^"', source)
         self.assertIn("git", source)
         self.assertIn("compatibility_sources", source)
         self.assertNotIn('["git", "grep", "-l", SYMBOL, head, "--"]', source)
+
+    def test_resolver_retries_transient_promisor_blob_failures(self) -> None:
+        transient = resolver.ResolveError(
+            "command failed (128): git show HEAD:init/Kconfig\n"
+            "fatal: unable to access 'https://github.com/zen-kernel/zen-kernel.git/': "
+            "Operation too slow. Less than 1024 bytes/sec transferred the last 30 seconds"
+        )
+        with mock.patch.object(
+            resolver,
+            "run",
+            side_effect=[transient, "config ZEN_INTERACTIVE\n"],
+        ) as run_mock, mock.patch.object(resolver.time, "sleep") as sleep_mock:
+            content = resolver.read_file_at(
+                Path("checkout"), "HEAD", "init/Kconfig"
+            )
+
+        self.assertEqual(content, "config ZEN_INTERACTIVE\n")
+        self.assertEqual(run_mock.call_count, 2)
+        sleep_mock.assert_called_once_with(resolver.REMOTE_RETRY_DELAY_SECONDS)
+
+    def test_resolver_does_not_retry_permanent_blob_errors(self) -> None:
+        permanent = resolver.ResolveError(
+            "command failed (128): git show HEAD:missing\n"
+            "fatal: path 'missing' does not exist in 'HEAD'"
+        )
+        with mock.patch.object(resolver, "run", side_effect=permanent) as run_mock:
+            with self.assertRaises(resolver.ResolveError):
+                resolver.read_file_at(Path("checkout"), "HEAD", "missing")
+
+        self.assertEqual(run_mock.call_count, 1)
 
 
 if __name__ == "__main__":
