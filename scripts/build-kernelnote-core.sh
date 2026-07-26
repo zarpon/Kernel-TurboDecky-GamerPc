@@ -41,9 +41,12 @@ BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec
 # Marie is fetched as a pinned local Git checkout rather than through a raw
 # patch URL. Only the exact patch blob is materialized in the workspace.
 MARIE_REPO="https://github.com/firelzrd/lru_marie.git"
-MARIE_COMMIT="4d57ede4ab9b2000ae9ddc25714b8ac219671d35"
-MARIE_PATCH_PATH="patches/testing/0001-linux7.1-rc5-lru_marie-0.7.7.patch"
-MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"
+MARIE_COMMIT="067bea686c31e4b588270e21de16b9f317f3cb46"
+MARIE_PATCH_PATH="patches/testing/0001-linux7.1-rc5-lru_marie-0.9.0.patch"
+MARIE_PATCH="$PATCHDIR/02-lru-marie.patch"
+PATCH_MARIE_VERSION="${PATCH_MARIE_VERSION:-0.9.0}"
+MARIE_FALLBACK_PATCH="$ROOT/patches/fallback/lru_marie.patch"
+MARIE_FALLBACK_METADATA="$ROOT/patches/fallback/lru_marie.json"
 
 # Keep the existing Liquorix built-in arguments and append these canonical
 # kernel parameters. CMDLINE_OVERRIDE stays disabled so bootloader parameters
@@ -75,26 +78,43 @@ download() {
 }
 
 fetch_marie_testing_patch() {
-  echo "==> Fetching pinned Marie LRU 0.7.7 testing source locally"
+  local acquisition="pinned local partial Git checkout; no raw patch URL"
+  echo "==> Fetching pinned Marie LRU $PATCH_MARIE_VERSION testing source locally"
   rm -rf "$MARIEDIR"
   git init --quiet "$MARIEDIR"
   git -C "$MARIEDIR" remote add origin "$MARIE_REPO"
   git -C "$MARIEDIR" config remote.origin.promisor true
   git -C "$MARIEDIR" config remote.origin.partialclonefilter blob:none
-  git -C "$MARIEDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$MARIE_COMMIT" \
-    2>&1 | tee "$LOGDIR/02-lru-marie-fetch.log"
 
-  git -C "$MARIEDIR" show "FETCH_HEAD:$MARIE_PATCH_PATH" > "$MARIE_PATCH"
+  if git -C "$MARIEDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$MARIE_COMMIT" \
+      2>&1 | tee "$LOGDIR/02-lru-marie-fetch.log" && \
+      git -C "$MARIEDIR" show "FETCH_HEAD:$MARIE_PATCH_PATH" > "$MARIE_PATCH"; then
+    test -s "$MARIE_PATCH"
+  else
+    rm -f "$MARIE_PATCH"
+    echo "==> Marie upstream source unavailable; using maintained local fallback"
+    python3 "$ROOT/scripts/validate-marie-fallback.py" \
+      --patch "$MARIE_FALLBACK_PATCH" \
+      --metadata "$MARIE_FALLBACK_METADATA"
+    PATCH_MARIE_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_version"])' "$MARIE_FALLBACK_METADATA")"
+    MARIE_COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$MARIE_FALLBACK_METADATA")"
+    MARIE_PATCH_PATH="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["selected_path"])' "$MARIE_FALLBACK_METADATA")"
+    cp "$MARIE_FALLBACK_PATCH" "$MARIE_PATCH"
+    acquisition="maintained local fallback"
+  fi
+
   test -s "$MARIE_PATCH"
-  grep -Fq 'Subject: [PATCH] linux7.1-rc5-lru_marie-0.7.7' "$MARIE_PATCH"
+  grep -Fq 'lru_marie' "$MARIE_PATCH"
+  grep -Fq 'LRU_MARIE' "$MARIE_PATCH"
 
   {
     echo "Marie source policy: testing-compatible"
     echo "Repository: firelzrd/lru_marie"
     echo "Commit: $MARIE_COMMIT"
+    echo "Version: $PATCH_MARIE_VERSION"
     echo "Path: $MARIE_PATCH_PATH"
     echo "SHA256: $(sha256sum "$MARIE_PATCH" | awk '{print $1}')"
-    echo "Acquisition: pinned local partial Git checkout; no raw patch URL"
+    echo "Acquisition: $acquisition"
   } | tee "$LOGDIR/02-lru-marie-provenance.txt"
 }
 
@@ -214,7 +234,7 @@ PY
 apply_marie_testing_patch() {
   local file="$1" status=0
 
-  echo "==> Applying local Marie LRU 0.7.7 testing patch for Linux 7.1"
+  echo "==> Applying local Marie LRU $PATCH_MARIE_VERSION testing patch for Linux 7.1"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/02-lru-marie.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -252,10 +272,10 @@ apply_marie_testing_patch() {
     git diff --check | tee "$LOGDIR/02-lru-marie-diff-check-after-fix.log"
   fi
 
-  grep -Fq '0.7.7' mm/lru_marie/version.h
+  grep -Fq "$PATCH_MARIE_VERSION" mm/lru_marie/version.h
   grep -Fq 'config LRU_MARIE' mm/Kconfig
   grep -Fq 'CONFIG_LRU_MARIE' include/linux/lru_marie.h
-  echo "==> Marie LRU 0.7.7 testing patch applied successfully"
+  echo "==> Marie LRU $PATCH_MARIE_VERSION testing patch applied successfully"
 }
 
 report_bore_rejects() {

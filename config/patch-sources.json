@@ -53,7 +53,9 @@
       "required_markers": [
         "LRU_MARIE",
         "lru_marie"
-      ]
+      ],
+      "local_fallback_patch": "../patches/fallback/lru_marie.patch",
+      "local_fallback_metadata": "../patches/fallback/lru_marie.json"
     },
     "adios": {
       "kind": "git_patch",

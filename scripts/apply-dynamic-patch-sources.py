@@ -191,16 +191,30 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         "MARIE": project_version(component(lock, "marie"), "unknown"),
         "REFLEX": project_version(component(lock, "reflex"), "unknown"),
     }
-    insertion = (
-        f'PATCH_MARIE_VERSION="{versions["MARIE"]}"\n'
-        f'PATCH_REFLEX_VERSION="{versions["REFLEX"]}"\n'
-    )
-    text = replace_once(
-        text,
-        'MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n',
-        'MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n' + insertion,
-        "dynamic core versions",
-    )
+    if "PATCH_MARIE_VERSION=" in text:
+        text = replace_assignment(text, "PATCH_MARIE_VERSION", versions["MARIE"])
+    else:
+        marie_patch = re.compile(r'^(MARIE_PATCH=.*)$', re.MULTILINE)
+        matches = list(marie_patch.finditer(text))
+        if len(matches) != 1:
+            raise RewriteError(
+                f"PATCH_MARIE_VERSION: expected one MARIE_PATCH anchor, found {len(matches)}"
+            )
+        text = marie_patch.sub(
+            rf'\1\nPATCH_MARIE_VERSION="{versions["MARIE"]}"',
+            text,
+            count=1,
+        )
+    if "PATCH_REFLEX_VERSION=" in text:
+        text = replace_assignment(text, "PATCH_REFLEX_VERSION", versions["REFLEX"])
+    else:
+        anchor = f'PATCH_MARIE_VERSION="{versions["MARIE"]}"\n'
+        text = replace_once(
+            text,
+            anchor,
+            anchor + f'PATCH_REFLEX_VERSION="{versions["REFLEX"]}"\n',
+            "dynamic REFLEX version",
+        )
 
     replacements = {
         'grep -Fq \'Subject: [PATCH] linux7.1-rc5-lru_marie-0.7.7\' "$MARIE_PATCH"':

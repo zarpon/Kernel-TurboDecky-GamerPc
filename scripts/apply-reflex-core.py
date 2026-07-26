@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -14,16 +15,28 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def insert_after_marie_variables(text: str, block: str) -> str:
+    preferred = re.compile(r"^PATCH_MARIE_VERSION=.*$", re.MULTILINE)
+    fallback = re.compile(r"^MARIE_PATCH=.*$", re.MULTILINE)
+    matches = list(preferred.finditer(text))
+    if not matches:
+        matches = list(fallback.finditer(text))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"REFLEX variables: expected one Marie variables anchor, found {len(matches)}"
+        )
+    match = matches[0]
+    return text[: match.end()] + "\n" + block + text[match.end() :]
+
+
 def patch_core(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
     if 'REFLEX_COMMIT="a7a7774b059a1f913521ffbfc52eeda72bdbb14c"' in source:
         return
 
-    source = replace_once(
+    source = insert_after_marie_variables(
         source,
-        'MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n',
-        '''MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"
-
+        '''
 # REFLEX CPUFreq: native Linux 7.1 patch, pinned to an exact upstream commit.
 REFLEX_REPO="https://github.com/firelzrd/reflex.git"
 REFLEX_COMMIT="a7a7774b059a1f913521ffbfc52eeda72bdbb14c"
@@ -31,7 +44,6 @@ REFLEX_PATCH_PATH="patches/0001-linux7.1-reflex-v0.3.1.patch"
 REFLEXDIR="$WORKDIR/reflex"
 REFLEX_PATCH="$PATCHDIR/0007-reflex-v0.3.1-linux7.1.patch"
 ''',
-        "REFLEX variables",
     )
 
     source = replace_once(

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -12,6 +13,25 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     if count != 1:
         raise SystemExit(f"{label}: expected exactly one anchor, found {count}: {old[:120]!r}")
     return text.replace(old, new, 1)
+
+
+def insert_requested_series_variable(text: str) -> str:
+    preferred = re.compile(r"^PATCH_MARIE_VERSION=.*$", re.MULTILINE)
+    fallback = re.compile(r"^MARIE_PATCH=.*$", re.MULTILINE)
+    matches = list(preferred.finditer(text))
+    if not matches:
+        matches = list(fallback.finditer(text))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"requested series variables: expected one Marie variables anchor, "
+            f"found {len(matches)}"
+        )
+    match = matches[0]
+    return (
+        text[: match.end()]
+        + '\nREQUESTED_SERIES_DIR="$PATCHDIR/requested-series"'
+        + text[match.end() :]
+    )
 
 
 def main() -> None:
@@ -24,14 +44,7 @@ def main() -> None:
     if marker in source:
         return
 
-    source = replace_once(
-        source,
-        'MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n',
-        '''MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"
-REQUESTED_SERIES_DIR="$PATCHDIR/requested-series"
-''',
-        "requested series variables",
-    )
+    source = insert_requested_series_variable(source)
 
     source = replace_once(
         source,

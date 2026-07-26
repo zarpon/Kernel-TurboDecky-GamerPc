@@ -76,6 +76,20 @@ A política de THP permanece independente do perfil Zen:
 - a configuração e os parâmetros THP já definidos pelo projeto não são
   substituídos, redefinidos nem condicionados por `CONFIG_ZEN_INTERACTIVE`.
 
+## Fallback local do Marie LRU
+
+A versão mais recente e compatível do Marie LRU também é mantida em
+`patches/fallback/lru_marie.patch`, acompanhada por metadados com commit,
+caminho, versão, tamanho e SHA-256. O resolvedor usa esses bytes somente quando
+a consulta ao repositório oficial falha; a seleção fica registrada como
+`local-fallback` no `patch-lock.json`.
+
+O workflow `update-marie-fallback.yml` consulta o upstream a cada hora, após
+alterações relevantes na `main` ou por disparo manual. Quando encontra uma
+versão nova, atualiza o patch local, seus metadados e os defaults do script-base.
+Se a branch principal não aceitar escrita direta, ele abre uma pull request de
+atualização automaticamente.
+
 ## Lock por build
 
 O resolvedor cria `.resolved-patches/patch-lock.json` contendo, para cada
