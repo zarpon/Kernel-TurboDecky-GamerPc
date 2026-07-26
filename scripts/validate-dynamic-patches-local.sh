@@ -88,4 +88,41 @@ if grep -RIn --binary-files=without-match \
   exit 1
 fi
 
+# Exercise the exact CI pre-build rewrite chain on disposable script copies.
+# This catches stale cross-transformer anchors before any source checkout or
+# kernel compilation and leaves a named step in local-validation.log.
+if [[ -n "${KERNEL_VERSION:-}" && -n "${KERNEL_SERIES:-}" ]]; then
+  preflight_dir="$(mktemp -d)"
+  trap 'rm -rf "$preflight_dir"' EXIT
+  cp "$ROOT/scripts/build-kernelnote-core.sh" "$preflight_dir/core.sh"
+  cp "$ROOT/scripts/build-kernelnote.sh" "$preflight_dir/wrapper.sh"
+
+  run_rewriter() {
+    local label="$1"
+    shift
+    echo "==> Preflight rewriter: $label"
+    "$@"
+  }
+
+  run_rewriter reflex \
+    python3 "$ROOT/scripts/apply-reflex-core.py" \
+      "$preflight_dir/core.sh" "$preflight_dir/wrapper.sh"
+  run_rewriter upstream-generic \
+    python3 "$ROOT/scripts/apply-upstream-generic.py" "$preflight_dir/core.sh"
+  run_rewriter requested-series \
+    python3 "$ROOT/scripts/apply-requested-patch-series.py" "$preflight_dir/core.sh"
+  run_rewriter latest-stable \
+    python3 "$ROOT/scripts/apply-latest-stable-series.py" "$preflight_dir/core.sh"
+  run_rewriter zen-interactive \
+    python3 "$ROOT/scripts/apply-zen-interactive.py" "$preflight_dir/core.sh"
+  run_rewriter generic-name-and-dynamic-sources \
+    python3 "$ROOT/scripts/apply-zarpon-generic-name.py" \
+      "$preflight_dir/core.sh" "$preflight_dir/wrapper.sh"
+  run_rewriter final-bore-port \
+    python3 "$ROOT/scripts/finalize-bore-stable-port.py" "$preflight_dir/core.sh"
+  bash -n "$preflight_dir/core.sh" "$preflight_dir/wrapper.sh"
+  rm -rf "$preflight_dir"
+  trap - EXIT
+fi
+
 echo "Dynamic patch source validation passed"
