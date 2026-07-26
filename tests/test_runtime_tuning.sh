@@ -35,11 +35,11 @@ require_line "$zram_setup_dropin" "[Service]"
 require_line "$zram_setup_dropin" "ExecStartPre=/usr/lib/turbodecky/configure-zram-ir %I"
 
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
-require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/defrag - - - - defer"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise"
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise"
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0"
-require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 64"
-require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 0"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 384"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 16"
 
 # A distro may configure zram0 with zstd in its main generator configuration.
 # The TurboDecky drop-in must replace only the compression policy, preserving
@@ -118,17 +118,17 @@ if command -v systemd-tmpfiles >/dev/null 2>&1; then
 EOF
   systemd-tmpfiles --create --root="$rootfs"
   require_value "$rootfs/sys/kernel/mm/transparent_hugepage/enabled" "madvise"
-  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/defrag" "defer"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/defrag" "defer+madvise"
   require_value "$rootfs/sys/kernel/mm/transparent_hugepage/shmem_enabled" "advise"
   require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/defrag" "0"
-  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none" "64"
-  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap" "0"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none" "384"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap" "16"
 fi
 
 # Deterministic admission-control simulation for one 2 MiB x86 THP. This is
-# not a hardware FPS benchmark: it proves the shipped limits retain a dense
-# 64-hole candidate while rejecting sparse or swapped candidates that could
-# add khugepaged allocation and swap-in work to frame-time-sensitive loads.
+# not a hardware FPS benchmark: it proves the shipped limits accept the
+# configured 384-hole/16-swapped candidate while retaining explicit bounds
+# against candidates that exceed the configured khugepaged limits.
 python3 - "$thp_policy" <<'PY'
 from dataclasses import dataclass
 from pathlib import Path
@@ -161,29 +161,31 @@ def eligible(policy: Policy, *, none: int, swap: int) -> bool:
 
 values = tmpfiles_values(Path(sys.argv[1]))
 assert values["/sys/kernel/mm/transparent_hugepage/enabled"] == "madvise"
-assert values["/sys/kernel/mm/transparent_hugepage/defrag"] == "defer"
+assert values["/sys/kernel/mm/transparent_hugepage/defrag"] == "defer+madvise"
 assert values["/sys/kernel/mm/transparent_hugepage/shmem_enabled"] == "advise"
 assert values["/sys/kernel/mm/transparent_hugepage/khugepaged/defrag"] == "0"
 proposed = Policy(
     max_none=int(values["/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none"]),
     max_swap=int(values["/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap"]),
 )
-assert proposed == Policy(max_none=64, max_swap=0)
+assert proposed == Policy(max_none=384, max_swap=16)
 
-legacy = Policy(max_none=409, max_swap=8)
+legacy = Policy(max_none=64, max_swap=0)
 assert eligible(legacy, none=64, swap=0)
-assert eligible(proposed, none=64, swap=0)
-assert eligible(legacy, none=409, swap=0)
-assert not eligible(proposed, none=409, swap=0)
-assert eligible(legacy, none=0, swap=8)
-assert not eligible(proposed, none=0, swap=8)
+assert eligible(proposed, none=384, swap=16)
+assert not eligible(legacy, none=384, swap=0)
+assert eligible(proposed, none=384, swap=0)
+assert not eligible(legacy, none=0, swap=16)
+assert eligible(proposed, none=0, swap=16)
+assert not eligible(proposed, none=385, swap=0)
+assert not eligible(proposed, none=0, swap=17)
 
 legacy_zero_fill = legacy.max_none * PAGE_SIZE
 proposed_zero_fill = proposed.max_none * PAGE_SIZE
 legacy_swap_bytes = legacy.max_swap * PAGE_SIZE
 proposed_swap_bytes = proposed.max_swap * PAGE_SIZE
-assert legacy_zero_fill - proposed_zero_fill == 1_413_120
-assert legacy_swap_bytes - proposed_swap_bytes == 32_768
+assert proposed_zero_fill - legacy_zero_fill == 1_310_720
+assert proposed_swap_bytes - legacy_swap_bytes == 65_536
 
 print(
     "THP admission simulation passed: zero-fill cap "
