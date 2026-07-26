@@ -11,6 +11,7 @@ trap 'rm -f "$GENERATED"' EXIT
 
 python3 - "$CORE" "$GENERATED" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 source = Path(sys.argv[1]).read_text(encoding="utf-8")
@@ -27,10 +28,23 @@ def replace_once(old: str, new: str) -> None:
     source = source.replace(old, new, 1)
 
 
-replace_once(
-    'MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n',
-    '''MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"
+def insert_after_marie_variables(block: str) -> None:
+    global source
+    preferred = re.compile(r"^PATCH_MARIE_VERSION=.*$", re.MULTILINE)
+    fallback = re.compile(r"^MARIE_PATCH=.*$", re.MULTILINE)
+    matches = list(preferred.finditer(source))
+    if not matches:
+        matches = list(fallback.finditer(source))
+    if len(matches) != 1:
+        raise SystemExit(
+            f"expected exactly one Marie variables anchor, found {len(matches)}"
+        )
+    match = matches[0]
+    source = source[: match.end()] + "\n" + block + source[match.end() :]
 
+
+insert_after_marie_variables(
+    '''
 # ZRAM Immediate Recompression: native Linux 7.1 patch.
 ZRAM_IR_REPO="https://github.com/firelzrd/zram-ir.git"
 ZRAM_IR_COMMIT="e348391dcf54bc42904f227f5ee83d2790f28f52"
@@ -378,4 +392,4 @@ PY
 
 chmod 0755 "$GENERATED"
 bash -n "$GENERATED"
-"$GENERATED" "$@"
+exec "$GENERATED" "${1:-validate}"
