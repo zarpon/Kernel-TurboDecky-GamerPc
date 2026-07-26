@@ -16,6 +16,8 @@ DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
     encoding="utf-8"
 )
 CONFIG = (ROOT / "config/kernelnote.config").read_text(encoding="utf-8")
+BUILD_CORE = (ROOT / "scripts/build-kernelnote-core.sh").read_text(encoding="utf-8")
+ZEN_REWRITER = (ROOT / "scripts/apply-zen-interactive.py").read_text(encoding="utf-8")
 FINALIZER_PATH = ROOT / "scripts/finalize-bore-stable-port.py"
 
 
@@ -80,6 +82,24 @@ class ManualWorkflowContractTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn("grep -Fq 'CONFIG_ZEN_INTERACTIVE=y' logs/final.config", WORKFLOW)
+
+    def test_reflex_keeps_vendor_pstate_drivers_in_passive_mode(self) -> None:
+        self.assertIn("CONFIG_X86_INTEL_PSTATE=y", CONFIG)
+        self.assertIn("CONFIG_X86_AMD_PSTATE=y", CONFIG)
+        self.assertIn("CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2", CONFIG)
+        self.assertIn("intel_pstate=passive", CONFIG)
+        self.assertIn("amd_pstate=passive", CONFIG)
+        for token in ("intel_pstate=passive", "amd_pstate=passive"):
+            self.assertIn(token, BUILD_CORE)
+            self.assertIn(f"grep -Fq '{token}' logs/final.config", WORKFLOW)
+        self.assertIn('assert_cmdline_token "intel_pstate=passive"', BUILD_CORE)
+        self.assertIn('assert_cmdline_token "amd_pstate=passive"', BUILD_CORE)
+        self.assertIn("CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2", WORKFLOW)
+
+    def test_zen_source_follows_the_resolved_kernel_series(self) -> None:
+        self.assertIn('KERNEL_SERIES:-7.1', ZEN_REWRITER)
+        self.assertIn("compatibility commits", ZEN_REWRITER)
+        self.assertNotIn('ZEN_INTERACTIVE_REF="7.0/zen-sauce"', ZEN_REWRITER)
 
     def test_bore_port_is_finalized_after_dynamic_source_resolution(self) -> None:
         dynamic = (

@@ -20,17 +20,18 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 def rewrite(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
 
-    variables_marker = 'ZEN_INTERACTIVE_REF="7.0/zen-sauce"\n'
+    variables_marker = 'ZEN_INTERACTIVE_REF="${KERNEL_SERIES:-7.1}/zen-sauce"\n'
     if variables_marker not in text:
         anchor = (
             'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='
             '"cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c"\n'
         )
         replacement = anchor + '''
-# Zen has not published a 7.1 sauce branch yet. Follow the current official
-# 7.0 profile and port only hunks explicitly gated by ZEN_INTERACTIVE.
+# Follow the current kernel series when Zen publishes an exact sauce branch;
+# the resolver falls back to the nearest older compatible official series and
+# records the selected ref and compatibility commits in patch-lock.json.
 ZEN_INTERACTIVE_REPO="https://github.com/zen-kernel/zen-kernel.git"
-ZEN_INTERACTIVE_REF="7.0/zen-sauce"
+ZEN_INTERACTIVE_REF="${KERNEL_SERIES:-7.1}/zen-sauce"
 ZEN_INTERACTIVE_DIR="$WORKDIR/zen-interactive"
 ZEN_INTERACTIVE_PATCH="$PATCHDIR/00-zen-interactive-profile.patch"
 ZEN_INTERACTIVE_PROVENANCE="$LOGDIR/00-zen-interactive-provenance.txt"
@@ -86,7 +87,7 @@ apply_zen_interactive_profile() {
       | tee "$LOGDIR/00-zen-interactive.apply.log"
   else
     cat "$LOGDIR/00-zen-interactive.dry-run.log"
-    echo "==> Porting Zen interactive profile from Linux 7.0 to $KERNEL_VERSION"
+    echo "==> Porting Zen interactive profile from $ZEN_INTERACTIVE_REF to $KERNEL_VERSION"
     set +e
     patch --batch --forward --fuzz=3 --strip=1 < "$file" \
       > "$LOGDIR/00-zen-interactive.fuzz-apply.log" 2>&1

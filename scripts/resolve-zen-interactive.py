@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Materialize the current official CONFIG_ZEN_INTERACTIVE profile.
 
-Zen has not published a 7.1 zen-sauce branch yet. The resolver follows the
-current 7.0/zen-sauce HEAD, finds the commit that introduced the profile and
-retains only unified-diff hunks explicitly gated by ZEN_INTERACTIVE. THP and
-transparent-hugepage changes are deliberately excluded so the existing kernel
-THP policy remains untouched.
+The resolver selects the newest official ``<kernel-series>/zen-sauce`` branch
+compatible with the stable kernel selected for this build. It finds the commit
+that introduced the profile, retains only unified-diff hunks explicitly gated
+by ZEN_INTERACTIVE, and adds the current Zen compatibility commits that are not
+part of that symbol-gated profile. THP and transparent-hugepage changes are
+deliberately excluded so the existing kernel THP policy remains untouched.
 """
 from __future__ import annotations
 
@@ -19,12 +20,15 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Any, NamedTuple
 
 REPO = "https://github.com/zen-kernel/zen-kernel.git"
-REF = "7.0/zen-sauce"
-KERNEL_TARGET = "7.0"
+DEFAULT_KERNEL_SERIES = "7.1"
+SERIES_RE = re.compile(r"^[0-9]+\.[0-9]+$")
+ZEN_REF_RE = re.compile(r"^refs/heads/([0-9]+\.[0-9]+)/zen-sauce$")
 SYMBOL = "ZEN_INTERACTIVE"
 SYMBOL_DEFINITION = "config ZEN_INTERACTIVE"
+INTRODUCTION_SUBJECT = "ZEN: INTERACTIVE: Base config item"
 THP_PATHS = {"mm/huge_memory.c"}
 THP_TOKENS = re.compile(
     r"TRANSPARENT_HUGEPAGE|khugepaged|\bTHP(?:_|\b)|transparent[ -]hugepage",
@@ -36,9 +40,38 @@ TOTAL_RESOLVE_TIMEOUT = 600
 MAX_HISTORY_DEPTH = 2048
 _RESOLVE_DEADLINE: float | None = None
 
+COMPATIBILITY_SPECS = (
+    {
+        "name": "evdev-call-rcu",
+        "path": "drivers/input/evdev.c",
+        "pattern": "evdev_reclaim_client",
+        "marker": "call_rcu(&client->rcu",
+    },
+    {
+        "name": "cpufreq-pstate-schedutil-dependency",
+        "path": "drivers/cpufreq/Kconfig.x86",
+        "pattern": "select CPU_FREQ_GOV_SCHEDUTIL",
+        "marker": "CPU_FREQ_GOV_SCHEDUTIL",
+    },
+)
+
 
 class ResolveError(RuntimeError):
     pass
+
+
+class ProfileResolution(NamedTuple):
+    patch: str
+    head: str
+    intro: str
+    base: str
+    ref: str
+    kernel_target: str
+    files: list[str]
+    hunks: int
+    profile_hunks: int
+    excluded_thp_hunks: int
+    compatibility_sources: list[dict[str, Any]]
 
 
 def _remaining_timeout(requested: int) -> int:
@@ -89,6 +122,66 @@ def run(
         )
     print(f"==> Zen resolver command completed in {elapsed:.1f}s", flush=True)
     return completed.stdout
+
+
+def series_key(series: str) -> tuple[int, int]:
+    if not SERIES_RE.fullmatch(series):
+        raise ResolveError(f"invalid kernel series: {series!r}")
+    major, minor = (int(part) for part in series.split("."))
+    return major, minor
+
+
+def requested_kernel_series() -> str:
+    return os.environ.get("KERNEL_SERIES", DEFAULT_KERNEL_SERIES)
+
+
+def parse_zen_refs(output: str) -> dict[str, str]:
+    refs: dict[str, str] = {}
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) != 2:
+            continue
+        match = ZEN_REF_RE.fullmatch(fields[1])
+        if match:
+            refs[match.group(1)] = fields[1].removeprefix("refs/heads/")
+    return refs
+
+
+def select_compatible_ref(kernel_series: str | None = None) -> tuple[str, str, str]:
+    """Return ``(ref, source_series, selection)`` for the target series.
+
+    The exact series is preferred. If Zen has not published that branch yet,
+    the newest older Zen series is selected; a newer branch is never applied to
+    an older stable kernel. This keeps every build on the newest compatible
+    official source without hard-coding a stale branch name.
+    """
+    target = kernel_series or requested_kernel_series()
+    target_key = series_key(target)
+    raw_refs = run(
+        ["git", "ls-remote", "--heads", REPO, "refs/heads/*/zen-sauce"],
+        timeout=FETCH_TIMEOUT,
+    )
+    refs = parse_zen_refs(raw_refs)
+    if not refs:
+        raise ResolveError("official Zen repository has no zen-sauce series branches")
+
+    exact = refs.get(target)
+    if exact:
+        return exact, target, "exact-series"
+
+    compatible = [
+        (series_key(series), series)
+        for series in refs
+        if series_key(series) <= target_key
+    ]
+    if not compatible:
+        available = ", ".join(sorted(refs, key=series_key))
+        raise ResolveError(
+            f"no Zen zen-sauce branch is compatible with Linux {target}; "
+            f"available series: {available}"
+        )
+    _, selected = max(compatible)
+    return refs[selected], selected, "nearest-older-series"
 
 
 def split_sections(diff: str) -> list[str]:
@@ -181,23 +274,63 @@ def read_file_at(checkout: Path, commit: str, path: str) -> str:
 
 
 def locate_introduction(checkout: Path) -> str | None:
+    # The official Zen profile has a stable introduction subject. Commit
+    # metadata is cheap to walk even in a blob-less clone; verify the selected
+    # commit and its parent below so a future subject change remains safe.
     commits = run(
-        ["git", "log", "--reverse", "--format=%H", "FETCH_HEAD", "--", "init/Kconfig"],
+        [
+            "git",
+            "log",
+            "--reverse",
+            "--format=%H",
+            "--fixed-strings",
+            "--grep",
+            INTRODUCTION_SUBJECT,
+            "FETCH_HEAD",
+            "--",
+            "init/Kconfig",
+        ],
         cwd=checkout,
     ).splitlines()
     if not commits:
-        raise ResolveError("official branch has no init/Kconfig history")
+        # If the upstream subject changes, fall back to Git's semantic search.
+        # Iterating over every historical init/Kconfig blob would turn a
+        # blob-less clone into one network request per commit.
+        commits = run(
+            [
+                "git",
+                "log",
+                "--reverse",
+                "--format=%H",
+                "-S",
+                SYMBOL_DEFINITION,
+                "FETCH_HEAD",
+                "--",
+                "init/Kconfig",
+            ],
+            cwd=checkout,
+        ).splitlines()
+    if not commits:
+        # A shallow boundary can contain the symbol without its introduction
+        # commit. The caller will deepen the history and try again.
+        return None
 
-    previous_has_symbol: bool | None = None
-    for commit in commits:
-        has_symbol = SYMBOL_DEFINITION in read_file_at(checkout, commit, "init/Kconfig")
-        if has_symbol and previous_has_symbol is False:
-            return commit
-        if has_symbol and previous_has_symbol is None:
-            # The shallow boundary already contains the symbol; deepen history.
-            return None
-        previous_has_symbol = has_symbol
-    return None
+    commit = commits[0].strip()
+    current = read_file_at(checkout, commit, "init/Kconfig")
+    if SYMBOL_DEFINITION not in current:
+        return None
+    parent_check = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^"],
+        cwd=checkout,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+        timeout=_remaining_timeout(DEFAULT_COMMAND_TIMEOUT),
+    )
+    if parent_check.returncode != 0:
+        return None
+    previous = read_file_at(checkout, f"{commit}^", "init/Kconfig")
+    return commit if SYMBOL_DEFINITION not in previous else None
 
 
 def discover_symbol_files(checkout: Path, *, intro: str, head: str) -> list[str]:
@@ -237,7 +370,90 @@ def discover_symbol_files(checkout: Path, *, intro: str, head: str) -> list[str]
     return sorted(set(selected))
 
 
-def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, int]:
+def discover_compatibility_sources(
+    checkout: Path, *, head: str
+) -> list[dict[str, Any]]:
+    """Find the current Zen commits omitted by the symbol-gated profile.
+
+    These are selected from the history of the chosen official series branch,
+    not copied into this repository as fixed patch files. The resulting commit
+    and byte hashes are recorded in the per-build lock after materialization.
+    """
+    sources: list[dict[str, Any]] = []
+    for spec in COMPATIBILITY_SPECS:
+        commits = run(
+            [
+                "git",
+                "log",
+                "--format=%H",
+                "-G",
+                spec["pattern"],
+                head,
+                "--",
+                spec["path"],
+            ],
+            cwd=checkout,
+            timeout=FETCH_TIMEOUT,
+        ).splitlines()
+        if not commits:
+            raise ResolveError(
+                f"Zen series history has no {spec['name']} compatibility commit"
+            )
+
+        commit = commits[0].strip()
+        parent = run(
+            ["git", "rev-parse", f"{commit}^"],
+            cwd=checkout,
+        ).strip()
+        patch = run(
+            [
+                "git",
+                "diff",
+                "--full-index",
+                "--no-ext-diff",
+                "--no-renames",
+                parent,
+                commit,
+                "--",
+                spec["path"],
+            ],
+            cwd=checkout,
+            timeout=FETCH_TIMEOUT,
+        )
+        if not patch or "diff --git " not in patch:
+            raise ResolveError(
+                f"Zen compatibility commit {commit} produced no patch for "
+                f"{spec['path']}"
+            )
+        if spec["marker"] not in patch:
+            raise ResolveError(
+                f"Zen compatibility commit {commit} does not contain the expected "
+                f"{spec['name']} marker"
+            )
+        assert_thp_untouched(patch)
+        subject = run(
+            ["git", "show", "-s", "--format=%s", commit],
+            cwd=checkout,
+        ).strip()
+        sources.append(
+            {
+                "name": spec["name"],
+                "path": spec["path"],
+                "commit": commit,
+                "parent_commit": parent,
+                "subject": subject,
+                "selection": "latest matching commit on selected official Zen series",
+                "sha256": hashlib.sha256(patch.encode("utf-8")).hexdigest(),
+                "size": len(patch.encode("utf-8")),
+                "patch": patch,
+            }
+        )
+    return sources
+
+
+def fetch_profile(checkout: Path) -> ProfileResolution:
+    kernel_target = requested_kernel_series()
+    ref, _source_series, _selection = select_compatible_ref(kernel_target)
     shutil.rmtree(checkout, ignore_errors=True)
     checkout.mkdir(parents=True)
     run(["git", "init", "--quiet"], cwd=checkout)
@@ -247,8 +463,9 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
 
     depth = 128
     intro = ""
+    compatibility_sources: list[dict[str, Any]] = []
     while depth <= MAX_HISTORY_DEPTH:
-        print(f"==> Zen resolver: fetching {REF} at depth {depth}", flush=True)
+        print(f"==> Zen resolver: fetching {ref} at depth {depth}", flush=True)
         run(
             [
                 "git",
@@ -258,7 +475,7 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
                 f"--depth={depth}",
                 "--filter=blob:none",
                 "origin",
-                f"refs/heads/{REF}",
+                f"refs/heads/{ref}",
             ],
             cwd=checkout,
             timeout=FETCH_TIMEOUT,
@@ -274,6 +491,20 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
                 timeout=_remaining_timeout(DEFAULT_COMMAND_TIMEOUT),
             )
             if parent_check.returncode == 0:
+                try:
+                    compatibility_sources = discover_compatibility_sources(
+                        checkout, head="FETCH_HEAD"
+                    )
+                except ResolveError as exc:
+                    if depth < MAX_HISTORY_DEPTH:
+                        print(
+                            "==> Zen resolver: compatibility history is outside "
+                            f"depth {depth}; deepening ({exc})",
+                            flush=True,
+                        )
+                        depth *= 2
+                        continue
+                    raise
                 break
         depth *= 2
     else:
@@ -299,19 +530,34 @@ def fetch_profile(checkout: Path) -> tuple[str, str, str, str, list[str], int, i
         timeout=FETCH_TIMEOUT,
     )
     patch, selected_files, hunks, excluded = filter_symbol_hunks(full_diff)
-    return patch, head, intro, base, selected_files, hunks, excluded
+    compatibility_patch = "\n".join(
+        source["patch"].rstrip("\n") for source in compatibility_sources
+    )
+    if compatibility_patch:
+        patch = patch.rstrip("\n") + "\n" + compatibility_patch + "\n"
+    assert_thp_untouched(patch)
+    compatibility_files = [source["path"] for source in compatibility_sources]
+    total_hunks = patch.count("\n@@ ")
+    return ProfileResolution(
+        patch=patch,
+        head=head,
+        intro=intro,
+        base=base,
+        ref=ref,
+        kernel_target=kernel_target,
+        files=sorted(set(selected_files + compatibility_files)),
+        hunks=total_hunks,
+        profile_hunks=hunks,
+        excluded_thp_hunks=excluded,
+        compatibility_sources=compatibility_sources,
+    )
 
 
 def update_lock(
     path: Path,
     *,
     output: Path,
-    head: str,
-    intro: str,
-    base: str,
-    files: list[str],
-    hunks: int,
-    excluded_thp_hunks: int,
+    resolution: ProfileResolution,
 ) -> None:
     data = json.loads(path.read_text(encoding="utf-8"))
     components = data.setdefault("components", {})
@@ -319,17 +565,26 @@ def update_lock(
     components["zen_interactive"] = {
         "kind": "git_profile",
         "repo": REPO,
-        "ref": REF,
-        "commit": head,
-        "base_commit": base,
-        "introduction_commit": intro,
-        "kernel_target": KERNEL_TARGET,
-        "selection": "nearest-series-profile",
+        "ref": resolution.ref,
+        "commit": resolution.head,
+        "base_commit": resolution.base,
+        "introduction_commit": resolution.intro,
+        "kernel_target": resolution.kernel_target,
+        "selection": (
+            "exact-series-profile"
+            if resolution.ref == f"{resolution.kernel_target}/zen-sauce"
+            else "nearest-older-series-profile"
+        ),
         "output": str(output),
-        "files": files,
-        "hunks": hunks,
-        "excluded_thp_hunks": excluded_thp_hunks,
+        "files": resolution.files,
+        "hunks": resolution.hunks,
+        "profile_hunks": resolution.profile_hunks,
+        "excluded_thp_hunks": resolution.excluded_thp_hunks,
         "thp_policy": "preserved-unchanged",
+        "compatibility_sources": [
+            {key: value for key, value in source.items() if key != "patch"}
+            for source in resolution.compatibility_sources
+        ],
         "sha256": hashlib.sha256(content).hexdigest(),
         "size": len(content),
     }
@@ -348,49 +603,56 @@ def main() -> None:
     _RESOLVE_DEADLINE = time.monotonic() + TOTAL_RESOLVE_TIMEOUT
 
     try:
-        patch, head, intro, base, files, hunks, excluded = fetch_profile(args.checkout)
+        resolution = fetch_profile(args.checkout)
     except ResolveError as exc:
         raise SystemExit(f"Zen interactive resolver failed: {exc}") from exc
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.provenance.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(patch, encoding="utf-8")
+    args.output.write_text(resolution.patch, encoding="utf-8")
     digest = hashlib.sha256(args.output.read_bytes()).hexdigest()
     args.provenance.write_text(
         "\n".join(
             [
                 "Component: Zen interactive tuning profile",
                 f"Repository: {REPO}",
-                f"Ref: {REF}",
-                f"Commit: {head}",
-                f"Introduction commit: {intro}",
-                f"Diff base: {base}",
-                f"Kernel target: {KERNEL_TARGET}",
-                "Selection: nearest official series; symbol-gated hunks only",
+                f"Ref: {resolution.ref}",
+                f"Commit: {resolution.head}",
+                f"Introduction commit: {resolution.intro}",
+                f"Diff base: {resolution.base}",
+                f"Kernel target: {resolution.kernel_target}",
+                "Selection: newest exact or nearest older official series",
                 "Discovery: introduction-commit files at current HEAD",
+                "Compatibility commits: latest matching history on selected series",
                 "THP policy: preserved unchanged; all THP hunks excluded",
-                f"Excluded THP hunks: {excluded}",
-                f"Files: {', '.join(files)}",
-                f"Hunks: {hunks}",
+                f"Excluded THP hunks: {resolution.excluded_thp_hunks}",
+                f"Files: {', '.join(resolution.files)}",
+                f"Profile hunks: {resolution.profile_hunks}",
+                f"Total hunks: {resolution.hunks}",
                 f"SHA256: {digest}",
             ]
         )
         + "\n",
         encoding="utf-8",
     )
+    with args.provenance.open("a", encoding="utf-8") as provenance:
+        for source in resolution.compatibility_sources:
+            provenance.write(
+                "Compatibility commit: "
+                f"{source['name']} {source['commit']} "
+                f"({source['path']}) {source['subject']}\n"
+            )
+            provenance.write(f"Compatibility SHA256: {source['sha256']}\n")
     update_lock(
         args.lock,
         output=args.output,
-        head=head,
-        intro=intro,
-        base=base,
-        files=files,
-        hunks=hunks,
-        excluded_thp_hunks=excluded,
+        resolution=resolution,
     )
     print(
-        f"Resolved official Zen interactive profile {head}: {hunks} hunks in "
-        f"{len(files)} files; excluded {excluded} THP hunks",
+        f"Resolved official Zen interactive profile {resolution.head} from "
+        f"{resolution.ref}: {resolution.hunks} hunks in {len(resolution.files)} "
+        f"files; added {len(resolution.compatibility_sources)} compatibility "
+        f"commits; excluded {resolution.excluded_thp_hunks} THP hunks",
         flush=True,
     )
 

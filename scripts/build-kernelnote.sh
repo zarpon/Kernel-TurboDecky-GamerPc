@@ -59,11 +59,15 @@ replace_once(
     '''KERNEL_DEFAULT_CMDLINE=(
   "mitigations=off"
   "nowatchdog"
+  "intel_pstate=passive"
+  "amd_pstate=passive"
 )
 ''',
     '''KERNEL_DEFAULT_CMDLINE=(
   "mitigations=off"
   "nowatchdog"
+  "intel_pstate=passive"
+  "amd_pstate=passive"
   "cpuidle.governor=nap"
 )
 '''
@@ -333,6 +337,8 @@ assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"
 replace_once(
     'assert_cmdline_token "nowatchdog"\n',
     '''assert_cmdline_token "nowatchdog"
+assert_cmdline_token "intel_pstate=passive"
+assert_cmdline_token "amd_pstate=passive"
 assert_cmdline_token "cpuidle.governor=nap"
 '''
 )
