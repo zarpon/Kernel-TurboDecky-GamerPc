@@ -9,6 +9,8 @@ python3 -m py_compile \
   "$ROOT/scripts/resolve-latest-stable.py" \
   "$ROOT/scripts/resolve-patch-sources.py" \
   "$ROOT/scripts/resolve-zen-interactive.py" \
+  "$ROOT/scripts/update-marie-fallback.py" \
+  "$ROOT/scripts/validate-marie-fallback.py" \
   "$ROOT/scripts/apply-dynamic-patch-sources.py" \
   "$ROOT/scripts/apply-validation-modules.py" \
   "$ROOT/scripts/patch-external-module-toolchain.py" \
@@ -24,6 +26,9 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
+  "$ROOT/tests/test_marie_version_reporting.py" \
+  "$ROOT/tests/test_marie_local_fallback.py" \
+  "$ROOT/tests/test_marie_fallback_updater.py" \
   "$ROOT/tests/test_bore_liquorix_port.py" \
   "$ROOT/tests/test_bore_stable_port.py" \
   "$ROOT/tests/test_bore_stable_finalizer.py" \
@@ -58,6 +63,11 @@ fi
 grep -Fq 'drivers/gpu/drm/amd/amdgpu/amdgpu.ko' "$ROOT/scripts/apply-validation-modules.py"
 grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
 grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
+grep -Fq 'local_fallback_patch' "$ROOT/config/patch-sources.json"
+test -s "$ROOT/patches/fallback/lru_marie.patch"
+python3 "$ROOT/scripts/validate-marie-fallback.py" \
+  --patch "$ROOT/patches/fallback/lru_marie.patch" \
+  --metadata "$ROOT/patches/fallback/lru_marie.json"
 grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 grep -Fq 'KERNEL_VERSION' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-source-resolution.log' "$ROOT/scripts/apply-zarpon-generic-name.py"

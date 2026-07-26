@@ -10,7 +10,7 @@ os scripts de geração do `Kernel-TurboDecky-GamerPc`.
 | --- | --- | --- |
 | BORE 6.8.0-rc1 | `bore` + `patches/bore/7.1.4-bore-6.8.0-rc1.patch` | Equivalente compatível; fonte oficial é resolvida por série e o port revisado é validado por SHA-256 |
 | BORE `sched-ext` coexistence fix | `bore_sched_ext_coexistence` + `patches/bore/7.1.4-sched-ext-coexistence-fix.patch` | Coberto |
-| Marie LRU 0.6.7 | `marie` | Coberto por versão mais nova compatível, atualmente 0.7.7 para Linux 7.1 |
+| Marie LRU 0.6.7 | `marie` | Coberto por resolução dinâmica; o fallback local é sincronizado automaticamente com a versão upstream compatível mais recente |
 | ZRAM-IR 1.2 | `zram_ir` | Coberto por fonte compatível de Linux 7.1 |
 | POC Selector 2.6.1r2 | `poc` | Coberto por versão mais nova compatível, atualmente 2.6.2r2 |
 | NAP 0.5.0 | `nap` | Coberto por port controlado da fonte estável compatível |

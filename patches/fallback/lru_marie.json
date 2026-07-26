@@ -1,0 +1,15 @@
+{
+  "commit": "067bea686c31e4b588270e21de16b9f317f3cb46",
+  "kernel_series": "7.1",
+  "kernel_target": "7.1",
+  "kernel_version": "7.1.5",
+  "path": "patches/testing/0001-linux7.1-rc5-lru_marie-0.9.0.patch",
+  "project_version": "0.9.0",
+  "ref": "main",
+  "repo": "https://github.com/firelzrd/lru_marie.git",
+  "schema": 1,
+  "selected_path": "patches/testing/0001-linux7.1-rc5-lru_marie-0.9.0.patch",
+  "selection": "exact",
+  "sha256": "e71ba32363cec7da2186af37c55303de39b5b4aa1029b3f53721564aa446dfc7",
+  "size": 488963
+}

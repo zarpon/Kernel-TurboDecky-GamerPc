@@ -1,0 +1,222 @@
+name: Refresh Marie LRU fallback
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - config/patch-sources.json
+      - scripts/resolve-patch-sources.py
+      - scripts/update-marie-fallback.py
+      - scripts/validate-marie-fallback.py
+      - patches/fallback/lru_marie.json
+      - .github/workflows/update-marie-fallback.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-marie-fallback
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    if: github.event_name != 'push' || github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Resolve latest stable Linux
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p logs
+          python3 scripts/resolve-latest-stable.py \
+            --github-env "$GITHUB_ENV" \
+            --github-output "$GITHUB_OUTPUT" \
+            --log-dir logs
+
+      - name: Refresh and validate fallback
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/update-marie-fallback.py \
+            --kernel-version "$KERNEL_VERSION" \
+            --kernel-series "$KERNEL_SERIES"
+          python3 scripts/validate-marie-fallback.py \
+            --patch patches/fallback/lru_marie.patch \
+            --metadata patches/fallback/lru_marie.json
+          python3 -m unittest -v \
+            tests.test_marie_local_fallback \
+            tests.test_marie_fallback_updater \
+            tests.test_marie_version_reporting
+          bash -n scripts/build-kernelnote-core.sh
+          git diff --check
+
+      - name: Publish fallback update
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if git diff --quiet -- \
+              patches/fallback/lru_marie.patch \
+              patches/fallback/lru_marie.json \
+              scripts/build-kernelnote-core.sh; then
+            echo "Marie fallback is already current"
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          repository = os.environ["REPOSITORY"]
+          owner = os.environ["REPOSITORY_OWNER"]
+          token = os.environ["GH_TOKEN"]
+          api = f"https://api.github.com/repos/{repository}"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "TurboDecky-Marie-Fallback",
+          }
+          files = [
+              "patches/fallback/lru_marie.patch",
+              "patches/fallback/lru_marie.json",
+              "scripts/build-kernelnote-core.sh",
+          ]
+
+          def request(
+              url: str,
+              *,
+              method: str = "GET",
+              payload: dict | None = None,
+          ):
+              data = None if payload is None else json.dumps(payload).encode()
+              req = urllib.request.Request(
+                  url, data=data, headers=headers, method=method
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=120) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode(errors="replace")
+                  exc.add_note(detail)
+                  raise
+
+          def publish(branch: str) -> None:
+              for relative in files:
+                  encoded = urllib.parse.quote(relative, safe="/")
+                  url = f"{api}/contents/{encoded}"
+                  sha = None
+                  try:
+                      current = request(
+                          f"{url}?ref={urllib.parse.quote(branch, safe='')}"
+                      )
+                      sha = current["sha"]
+                  except urllib.error.HTTPError as exc:
+                      if exc.code != 404:
+                          raise
+
+                  payload = {
+                      "message": f"Update Marie LRU fallback: {relative}",
+                      "content": base64.b64encode(
+                          Path(relative).read_bytes()
+                      ).decode(),
+                      "branch": branch,
+                  }
+                  if sha:
+                      payload["sha"] = sha
+                  request(url, method="PUT", payload=payload)
+                  print(f"published {relative} to {branch}", flush=True)
+
+          try:
+              publish("main")
+              print("Marie fallback updated directly on main", flush=True)
+          except urllib.error.HTTPError as exc:
+              if exc.code not in {403, 409, 422}:
+                  raise
+
+              branch = "automation/update-marie-fallback"
+              main_ref = request(f"{api}/git/ref/heads/main")
+              main_sha = main_ref["object"]["sha"]
+              branch_ref_url = (
+                  f"{api}/git/refs/heads/"
+                  f"{urllib.parse.quote(branch, safe='/')}"
+              )
+              try:
+                  request(branch_ref_url)
+                  request(
+                      branch_ref_url,
+                      method="PATCH",
+                      payload={"sha": main_sha, "force": True},
+                  )
+              except urllib.error.HTTPError as ref_exc:
+                  if ref_exc.code != 404:
+                      raise
+                  request(
+                      f"{api}/git/refs",
+                      method="POST",
+                      payload={
+                          "ref": f"refs/heads/{branch}",
+                          "sha": main_sha,
+                      },
+                  )
+
+              publish(branch)
+              version = json.loads(
+                  Path("patches/fallback/lru_marie.json").read_text(
+                      encoding="utf-8"
+                  )
+              )["project_version"]
+              title = f"Update Marie LRU fallback to {version}"
+              body = (
+                  "Automatically refreshes the maintained Marie LRU fallback "
+                  "from the latest compatible upstream patch."
+              )
+              query = urllib.parse.urlencode(
+                  {
+                      "state": "open",
+                      "head": f"{owner}:{branch}",
+                      "base": "main",
+                  }
+              )
+              pulls = request(f"{api}/pulls?{query}")
+              if pulls:
+                  request(
+                      f"{api}/pulls/{pulls[0]['number']}",
+                      method="PATCH",
+                      payload={"title": title, "body": body},
+                  )
+                  print(
+                      f"updated fallback PR #{pulls[0]['number']}", flush=True
+                  )
+              else:
+                  created = request(
+                      f"{api}/pulls",
+                      method="POST",
+                      payload={
+                          "title": title,
+                          "head": branch,
+                          "base": "main",
+                          "body": body,
+                      },
+                  )
+                  print(f"created fallback PR #{created['number']}", flush=True)
+          PY

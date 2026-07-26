@@ -291,7 +291,92 @@ def write_bytes(path: Path, data: bytes) -> None:
     os.replace(temp, path)
 
 
-def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, series_text: str) -> dict[str, Any]:
+
+def load_local_fallback(
+    spec: dict[str, Any],
+    manifest_root: Path | None,
+    component: str,
+    kernel: KernelVersion,
+) -> tuple[bytes, dict[str, Any]] | None:
+    patch_value = spec.get("local_fallback_patch")
+    metadata_value = spec.get("local_fallback_metadata")
+    if not patch_value or not metadata_value:
+        return None
+    if manifest_root is None:
+        raise ResolverError(f"local fallback root is unavailable for {component}")
+
+    patch_path = (manifest_root / str(patch_value)).resolve()
+    metadata_path = (manifest_root / str(metadata_value)).resolve()
+    try:
+        data = patch_path.read_bytes()
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ResolverError(f"unable to read local fallback for {component}: {exc}") from exc
+
+    if metadata.get("schema") != 1:
+        raise ResolverError(f"unsupported local fallback metadata for {component}")
+    validate_patch(data, component, list(spec.get("required_markers", [])))
+    actual_sha256 = sha256(data)
+    if metadata.get("sha256") != actual_sha256:
+        raise ResolverError(
+            f"local fallback SHA-256 mismatch for {component}: "
+            f"{actual_sha256} != {metadata.get('sha256')}"
+        )
+    if metadata.get("size") != len(data):
+        raise ResolverError(
+            f"local fallback size mismatch for {component}: "
+            f"{len(data)} != {metadata.get('size')}"
+        )
+
+    selected = str(metadata.get("selected_path", ""))
+    resolved_path = str(metadata.get("path", selected))
+    repo = str(metadata.get("repo", ""))
+    ref = str(metadata.get("ref", ""))
+    commit = str(metadata.get("commit", ""))
+    if not selected or not resolved_path or not repo or not ref:
+        raise ResolverError(f"local fallback metadata is incomplete for {component}")
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ResolverError(f"local fallback commit is invalid for {component}: {commit!r}")
+
+    target = extract_kernel_target(selected)
+    if compatibility_score(target, kernel)[0] <= 0:
+        raise ResolverError(
+            f"local fallback for {component} targets "
+            f"{target.text if target else 'unknown'} and is incompatible with {kernel.text}"
+        )
+    if spec.get("require_exact_series", False) and target and target.series != kernel.series:
+        raise ResolverError(
+            f"local fallback for {component} targets {target.text}, not {kernel.text}"
+        )
+
+    detected_version = project_version(selected, spec.get("project_version_regex"))
+    recorded_version = metadata.get("project_version")
+    if detected_version and recorded_version and detected_version != recorded_version:
+        raise ResolverError(
+            f"local fallback version mismatch for {component}: "
+            f"{detected_version} != {recorded_version}"
+        )
+
+    return data, {
+        "repo": repo,
+        "ref": ref,
+        "commit": commit,
+        "selected_path": selected,
+        "path": resolved_path,
+        "selection": "local-fallback",
+        "kernel_target": target.text if target else metadata.get("kernel_target"),
+        "project_version": recorded_version or detected_version,
+        "fallback_metadata": str(metadata_path),
+    }
+
+
+def resolve(
+    manifest: dict[str, Any],
+    output_dir: Path,
+    kernel: KernelVersion,
+    series_text: str,
+    manifest_root: Path | None = None,
+) -> dict[str, Any]:
     temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))
     repos_dir = temp_root / "repos"
     files_dir = temp_root / "files"
@@ -372,54 +457,61 @@ def resolve(manifest: dict[str, Any], output_dir: Path, kernel: KernelVersion, s
                             )
 
                 if not options:
-                    detail = " | ".join(ref_errors) if ref_errors else "no matching paths"
-                    expectation = "exact " if spec.get("require_exact_series", False) else ""
-                    raise ResolverError(
-                        f"no {expectation}compatible path found for {component} and Linux "
-                        f"{series_text}: {detail}"
+                    fallback = load_local_fallback(
+                        spec, manifest_root, component, kernel
                     )
-
-                _, repo_path, commit, ref, mode, selected, resolved_path = max(
-                    options, key=lambda item: item[0]
-                )
-                target = extract_kernel_target(selected)
-                if spec.get("require_exact_series", False) and target and target.series != kernel.series:
-                    raise ResolverError(
-                        f"{component} selected incompatible kernel target {target.text} "
-                        f"for Linux {series_text}"
+                    if fallback is None:
+                        detail = " | ".join(ref_errors) if ref_errors else "no matching paths"
+                        expectation = "exact " if spec.get("require_exact_series", False) else ""
+                        raise ResolverError(
+                            f"no {expectation}compatible path found for {component} and Linux "
+                            f"{series_text}: {detail}"
+                        )
+                    data, fallback_record = fallback
+                    write_bytes(output_path, data)
+                    record.update(fallback_record)
+                else:
+                    _, repo_path, commit, ref, mode, selected, resolved_path = max(
+                        options, key=lambda item: item[0]
                     )
-                data, confirmed_path = read_git_blob(repo_path, commit, selected)
-                if confirmed_path != resolved_path:
-                    raise ResolverError(
-                        f"resolved path changed during selection for {component}: "
-                        f"{resolved_path} != {confirmed_path}"
+                    target = extract_kernel_target(selected)
+                    if spec.get("require_exact_series", False) and target and target.series != kernel.series:
+                        raise ResolverError(
+                            f"{component} selected incompatible kernel target {target.text} "
+                            f"for Linux {series_text}"
+                        )
+                    data, confirmed_path = read_git_blob(repo_path, commit, selected)
+                    if confirmed_path != resolved_path:
+                        raise ResolverError(
+                            f"resolved path changed during selection for {component}: "
+                            f"{resolved_path} != {confirmed_path}"
+                        )
+                    if kind == "git_patch":
+                        validate_patch(data, component, list(spec.get("required_markers", [])))
+                    approved_sha256 = spec.get("approved_sha256")
+                    actual_sha256 = sha256(data)
+                    if approved_sha256 and actual_sha256 != approved_sha256:
+                        raise ResolverError(
+                            f"{component} selected current official source with SHA-256 "
+                            f"{actual_sha256}, but the reviewed local port requires "
+                            f"{approved_sha256}; refresh and validate the port"
+                        )
+                    write_bytes(output_path, data)
+                    record.update(
+                        {
+                            "repo": repo,
+                            "ref": ref,
+                            "commit": commit,
+                            "selected_path": selected,
+                            "path": resolved_path,
+                            "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",
+                            "repo_dir": f"repos/{repo_path.name}",
+                            "kernel_target": target.text if target else None,
+                            "project_version": project_version(
+                                selected, spec.get("project_version_regex")
+                            ),
+                        }
                     )
-                if kind == "git_patch":
-                    validate_patch(data, component, list(spec.get("required_markers", [])))
-                approved_sha256 = spec.get("approved_sha256")
-                actual_sha256 = sha256(data)
-                if approved_sha256 and actual_sha256 != approved_sha256:
-                    raise ResolverError(
-                        f"{component} selected current official source with SHA-256 "
-                        f"{actual_sha256}, but the reviewed local port requires "
-                        f"{approved_sha256}; refresh and validate the port"
-                    )
-                write_bytes(output_path, data)
-                record.update(
-                    {
-                        "repo": repo,
-                        "ref": ref,
-                        "commit": commit,
-                        "selected_path": selected,
-                        "path": resolved_path,
-                        "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",
-                        "repo_dir": f"repos/{repo_path.name}",
-                        "kernel_target": target.text if target else None,
-                        "project_version": project_version(
-                            selected, spec.get("project_version_regex")
-                        ),
-                    }
-                )
             elif kind == "http_patch":
                 values = {"kernel_version": kernel.text, "series": series_text}
                 errors: list[str] = []
@@ -487,7 +579,13 @@ def main() -> None:
         raise SystemExit("unsupported patch source manifest")
 
     try:
-        lock = resolve(manifest, args.output_dir.resolve(), kernel, args.kernel_series)
+        lock = resolve(
+    manifest,
+    args.output_dir.resolve(),
+    kernel,
+    args.kernel_series,
+    manifest_root=args.manifest.resolve().parent,
+)
     except ResolverError as exc:
         raise SystemExit(f"patch source resolution failed: {exc}") from exc
 
