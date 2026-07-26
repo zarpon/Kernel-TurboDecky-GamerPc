@@ -169,6 +169,11 @@ jobs:
           grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
           grep -Fq 'CONFIG_SCHED_BORE=y' logs/final.config
           grep -Fq 'CONFIG_ZEN_INTERACTIVE=y' logs/final.config
+          grep -Fq 'CONFIG_X86_INTEL_PSTATE=y' logs/final.config
+          grep -Fq 'CONFIG_X86_AMD_PSTATE=y' logs/final.config
+          grep -Fq 'CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2' logs/final.config
+          grep -Fq 'intel_pstate=passive' logs/final.config
+          grep -Fq 'amd_pstate=passive' logs/final.config
           python3 - <<'PY'
           import json
           from pathlib import Path

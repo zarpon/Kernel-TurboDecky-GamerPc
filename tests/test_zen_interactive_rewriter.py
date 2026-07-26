@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,7 +36,10 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
             path.write_text(CORE.read_text(encoding="utf-8"), encoding="utf-8")
             rewriter.rewrite(path)
             result = path.read_text(encoding="utf-8")
-            self.assertIn('ZEN_INTERACTIVE_REF="7.0/zen-sauce"', result)
+            self.assertIn(
+                'ZEN_INTERACTIVE_REF="${KERNEL_SERIES:-7.1}/zen-sauce"', result
+            )
+            self.assertIn("compatibility commits", result)
             self.assertIn("fetch_zen_interactive_profile", result)
             self.assertIn("apply_zen_interactive_profile", result)
             self.assertIn("assert_zen_patch_does_not_touch_thp", result)
@@ -147,11 +154,216 @@ index 5555555555555555555555555555555555555555..66666666666666666666666666666666
         self.assertEqual(command[:2], ["git", "diff-tree"])
         self.assertNotIn("grep", command)
 
+    def test_resolver_prefers_exact_series_and_falls_back_to_older_series(self) -> None:
+        refs = """a refs/heads/7.0/zen-sauce
+b refs/heads/7.1/zen-sauce
+c refs/heads/6.18/zen-sauce
+"""
+        with mock.patch.object(resolver, "run", return_value=refs):
+            self.assertEqual(
+                resolver.select_compatible_ref("7.1"),
+                ("7.1/zen-sauce", "7.1", "exact-series"),
+            )
+        with mock.patch.object(resolver, "run", return_value=refs):
+            self.assertEqual(
+                resolver.select_compatible_ref("7.2"),
+                ("7.1/zen-sauce", "7.1", "nearest-older-series"),
+            )
+
+    def test_resolver_materializes_current_compatibility_commits(self) -> None:
+        patches = {
+            "drivers/input/evdev.c": """diff --git a/drivers/input/evdev.c b/drivers/input/evdev.c
+--- a/drivers/input/evdev.c
++++ b/drivers/input/evdev.c
+@@ -1 +1 @@
+-old
++call_rcu(&client->rcu, evdev_reclaim_client);
+""",
+            "drivers/cpufreq/Kconfig.x86": """diff --git a/drivers/cpufreq/Kconfig.x86 b/drivers/cpufreq/Kconfig.x86
+--- a/drivers/cpufreq/Kconfig.x86
++++ b/drivers/cpufreq/Kconfig.x86
+@@ -1 +1 @@
+-select CPU_FREQ_GOV_SCHEDUTIL
++# dependency removed for REFLEX
+""",
+        }
+
+        def fake_run(args, **_kwargs):
+            if args[1] == "log":
+                return "commit-" + args[-1].replace("/", "-") + "\n"
+            if args[1] == "rev-parse":
+                return "parent\n"
+            if args[1] == "diff":
+                return patches[args[-1]]
+            if args[1] == "show":
+                return "ZEN compatibility commit\n"
+            raise AssertionError(args)
+
+        with mock.patch.object(resolver, "run", side_effect=fake_run):
+            sources = resolver.discover_compatibility_sources(
+                Path("checkout"), head="head"
+            )
+
+        self.assertEqual(
+            [source["name"] for source in sources],
+            ["evdev-call-rcu", "cpufreq-pstate-schedutil-dependency"],
+        )
+        self.assertTrue(all(source["sha256"] for source in sources))
+        self.assertIn("call_rcu(&client->rcu", sources[0]["patch"])
+        self.assertIn("CPU_FREQ_GOV_SCHEDUTIL", sources[1]["patch"])
+
+    def test_resolver_main_writes_patch_lock_and_provenance(self) -> None:
+        profile = resolver.ProfileResolution(
+            patch="diff --git a/init/Kconfig b/init/Kconfig\n",
+            head="head",
+            intro="intro",
+            base="base",
+            ref="7.1/zen-sauce",
+            kernel_target="7.1",
+            files=["drivers/input/evdev.c", "init/Kconfig"],
+            hunks=2,
+            profile_hunks=1,
+            excluded_thp_hunks=1,
+            compatibility_sources=[
+                {
+                    "name": "evdev-call-rcu",
+                    "path": "drivers/input/evdev.c",
+                    "commit": "compat",
+                    "parent_commit": "parent",
+                    "subject": "compatibility",
+                    "selection": "latest matching commit on selected official Zen series",
+                    "sha256": "digest",
+                    "size": 12,
+                    "patch": "diff --git a/drivers/input/evdev.c b/drivers/input/evdev.c\n",
+                }
+            ],
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "zen.patch"
+            provenance = root / "zen.provenance"
+            lock = root / "patch-lock.json"
+            lock.write_text('{"components": {}}\n', encoding="utf-8")
+            argv = sys.argv
+            sys.argv = [
+                "resolve-zen-interactive.py",
+                "--checkout",
+                str(root / "checkout"),
+                "--output",
+                str(output),
+                "--provenance",
+                str(provenance),
+                "--lock",
+                str(lock),
+            ]
+            try:
+                with mock.patch.object(resolver, "fetch_profile", return_value=profile):
+                    resolver.main()
+            finally:
+                sys.argv = argv
+
+            self.assertEqual(output.read_text(encoding="utf-8"), profile.patch)
+            self.assertIn("Compatibility commit: evdev-call-rcu", provenance.read_text())
+            record = json.loads(lock.read_text(encoding="utf-8"))["components"][
+                "zen_interactive"
+            ]
+            self.assertEqual(record["compatibility_sources"][0]["commit"], "compat")
+            self.assertNotIn("patch", record["compatibility_sources"][0])
+
+    def test_resolver_fetch_profile_composes_a_local_series_checkout(self) -> None:
+        def git(*args: str, cwd: Path) -> None:
+            subprocess.run(["git", *args], cwd=cwd, check=True, stdout=subprocess.DEVNULL)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "zen.git"
+            repo.mkdir()
+            git("init", "--quiet", cwd=repo)
+            git("config", "user.email", "test@example.invalid", cwd=repo)
+            git("config", "user.name", "test", cwd=repo)
+
+            files = {
+                "init/Kconfig": "menu General\n",
+                "mm/page_alloc.c": "int page_alloc;\n",
+                "drivers/input/evdev.c": (
+                    "static void evdev_detach_client(void)\n"
+                    "{\n"
+                    "\tsynchronize_rcu();\n"
+                    "}\n"
+                ),
+                "drivers/cpufreq/Kconfig.x86": (
+                    "config X86_PSTATE\n"
+                    "\tselect CPU_FREQ_GOV_SCHEDUTIL\n"
+                ),
+            }
+            for relative, content in files.items():
+                path = repo / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            git("add", ".", cwd=repo)
+            git("commit", "-qm", "base", cwd=repo)
+
+            (repo / "init/Kconfig").write_text(
+                "menu General\n"
+                "config ZEN_INTERACTIVE\n"
+                '\tbool "Tune interactivity"\n'
+                "\tdefault y\n",
+                encoding="utf-8",
+            )
+            (repo / "mm/page_alloc.c").write_text(
+                "int page_alloc;\n"
+                "#ifdef CONFIG_ZEN_INTERACTIVE\n"
+                "int zen_page_alloc;\n"
+                "#endif\n",
+                encoding="utf-8",
+            )
+            git("add", ".", cwd=repo)
+            git("commit", "-qm", "introduce Zen interactive profile", cwd=repo)
+
+            (repo / "drivers/input/evdev.c").write_text(
+                "static void evdev_reclaim_client(void) {}\n"
+                "static void evdev_detach_client(void)\n"
+                "{\n"
+                "\tcall_rcu(&client->rcu, evdev_reclaim_client);\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            git("add", ".", cwd=repo)
+            git("commit", "-qm", "evdev call_rcu", cwd=repo)
+
+            (repo / "drivers/cpufreq/Kconfig.x86").write_text(
+                "config X86_PSTATE\n",
+                encoding="utf-8",
+            )
+            git("add", ".", cwd=repo)
+            git("commit", "-qm", "remove schedutil dependency", cwd=repo)
+            git("update-ref", "refs/heads/7.1/zen-sauce", "HEAD", cwd=repo)
+
+            checkout = root / "checkout"
+            original_repo = resolver.REPO
+            resolver.REPO = str(repo)
+            try:
+                with mock.patch.dict(os.environ, {"KERNEL_SERIES": "7.1"}):
+                    resolution = resolver.fetch_profile(checkout)
+            finally:
+                resolver.REPO = original_repo
+
+            self.assertEqual(resolution.ref, "7.1/zen-sauce")
+            self.assertEqual(
+                [source["name"] for source in resolution.compatibility_sources],
+                ["evdev-call-rcu", "cpufreq-pstate-schedutil-dependency"],
+            )
+            self.assertIn("config ZEN_INTERACTIVE", resolution.patch)
+            self.assertIn("call_rcu(&client->rcu", resolution.patch)
+            self.assertIn("CPU_FREQ_GOV_SCHEDUTIL", resolution.patch)
+
     def test_resolver_has_bounded_commands_and_total_deadline(self) -> None:
         source = RESOLVER.read_text(encoding="utf-8")
         self.assertIn("TOTAL_RESOLVE_TIMEOUT = 600", source)
         self.assertIn("subprocess.TimeoutExpired", source)
         self.assertIn('f"{intro}^"', source)
+        self.assertIn("git", source)
+        self.assertIn("compatibility_sources", source)
         self.assertNotIn('["git", "grep", "-l", SYMBOL, head, "--"]', source)
 
 

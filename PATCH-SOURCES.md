@@ -53,10 +53,15 @@ compilação independente.
 ## Perfil Zen interativo sem alterações em THP
 
 `CONFIG_ZEN_INTERACTIVE=y` é obtido da branch oficial
-[`zen-kernel/zen-kernel:7.0/zen-sauce`](https://github.com/zen-kernel/zen-kernel/tree/7.0/zen-sauce),
-pois ainda não existe uma branch `7.1/zen-sauce`. O resolvedor segue o HEAD
-dessa branch, localiza o commit que introduziu o perfil e gera um patch mínimo
-apenas com hunks condicionados por `CONFIG_ZEN_INTERACTIVE`.
+[`zen-kernel/zen-kernel:<série>/zen-sauce`](https://github.com/zen-kernel/zen-kernel/branches),
+selecionando a série estável exata ou a série oficial anterior mais próxima. O
+resolvedor segue o HEAD atual dessa branch, localiza o commit que introduziu o
+perfil e gera um patch mínimo apenas com hunks condicionados por
+`CONFIG_ZEN_INTERACTIVE`. Ele também busca na história da mesma branch os
+commits compatíveis de `evdev` (`call_rcu`) e do Kconfig dos drivers P-State,
+que não pertencem ao hunk condicionado do perfil. Esses commits são
+materializados novamente a cada build e registrados no `patch-lock.json` com
+commit, caminho e SHA-256; não são patches estáticos adicionados ao repositório.
 
 A política de THP permanece independente do perfil Zen:
 
@@ -66,6 +71,8 @@ A política de THP permanece independente do perfil Zen:
   build falha se houver qualquer diferença;
 - o lock registra `thp_policy: preserved-unchanged` e a quantidade de hunks THP
   excluídos;
+- o lock registra a série selecionada e as fontes dos commits de compatibilidade
+  Zen que completam o perfil;
 - a configuração e os parâmetros THP já definidos pelo projeto não são
   substituídos, redefinidos nem condicionados por `CONFIG_ZEN_INTERACTIVE`.
 

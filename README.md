@@ -38,7 +38,10 @@ ou a verificação deve ser desativada.
   futex ao recalcular o deadline da tarefa. Ele não transforma o kernel em
   PREEMPT_RT nem altera as classes SCHED_FIFO/SCHED_RR.
 - **Resposta de frequência:** REFLEX acelera a transição de ocioso para ativo,
-  enquanto NAP escolhe estados de idle de forma adaptativa.
+  enquanto NAP escolhe estados de idle de forma adaptativa. Para o REFLEX
+  continuar controlando a política de frequência, `intel_pstate=passive` e
+  `amd_pstate=passive` são incorporados ao cmdline; o modo padrão do
+  `amd-pstate` também fica em `CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2`.
 - **I/O e carregamento:** ADIOS ajusta deadlines e lotes conforme a latência
   do dispositivo, favorecendo operações síncronas durante acesso intenso a
   disco.
@@ -84,12 +87,19 @@ Cada execução manual resolve primeiro o kernel estável e os patches upstream
 compatíveis mais recentes, registrando commits e SHA-256 exatos no
 `patch-lock.json` antes de gerar os pacotes.
 
+A matriz completa de equivalências com o `linux-charcoal-vulcano`, incluindo os
+patches específicos de Steam Deck que foram deliberadamente excluídos, está em
+[`PATCH-AUDIT.md`](PATCH-AUDIT.md).
+
 ## Patchset de desempenho
 
 - **BORE scheduler 6.8.0-rc1** — [firelzrd/bore-scheduler](https://github.com/firelzrd/bore-scheduler/tree/main/patches/testing): ajuste de prioridade CFS/EEVDF orientado pelo tempo de burst. O resolvedor consulta as árvores oficiais `testing` e `stable` para Linux 7.1 e seleciona a versão mais nova; o port revisado para Linux 7.1.4 fica em `patches/bore/7.1.4-bore-6.8.0-rc1.patch`. O SHA-256 do patch oficial precisa coincidir com o SHA revisado pelo port, portanto uma atualização upstream interrompe o build até o novo port ser validado. O lock também acompanha `0002-sched-ext-coexistence-fix.patch`; seu port local é aplicado logo após BORE, restaura `reweight_task()` e inclui o protótipo necessário para a compilação estrita.
 - **POC Selector** — [firelzrd/poc-selector](https://github.com/firelzrd/poc-selector): seleção eficiente de CPU ociosa considerando LLC e topologia.
 - **NAP CPUIdle** — [firelzrd/nap](https://github.com/firelzrd/nap): predição adaptativa do estado de idle.
 - **REFLEX CPUFreq** — [firelzrd/reflex](https://github.com/firelzrd/reflex): resposta rápida idle→busy combinada com PELT.
+- **Zen interativo** — a branch `zen-sauce` da série Linux compatível mais nova
+  é resolvida automaticamente; os commits atuais de `evdev` e P-State que
+  completam o perfil também ficam registrados no `patch-lock.json`.
 - **Marie LRU** — [firelzrd/lru_marie](https://github.com/firelzrd/lru_marie): reclaim adaptativo para desktops.
 - **ADIOS** — [firelzrd/adios](https://github.com/firelzrd/adios): scheduler de I/O adaptativo, embutido e padrão.
 - **ZRAM-IR** — [firelzrd/zram-ir](https://github.com/firelzrd/zram-ir): LZ4

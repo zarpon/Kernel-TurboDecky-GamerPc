@@ -51,6 +51,8 @@ MARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"
 KERNEL_DEFAULT_CMDLINE=(
   "mitigations=off"
   "nowatchdog"
+  "intel_pstate=passive"
+  "amd_pstate=passive"
 )
 
 case "$MODE" in
@@ -441,6 +443,12 @@ scripts/config --enable MQ_IOSCHED_ADIOS
 scripts/config --enable MQ_IOSCHED_DEFAULT_ADIOS
 scripts/config --module BLK_DEV_ZRAM
 
+# REFLEX is an external CPUFreq governor. Keep both vendor P-State drivers
+# available in passive mode so REFLEX remains the active policy controller.
+scripts/config --enable X86_INTEL_PSTATE
+scripts/config --enable X86_AMD_PSTATE
+scripts/config --set-val X86_AMD_PSTATE_DEFAULT_MODE 2
+
 # ThinLTO is mandatory for the final kernel. These symbols only survive
 # olddefconfig when Clang, LLD and the LLVM integrated assembler are active.
 scripts/config --disable LTO_NONE
@@ -487,10 +495,15 @@ assert_config "CONFIG_LTO_CLANG_THIN=y"
 assert_config "CONFIG_LRU_MARIE=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
+assert_config "CONFIG_X86_INTEL_PSTATE=y"
+assert_config "CONFIG_X86_AMD_PSTATE=y"
+assert_config "CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2"
 assert_config "CONFIG_CPU_MITIGATIONS=y"
 assert_config "CONFIG_CMDLINE_BOOL=y"
 assert_cmdline_token "mitigations=off"
 assert_cmdline_token "nowatchdog"
+assert_cmdline_token "intel_pstate=passive"
+assert_cmdline_token "amd_pstate=passive"
 
 if [[ "$MODE" == "validate" ]]; then
   assert_config "CONFIG_DEBUG_INFO_NONE=y"
