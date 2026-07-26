@@ -38,7 +38,22 @@ DEFAULT_COMMAND_TIMEOUT = 90
 FETCH_TIMEOUT = 180
 TOTAL_RESOLVE_TIMEOUT = 600
 MAX_HISTORY_DEPTH = 2048
+REMOTE_FETCH_RETRIES = 3
+REMOTE_RETRY_DELAY_SECONDS = 3
+REMOTE_LOW_SPEED_LIMIT = "1024"
+REMOTE_LOW_SPEED_TIME = "120"
 _RESOLVE_DEADLINE: float | None = None
+
+TRANSIENT_REMOTE_MARKERS = (
+    "operation too slow",
+    "early eof",
+    "connection reset",
+    "connection timed out",
+    "could not resolve host",
+    "the remote end hung up unexpectedly",
+    "curl 18",
+    "curl 28",
+)
 
 COMPATIBILITY_SPECS = (
     {
@@ -97,8 +112,13 @@ def run(
     started = time.monotonic()
     env = os.environ.copy()
     env.setdefault("GIT_TERMINAL_PROMPT", "0")
-    env.setdefault("GIT_HTTP_LOW_SPEED_LIMIT", "1024")
-    env.setdefault("GIT_HTTP_LOW_SPEED_TIME", "30")
+    # The resolver deliberately uses a blob-less partial clone. A later
+    # ``git show`` can therefore download a small promisor blob on demand.
+    # GitHub-hosted runners occasionally deliver that blob below Git's default
+    # low-speed window even though the connection is still healthy. Keep the
+    # limit bounded, but allow a slow transfer enough time to recover.
+    env["GIT_HTTP_LOW_SPEED_LIMIT"] = REMOTE_LOW_SPEED_LIMIT
+    env["GIT_HTTP_LOW_SPEED_TIME"] = REMOTE_LOW_SPEED_TIME
     try:
         completed = subprocess.run(
             args,
@@ -269,8 +289,38 @@ def filter_symbol_hunks(diff: str) -> tuple[str, list[str], int, int]:
     return result, files, kept_hunks, excluded_thp_hunks
 
 
+def is_transient_remote_error(error: str) -> bool:
+    lowered = error.lower()
+    return any(marker in lowered for marker in TRANSIENT_REMOTE_MARKERS)
+
+
 def read_file_at(checkout: Path, commit: str, path: str) -> str:
-    return run(["git", "show", f"{commit}:{path}"], cwd=checkout)
+    """Read a file from a partial clone, retrying failed lazy blob downloads.
+
+    The commit graph is present after the shallow fetch, but the blob itself is
+    intentionally omitted. ``git show`` consequently performs an HTTP request
+    through the promisor remote. A transient low-speed failure must not make a
+    build fail when the same official source can be downloaded on a retry.
+    Permanent errors (missing paths, invalid commits, and so on) are propagated
+    immediately so real resolver regressions remain visible.
+    """
+    command = ["git", "show", f"{commit}:{path}"]
+    for attempt in range(1, REMOTE_FETCH_RETRIES + 1):
+        try:
+            return run(command, cwd=checkout, timeout=FETCH_TIMEOUT)
+        except ResolveError as exc:
+            if attempt == REMOTE_FETCH_RETRIES or not is_transient_remote_error(
+                str(exc)
+            ):
+                raise
+            print(
+                "==> Zen resolver: transient promisor-blob download failure; "
+                f"retrying ({attempt}/{REMOTE_FETCH_RETRIES - 1})",
+                flush=True,
+            )
+            time.sleep(REMOTE_RETRY_DELAY_SECONDS)
+
+    raise AssertionError("unreachable retry loop")
 
 
 def locate_introduction(checkout: Path) -> str | None:
