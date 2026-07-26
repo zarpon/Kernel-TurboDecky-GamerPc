@@ -89,8 +89,8 @@ if grep -RIn --binary-files=without-match \
 fi
 
 # Exercise the exact CI pre-build rewrite chain on disposable script copies.
-# This catches stale cross-transformer anchors before any source checkout or
-# kernel compilation and leaves a named step in local-validation.log.
+# The source resolver still writes its lock beneath ROOT, so those temporary
+# resolver products are removed before the real CI rewrite chain starts.
 if [[ -n "${KERNEL_VERSION:-}" && -n "${KERNEL_SERIES:-}" ]]; then
   preflight_dir="$(mktemp -d)"
   trap 'rm -rf "$preflight_dir"' EXIT
@@ -121,7 +121,14 @@ if [[ -n "${KERNEL_VERSION:-}" && -n "${KERNEL_SERIES:-}" ]]; then
   run_rewriter final-bore-port \
     python3 "$ROOT/scripts/finalize-bore-stable-port.py" "$preflight_dir/core.sh"
   bash -n "$preflight_dir/core.sh" "$preflight_dir/build-kernelnote.sh"
-  rm -rf "$preflight_dir"
+
+  rm -rf "$preflight_dir" "$ROOT/.resolved-patches"
+  rm -f "$ROOT"/patches/bore/.resolved-*-bore-*.patch
+  rm -f \
+    "$ROOT/logs/patch-source-resolution.log" \
+    "$ROOT/logs/patch-source-rewrite.log" \
+    "$ROOT/logs/known-warning-fixes-rewrite.log" \
+    "$ROOT/logs/validation-modules-rewrite.log"
   trap - EXIT
 fi
 
