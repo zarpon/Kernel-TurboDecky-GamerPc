@@ -1,20 +1,124 @@
 #!/usr/bin/env python3
-"""Follow the resolved stable series and preserve VirtualBox host compatibility."""
+"""Follow the resolved stable series and preserve project compatibility ports."""
 
 from __future__ import annotations
 
+import os
+import re
 import sys
 from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+BORE_VERSION = "6.8.0-rc1"
+BORE_BASE_KERNEL = "7.1.4"
+BORE_SUPPORTED_KERNELS = {"7.1.4", "7.1.5"}
+BORE_BASE_PATCH = ROOT / "patches/bore/7.1.4-bore-6.8.0-rc1.patch"
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
     if count != 1:
-        raise SystemExit(f"{label}: expected exactly one anchor, found {count}: {old[:120]!r}")
+        raise SystemExit(
+            f"{label}: expected exactly one anchor, found {count}: {old[:120]!r}"
+        )
     return text.replace(old, new, 1)
 
 
-def patch_core(path: Path) -> None:
+def adapt_bore_text(text: str, kernel_version: str) -> str:
+    """Return the reviewed BORE port adjusted for a supported stable kernel.
+
+    Linux 7.1.5 removed util_est_update() from dequeue_task_fair() and warns
+    against referencing the task after dequeue_entities(DEQUEUE_DELAYED). The
+    BORE burst update is therefore placed before dequeue_entities() using the
+    new stable context. No fuzzy patching is introduced.
+    """
+
+    if kernel_version not in BORE_SUPPORTED_KERNELS:
+        supported = ", ".join(sorted(BORE_SUPPORTED_KERNELS))
+        raise SystemExit(
+            f"no reviewed BORE {BORE_VERSION} port for Linux {kernel_version}; "
+            f"supported: {supported}"
+        )
+    if kernel_version == BORE_BASE_KERNEL:
+        return text
+
+    text = replace_once(
+        text,
+        "Subject: [PATCH] sched: port BORE 6.8.0-rc1 to Linux 7.1.4",
+        f"Subject: [PATCH] sched: port BORE 6.8.0-rc1 to Linux {kernel_version}",
+        "BORE subject",
+    )
+    text = replace_once(
+        text,
+        "Port of the official BORE 7.1 test patch to Linux 7.1.4.",
+        f"Port of the official BORE 7.1 test patch to Linux {kernel_version}.",
+        "BORE description",
+    )
+
+    header = re.compile(
+        r"^@@[^\n]*@@ static bool dequeue_task_fair\(struct rq \*rq, "
+        r"struct task_struct \*p, int flags\)\n",
+        re.MULTILINE,
+    )
+    match = header.search(text)
+    if not match:
+        raise SystemExit("BORE dequeue_task_fair hunk was not found")
+
+    following = re.search(
+        r"^(?:@@ |diff --git )", text[match.end() :], re.MULTILINE
+    )
+    end = match.end() + (
+        following.start() if following else len(text[match.end() :])
+    )
+    old_hunk = text[match.start() : end]
+    required = (
+        "util_est_update(&rq->cfs, p, flags & DEQUEUE_SLEEP);",
+        "restart_burst_bore(p);",
+        "if (dequeue_entities(rq, &p->se, flags) < 0)",
+    )
+    missing = [token for token in required if token not in old_hunk]
+    if missing:
+        raise SystemExit(
+            f"unexpected BORE dequeue_task_fair hunk layout; missing {missing}"
+        )
+
+    new_hunk = """@@ -7427,6 +7523,19 @@ static bool dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
+ \tif (!p->se.sched_delayed)
+ \t\tutil_est_dequeue(&rq->cfs, p);
+ 
++#ifdef CONFIG_SCHED_BORE
++\t{
++\t\tstruct cfs_rq *cfs_rq = cfs_rq_of(&p->se);
++\t\tstruct sched_entity *se = &p->se;
++
++\t\tif ((flags & DEQUEUE_SLEEP) && entity_is_task(se)) {
++\t\t\tif (cfs_rq->curr == se)
++\t\t\t\tupdate_curr(cfs_rq);
++\t\t\trestart_burst_bore(p);
++\t\t}
++\t}
++#endif /* CONFIG_SCHED_BORE */
++
+ \tif (dequeue_entities(rq, &p->se, flags) < 0)
+ \t\treturn false;
+ 
+"""
+    return text[: match.start()] + new_hunk + text[end:]
+
+
+def materialize_bore_port(kernel_version: str) -> Path:
+    source = BORE_BASE_PATCH.read_text(encoding="utf-8")
+    adapted = adapt_bore_text(source, kernel_version)
+    destination = (
+        BORE_BASE_PATCH.parent
+        / f".resolved-{kernel_version}-bore-{BORE_VERSION}.patch"
+    )
+    destination.write_text(adapted, encoding="utf-8")
+    return destination
+
+
+def patch_core(path: Path, bore_patch: Path, kernel_version: str) -> None:
     source = path.read_text(encoding="utf-8")
     replacements = {
         "linux-tkg-patches/7.1/": "linux-tkg-patches/${KERNEL_SERIES}/",
@@ -38,6 +142,27 @@ def patch_core(path: Path) -> None:
             raise SystemExit(f"latest-stable patch-series anchor missing: {old!r}")
         source = source.replace(old, new)
 
+    relative_bore = bore_patch.relative_to(ROOT).as_posix()
+    source = replace_once(
+        source,
+        'BORE_PATCH="$ROOT/patches/bore/7.1.4-bore-6.8.0-rc1.patch"',
+        f'BORE_PATCH="$ROOT/{relative_bore}"',
+        "resolved BORE patch path",
+    )
+    source = replace_once(
+        source,
+        "grep -Fq 'sched: port BORE 6.8.0-rc1 to Linux 7.1.4' \"$BORE_PATCH\"",
+        f"grep -Fq 'sched: port BORE 6.8.0-rc1 to Linux {kernel_version}' \"$BORE_PATCH\"",
+        "resolved BORE subject assertion",
+    )
+    source = source.replace(
+        "Applying the reviewed BORE 6.8.0-rc1 Linux 7.1.4 port",
+        f"Applying the reviewed BORE 6.8.0-rc1 Linux {kernel_version} port",
+    )
+    source = source.replace(
+        "BORE 6.8.0-rc1 for Linux 7.1.4",
+        f"BORE 6.8.0-rc1 for Linux {kernel_version}",
+    )
     path.write_text(source, encoding="utf-8")
 
 
@@ -107,10 +232,14 @@ assert_cmdline_token "kvm.enable_virt_at_load=0"
 
 def main() -> None:
     if len(sys.argv) != 2:
-        raise SystemExit("usage: apply-latest-stable-series.py <generated-core-script>")
+        raise SystemExit(
+            "usage: apply-latest-stable-series.py <generated-core-script>"
+        )
 
+    kernel_version = os.environ.get("KERNEL_VERSION", BORE_BASE_KERNEL)
+    bore_patch = materialize_bore_port(kernel_version)
     core = Path(sys.argv[1])
-    patch_core(core)
+    patch_core(core, bore_patch, kernel_version)
     patch_wrapper(core.with_name("build-kernelnote.sh"))
 
 
