@@ -66,6 +66,12 @@ NAP_COMMIT="b4ca3378854a067bb639c60d9d8175ecc0a804bf"
 NAP_PATCH_PATH="patches/stable/0001-6.18.3-nap-v0.5.0.patch"
 NAP_DIR="$WORKDIR/nap"
 NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"
+
+# LZ4KDR is resolved from current upstream first and uses the reviewed Linux
+# 7.1.5 port only when the selected upstream source is from another series.
+# The zswap adapter remains separate from the zram backend.
+LZ4KDR_PATCH="$PATCHDIR/25-lz4kdr.patch"
+LZ4KDR_ZSWAP_PATCH="$PATCHDIR/26-lz4kdr-zswap.patch"
 '''
 )
 
@@ -195,6 +201,54 @@ replace_once(
   echo "==> ZRAM-IR 1.2 patch applied successfully"
 }
 
+apply_lz4kdr_patch() {
+  local file="$1"
+
+  echo "==> Applying LZ4KDR ${PATCH_LZ4KDR_VERSION} zram backend"
+  if ! git apply --check --whitespace=error-all "$file" \
+      > "$LOGDIR/25-lz4kdr.dry-run.log" 2>&1; then
+    cat "$LOGDIR/25-lz4kdr.dry-run.log"
+    echo "LZ4KDR port is not applicable without fuzz; review the port for this kernel" >&2
+    return 1
+  fi
+  git apply --whitespace=error-all "$file" \
+    | tee "$LOGDIR/25-lz4kdr.apply.log"
+  git diff --check -- drivers/block/zram lib/lz4kdr include/linux/lz4kdr.h \
+    | tee "$LOGDIR/25-lz4kdr-diff-check.log"
+  test -s drivers/block/zram/backend_lz4kdr.c
+  test -s lib/lz4kdr/lz4kdr_encode.c
+  test -s lib/lz4kdr/lz4kdr_decode.c
+  grep -Fq 'config ZRAM_BACKEND_LZ4KDR' drivers/block/zram/Kconfig
+  grep -Fq 'config ZRAM_DEF_COMP_LZ4KDR' drivers/block/zram/Kconfig
+  grep -Fq 'lz4kdr_encode' lib/lz4kdr/lz4kdr_encode.c
+  echo "==> LZ4KDR zram backend applied successfully"
+}
+
+apply_lz4kdr_zswap_patch() {
+  local file="$1"
+
+  echo "==> Applying LZ4KDR ${PATCH_LZ4KDR_ZSWAP_VERSION} zswap adapter"
+  if grep -Eq '^diff --git a/(drivers/block/zram|lib/lz4kdr)/' "$file"; then
+    echo "LZ4KDR zswap adapter must not modify the zram backend" >&2
+    return 1
+  fi
+  if ! git apply --check --whitespace=error-all "$file" \
+      > "$LOGDIR/26-lz4kdr-zswap.dry-run.log" 2>&1; then
+    cat "$LOGDIR/26-lz4kdr-zswap.dry-run.log"
+    echo "LZ4KDR zswap port is not applicable without fuzz; review the adapter" >&2
+    return 1
+  fi
+  git apply --whitespace=error-all "$file" \
+    | tee "$LOGDIR/26-lz4kdr-zswap.apply.log"
+  git diff --check -- crypto/Kconfig crypto/Makefile crypto/lz4kdr.c mm/Kconfig \
+    | tee "$LOGDIR/26-lz4kdr-zswap-diff-check.log"
+  test -s crypto/lz4kdr.c
+  grep -Fq 'CRYPTO_LZ4KDR' crypto/Kconfig
+  grep -Fq 'crypto_register_acomp' crypto/lz4kdr.c
+  grep -Fq 'ZSWAP_COMPRESSOR_DEFAULT_LZ4KDR' mm/Kconfig
+  echo "==> LZ4KDR zswap adapter applied successfully"
+}
+
 apply_poc_patch() {
   local file="$1" status=0
 
@@ -287,6 +341,8 @@ apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_poc_patch "$POC_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 apply_zram_ir_patch "$ZRAM_IR_PATCH"
+apply_lz4kdr_patch "$LZ4KDR_PATCH"
+apply_lz4kdr_zswap_patch "$LZ4KDR_ZSWAP_PATCH"
 apply_nap_patch "$NAP_PATCH"
 '''
 )
@@ -296,6 +352,7 @@ replace_once(
     '''scripts/config --module ZRAM
 scripts/config --enable ZRAM_MULTI_COMP
 scripts/config --enable ZRAM_BACKEND_LZ4
+scripts/config --enable ZRAM_BACKEND_LZ4KDR
 scripts/config --enable ZRAM_BACKEND_ZSTD
 scripts/config --disable ZRAM_DEF_COMP_LZORLE
 scripts/config --disable ZRAM_DEF_COMP_LZO
@@ -303,7 +360,9 @@ scripts/config --disable ZRAM_DEF_COMP_LZ4HC
 scripts/config --disable ZRAM_DEF_COMP_ZSTD
 scripts/config --disable ZRAM_DEF_COMP_DEFLATE
 scripts/config --disable ZRAM_DEF_COMP_842
-scripts/config --enable ZRAM_DEF_COMP_LZ4
+scripts/config --disable ZRAM_DEF_COMP_LZ4
+scripts/config --enable ZRAM_DEF_COMP_LZ4KDR
+scripts/config --enable CRYPTO_LZ4KDR
 scripts/config --enable SCHED_POC_SELECTOR
 scripts/config --enable CPU_IDLE_GOV_NAP
 '''
@@ -341,8 +400,11 @@ replace_once(
 assert_config "CONFIG_ZRAM=m"
 assert_config "CONFIG_ZRAM_MULTI_COMP=y"
 assert_config "CONFIG_ZRAM_BACKEND_LZ4=y"
+assert_config "CONFIG_ZRAM_BACKEND_LZ4KDR=y"
 assert_config "CONFIG_ZRAM_BACKEND_ZSTD=y"
-assert_config "CONFIG_ZRAM_DEF_COMP_LZ4=y"
+assert_config "CONFIG_ZRAM_DEF_COMP_LZ4KDR=y"
+assert_config "CONFIG_CRYPTO_LZ4KDR=y"
+assert_disabled_or_absent ZRAM_DEF_COMP_LZ4
 assert_config "CONFIG_SCHED_POC_SELECTOR=y"
 assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"
 '''

@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "component": "lz4kdr_zswap",
+  "kernel_target": "7.1.5",
+  "project_version": "1.0",
+  "sha256": "5af8ca891cd7ed6eb942b1ee334b13c8eeb1d51ec3be6798e9cb83a896849b0f",
+  "size": 6573
+}
