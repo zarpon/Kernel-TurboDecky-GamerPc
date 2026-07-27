@@ -12,6 +12,8 @@ os scripts de geração do `Kernel-TurboDecky-GamerPc`.
 | BORE `sched-ext` coexistence fix | `bore_sched_ext_coexistence` + `patches/bore/7.1.4-sched-ext-coexistence-fix.patch` | Coberto |
 | Marie LRU 0.6.7 | `marie` | Coberto por resolução dinâmica; o fallback local é sincronizado automaticamente com a versão upstream compatível mais recente |
 | ZRAM-IR 1.2 | `zram_ir` | Coberto por fonte compatível de Linux 7.1 |
+| LZ4KDR zram 1.3 | `lz4kdr` | Fonte upstream é buscada primeiro; o port revisado para Linux 7.1.5 é usado somente quando a fonte mais próxima é de outra série |
+| LZ4KDR zswap adapter 1.0 | `lz4kdr_zswap` | Adaptador separado para `crypto_acomp`; não altera `drivers/block/zram` nem `lib/lz4kdr` |
 | POC Selector 2.6.1r2 | `poc` | Coberto por versão mais nova compatível, atualmente 2.6.2r2 |
 | NAP 0.5.0 | `nap` | Coberto por port controlado da fonte estável compatível |
 | ADIOS 3.2.0 e patch de default | `adios` | Coberto; default ADIOS continua explícito |

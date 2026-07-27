@@ -132,6 +132,10 @@ def file_url(record: dict[str, Any]) -> str:
     return f'file://$RESOLVED_PATCH_ROOT/{record["output"]}'
 
 
+def file_path(record: dict[str, Any]) -> str:
+    return f'$RESOLVED_PATCH_ROOT/{record["output"]}'
+
+
 def project_version(record: dict[str, Any], fallback: str) -> str:
     value = record.get("project_version")
     return str(value) if value else fallback
@@ -257,10 +261,19 @@ def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
         if path_var in text:
             text = replace_assignment(text, path_var, str(record["path"]))
 
+    for variable, name in (
+        ("LZ4KDR_PATCH", "lz4kdr"),
+        ("LZ4KDR_ZSWAP_PATCH", "lz4kdr_zswap"),
+    ):
+        if f"{variable}=" in text:
+            text = replace_assignment(text, variable, file_path(component(lock, name)))
+
     versions = {
         "zram_ir": project_version(component(lock, "zram_ir"), "unknown"),
         "poc": project_version(component(lock, "poc"), "unknown"),
         "nap": project_version(component(lock, "nap"), "unknown"),
+        "lz4kdr": project_version(component(lock, "lz4kdr"), "unknown"),
+        "lz4kdr_zswap": project_version(component(lock, "lz4kdr_zswap"), "unknown"),
     }
     anchor = 'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"\n'
     position = text.find(anchor)
@@ -270,6 +283,8 @@ def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
         f'PATCH_ZRAM_IR_VERSION="{versions["zram_ir"]}"\n'
         + f'PATCH_POC_VERSION="{versions["poc"]}"\n'
         + f'PATCH_NAP_VERSION="{versions["nap"]}"\n'
+        + f'PATCH_LZ4KDR_VERSION="{versions["lz4kdr"]}"\n'
+        + f'PATCH_LZ4KDR_ZSWAP_VERSION="{versions["lz4kdr_zswap"]}"\n'
     )
     position += len(anchor)
     text = text[:position] + insertion + text[position:]
@@ -295,7 +310,7 @@ def validate_lock(lock: dict[str, Any]) -> None:
         raise RewriteError("unsupported patch lock schema")
     required = {
         "bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
-        "vram", "liquorix_config", *REQUESTED.keys(),
+        "lz4kdr", "lz4kdr_zswap", "vram", "liquorix_config", *REQUESTED.keys(),
     }
     missing = sorted(required - set(lock.get("components", {})))
     if missing:

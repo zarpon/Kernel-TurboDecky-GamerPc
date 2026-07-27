@@ -370,6 +370,180 @@ def load_local_fallback(
     }
 
 
+def _manifest_path(manifest_root: Path, value: str, component: str) -> Path:
+    """Resolve a checked-in artifact path and keep its lock representation portable."""
+    path = (manifest_root / value).resolve()
+    allowed_root = manifest_root.resolve().parent
+    try:
+        path.relative_to(allowed_root)
+    except ValueError as exc:
+        raise ResolverError(
+            f"local artifact for {component} escapes the manifest root: {value!r}"
+        ) from exc
+    return path
+
+
+def _read_local_patch(
+    spec: dict[str, Any],
+    manifest_root: Path | None,
+    component: str,
+    kernel: KernelVersion,
+    *,
+    patch_key: str,
+    metadata_key: str,
+    exact_kernel: bool,
+) -> tuple[bytes, dict[str, Any]] | None:
+    """Read a reviewed local patch and verify its immutable metadata."""
+    patch_value = spec.get(patch_key)
+    metadata_value = spec.get(metadata_key)
+    if not patch_value or not metadata_value:
+        return None
+    if manifest_root is None:
+        raise ResolverError(f"local port root is unavailable for {component}")
+
+    patch_path = _manifest_path(manifest_root, str(patch_value), component)
+    metadata_path = _manifest_path(manifest_root, str(metadata_value), component)
+    try:
+        data = patch_path.read_bytes()
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ResolverError(f"unable to read local port for {component}: {exc}") from exc
+
+    if metadata.get("schema") != 1:
+        raise ResolverError(f"unsupported local port metadata for {component}")
+    if metadata.get("component") not in (None, component):
+        raise ResolverError(
+            f"local port metadata belongs to {metadata.get('component')!r}, not {component}"
+        )
+    validate_patch(data, component, list(spec.get("required_markers", [])))
+    actual_sha256 = sha256(data)
+    if metadata.get("sha256") != actual_sha256:
+        raise ResolverError(
+            f"local port SHA-256 mismatch for {component}: "
+            f"{actual_sha256} != {metadata.get('sha256')}"
+        )
+    if metadata.get("size") != len(data):
+        raise ResolverError(
+            f"local port size mismatch for {component}: "
+            f"{len(data)} != {metadata.get('size')}"
+        )
+
+    kernel_target = str(metadata.get("kernel_target", ""))
+    if exact_kernel and kernel_target != kernel.text:
+        raise ResolverError(
+            f"local port for {component} targets Linux {kernel_target or 'unknown'}, "
+            f"not {kernel.text}"
+        )
+    if not exact_kernel:
+        target = extract_kernel_target(kernel_target)
+        if compatibility_score(target, kernel)[0] <= 0:
+            raise ResolverError(
+                f"local port for {component} targets "
+                f"{target.text if target else 'unknown'} and is incompatible with {kernel.text}"
+            )
+
+    detected_version = metadata.get("project_version")
+    if detected_version is not None and not str(detected_version).strip():
+        raise ResolverError(f"local port version is empty for {component}")
+
+    manifest_resolved = manifest_root.resolve()
+    root = manifest_resolved if patch_path.is_relative_to(manifest_resolved) else manifest_resolved.parent
+    return data, {
+        "path": str(patch_path.relative_to(root)),
+        "metadata": str(metadata_path.relative_to(root)),
+        "kernel_target": kernel_target or None,
+        "project_version": detected_version,
+        "sha256": actual_sha256,
+        "size": len(data),
+    }
+
+
+def load_local_port(
+    spec: dict[str, Any],
+    manifest_root: Path | None,
+    component: str,
+    kernel: KernelVersion,
+    *,
+    upstream: dict[str, Any],
+) -> tuple[bytes, dict[str, Any]] | None:
+    """Load a port only after the current upstream source was selected."""
+    result = _read_local_patch(
+        spec,
+        manifest_root,
+        component,
+        kernel,
+        patch_key="local_port_patch",
+        metadata_key="local_port_metadata",
+        exact_kernel=True,
+    )
+    if result is None:
+        return None
+    data, port = result
+    if manifest_root is None:
+        raise ResolverError(f"local port root is unavailable for {component}")
+    metadata_path = _manifest_path(
+        manifest_root, str(spec["local_port_metadata"]), component
+    )
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    expected_upstream_sha = spec.get("local_port_upstream_sha256")
+    recorded_upstream_sha = metadata.get("upstream_sha256")
+    actual_upstream_sha = upstream["sha256"]
+    if expected_upstream_sha and expected_upstream_sha != actual_upstream_sha:
+        raise ResolverError(
+            f"{component} selected upstream SHA-256 {actual_upstream_sha}, but the "
+            f"reviewed local port expects {expected_upstream_sha}; refresh and validate the port"
+        )
+    if recorded_upstream_sha != actual_upstream_sha:
+        raise ResolverError(
+            f"{component} upstream changed: selected SHA-256 {actual_upstream_sha}, "
+            f"but the reviewed local port records {recorded_upstream_sha}; "
+            "refresh and validate the port"
+        )
+
+    for metadata_key, upstream_key in (
+        ("upstream_repository", "repository"),
+        ("upstream_ref", "ref"),
+        ("upstream_commit", "commit"),
+        ("upstream_path", "path"),
+    ):
+        recorded = metadata.get(metadata_key)
+        selected = upstream[upstream_key]
+        if recorded != selected:
+            raise ResolverError(
+                f"{component} upstream {upstream_key} changed: selected {selected!r}, "
+                f"but the reviewed local port records {recorded!r}; "
+                "refresh and validate the port"
+            )
+
+    port["upstream_sha256"] = actual_upstream_sha
+    port["upstream_commit"] = upstream["commit"]
+    port["upstream_path"] = upstream["path"]
+    return data, port
+
+
+def load_local_patch(
+    spec: dict[str, Any],
+    manifest_root: Path | None,
+    component: str,
+    kernel: KernelVersion,
+) -> tuple[bytes, dict[str, Any]]:
+    result = _read_local_patch(
+        spec,
+        manifest_root,
+        component,
+        kernel,
+        patch_key="local_patch",
+        metadata_key="local_metadata",
+        exact_kernel=True,
+    )
+    if result is None:
+        raise ResolverError(f"local patch metadata is incomplete for {component}")
+    data, record = result
+    record.update({"origin": "local-port", "selection": "local-port"})
+    return data, record
+
+
 def resolve(
     manifest: dict[str, Any],
     output_dir: Path,
@@ -496,7 +670,28 @@ def resolve(
                             f"{actual_sha256}, but the reviewed local port requires "
                             f"{approved_sha256}; refresh and validate the port"
                         )
-                    write_bytes(output_path, data)
+                    official_selection = mode if ref == refs[0] else f"{mode}-fallback-ref"
+                    upstream_record = {
+                        "repository": repo,
+                        "ref": ref,
+                        "commit": commit,
+                        "path": resolved_path,
+                        "sha256": actual_sha256,
+                        "size": len(data),
+                        "selection": official_selection,
+                    }
+                    ported = None
+                    if kind == "git_patch" and (
+                        target is None or target.series != kernel.series
+                    ):
+                        ported = load_local_port(
+                            spec,
+                            manifest_root,
+                            component,
+                            kernel,
+                            upstream=upstream_record,
+                        )
+
                     record.update(
                         {
                             "repo": repo,
@@ -504,7 +699,7 @@ def resolve(
                             "commit": commit,
                             "selected_path": selected,
                             "path": resolved_path,
-                            "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",
+                            "selection": official_selection,
                             "repo_dir": f"repos/{repo_path.name}",
                             "kernel_target": target.text if target else None,
                             "project_version": project_version(
@@ -512,6 +707,21 @@ def resolve(
                             ),
                         }
                     )
+                    if ported is None:
+                        write_bytes(output_path, data)
+                    else:
+                        port_data, port_record = ported
+                        write_bytes(output_path, port_data)
+                        record.update(
+                            {
+                                "origin": "local-port",
+                                "selection": "upstream-port",
+                                "kernel_target": kernel.text,
+                                "project_version": port_record.get("project_version"),
+                                "upstream": upstream_record,
+                                "port": port_record,
+                            }
+                        )
             elif kind == "http_patch":
                 values = {"kernel_version": kernel.text, "series": series_text}
                 errors: list[str] = []
@@ -541,6 +751,12 @@ def resolve(
                     )
                 write_bytes(output_path, data)
                 record.update({"url": selected_url, "selection": "first-valid"})
+            elif kind == "local_patch":
+                data, local_record = load_local_patch(
+                    spec, manifest_root, component, kernel
+                )
+                write_bytes(output_path, data)
+                record.update(local_record)
             else:
                 raise ResolverError(f"unknown component kind {kind!r} for {component}")
 

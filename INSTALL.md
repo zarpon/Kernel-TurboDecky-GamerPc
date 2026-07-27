@@ -71,7 +71,7 @@ política antes de usar o kernel em máquinas expostas ou de produção.
 
 Quando a distribuição gerencia `zram0` com `zram-generator`, o pacote
 `turbodecky-tuning` substitui somente a política de compressão antes da
-inicialização do dispositivo: LZ4 é o compressor primário e ZSTD é o
+inicialização do dispositivo: LZ4KDR é o compressor primário e ZSTD é o
 recompressor de prioridade `1`. O tamanho do dispositivo, a prioridade de swap
 e os demais parâmetros definidos pela distribuição são preservados.
 
@@ -84,5 +84,9 @@ cat /sys/block/zram0/comp_algorithm
 cat /sys/block/zram0/recomp_algorithm
 ```
 
-`[lz4]` identifica o compressor primário. Em `recomp_algorithm`, o ZSTD deve
+`[lz4kdr]` identifica o compressor primário. Em `recomp_algorithm`, o ZSTD deve
 aparecer configurado na prioridade `1`.
+
+O adaptador LZ4KDR do zswap é opt-in e não altera o backend da zram. Para
+utilizá-lo, acrescente `zswap.enabled=1 zswap.compressor=lz4kdr` à linha de
+comando do kernel; o compressor padrão do zswap permanece inalterado.

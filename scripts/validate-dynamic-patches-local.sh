@@ -26,6 +26,7 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
+  "$ROOT/tests/test_lz4kdr.py" \
   "$ROOT/tests/test_marie_version_reporting.py" \
   "$ROOT/tests/test_marie_local_fallback.py" \
   "$ROOT/tests/test_marie_fallback_updater.py" \
@@ -39,6 +40,8 @@ bash "$ROOT/tests/test_runtime_tuning.sh"
 
 grep -Fq '"bore"' "$ROOT/config/patch-sources.json"
 grep -Fq '"bore_sched_ext_coexistence"' "$ROOT/config/patch-sources.json"
+grep -Fq '"lz4kdr"' "$ROOT/config/patch-sources.json"
+grep -Fq '"lz4kdr_zswap"' "$ROOT/config/patch-sources.json"
 grep -Fq 'firelzrd/bore-scheduler' "$ROOT/config/patch-sources.json"
 grep -Fq '7.1.4-bore-6.8.0-rc1.patch' "$ROOT/scripts/build-kernelnote-core.sh"
 grep -Fq '7.1.4-sched-ext-coexistence-fix.patch' "$ROOT/scripts/build-kernelnote-core.sh"
@@ -52,6 +55,11 @@ grep -Fq 'amd_pstate=passive' "$ROOT/scripts/build-kernelnote-core.sh"
 grep -Fq 'CONFIG_X86_INTEL_PSTATE=y' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_X86_AMD_PSTATE=y' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2' "$ROOT/config/kernelnote.config"
+grep -Fq 'CONFIG_ZRAM_BACKEND_LZ4KDR=y' "$ROOT/config/kernelnote.config"
+grep -Fq 'CONFIG_ZRAM_DEF_COMP_LZ4KDR=y' "$ROOT/config/kernelnote.config"
+grep -Fq 'CONFIG_CRYPTO_LZ4KDR=y' "$ROOT/config/kernelnote.config"
+grep -Fq 'compression-algorithm = lz4kdr zstd' "$ROOT/packaging/90-turbodecky-zram.conf"
+grep -Fq 'lz4kdr priority 0 -> zstd priority 1' "$ROOT/packaging/configure-zram-ir"
 grep -Fq 'intel_pstate=passive' "$ROOT/config/kernelnote.config"
 grep -Fq 'amd_pstate=passive' "$ROOT/config/kernelnote.config"
 grep -Fq 'resolve-patch-sources.py' "$ROOT/scripts/apply-zarpon-generic-name.py"
@@ -72,6 +80,14 @@ grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 grep -Fq 'KERNEL_VERSION' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-source-resolution.log' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/resolve-patch-sources.py"
+grep -Fq 'local_port_upstream_sha256' "$ROOT/config/patch-sources.json"
+grep -Fq 'upstream-port' "$ROOT/scripts/resolve-patch-sources.py"
+grep -Fq 'apply_lz4kdr_patch' "$ROOT/scripts/build-kernelnote.sh"
+grep -Fq 'apply_lz4kdr_zswap_patch' "$ROOT/scripts/build-kernelnote.sh"
+test -s "$ROOT/patches/lz4kdr/7.1.5-lz4kdr-1.3.patch"
+test -s "$ROOT/patches/lz4kdr/7.1.5-lz4kdr-1.3.json"
+test -s "$ROOT/patches/lz4kdr/7.1.5-lz4kdr-zswap-1.0.patch"
+test -s "$ROOT/patches/lz4kdr/7.1.5-lz4kdr-zswap-1.0.json"
 grep -Fq 'kvm.enable_virt_at_load=0' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_INTEL=m' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"

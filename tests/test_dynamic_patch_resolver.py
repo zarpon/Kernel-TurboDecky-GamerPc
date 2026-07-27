@@ -272,7 +272,7 @@ class RewriterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             components = {}
-            git_names = {"bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "vram", "liquorix_config"}
+            git_names = {"bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "lz4kdr", "poc", "nap", "reflex", "vram", "liquorix_config"}
             requested = {
                 "c23_libbpf": "08-c23-libbpf.patch", "clear": "09-clear.patch",
                 "fsync": "10-fsync-futex-waitv.patch", "o3": "11-o3.patch",
@@ -289,10 +289,15 @@ class RewriterTests(unittest.TestCase):
                     "commit": "a" * 40, "path": f"patches/{name}.patch", "ref": "main",
                     "project_version": "9.9.9",
                 }
+            components["lz4kdr"]["output"] = "files/25-lz4kdr.patch"
             components["liquorix_config"]["kind"] = "git_file"
             components["liquorix_config"]["output"] = "files/liquorix.config"
             for name, output in requested.items():
                 components[name] = {"kind": "http_patch", "output": f"files/{output}"}
+            components["lz4kdr_zswap"] = {
+                "kind": "local_patch", "output": "files/26-lz4kdr-zswap.patch",
+                "project_version": "1.0",
+            }
             lock = {"schema": 1, "components": components}
             lock_path = tmp / "lock.json"
             for name in git_names:
@@ -302,6 +307,9 @@ class RewriterTests(unittest.TestCase):
                     output.write_text("CONFIG_GENERIC_CPU=y\n", encoding="utf-8")
                 else:
                     output.write_text(patch(f"{name} snapshot"), encoding="utf-8")
+            zswap_output = tmp / components["lz4kdr_zswap"]["output"]
+            zswap_output.parent.mkdir(parents=True, exist_ok=True)
+            zswap_output.write_text(patch("lz4kdr zswap snapshot"), encoding="utf-8")
             lock_path.write_text(json.dumps(lock), encoding="utf-8")
 
             requested_calls = "".join(
@@ -344,6 +352,8 @@ class RewriterTests(unittest.TestCase):
                 'POC_REPO="old"\nPOC_COMMIT="old"\nPOC_PATCH_PATH="old"\n'
                 'NAP_REPO="old"\nNAP_COMMIT="old"\nNAP_PATCH_PATH="old"\n'
                 'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"\n'
+                'LZ4KDR_PATCH="$PATCHDIR/25-lz4kdr.patch"\n'
+                'LZ4KDR_ZSWAP_PATCH="$PATCHDIR/26-lz4kdr-zswap.patch"\n'
                 'VRAM_PATCH_REPO="old"\nVRAM_PATCH_COMMIT="old"\nVRAM_PATCH_PATH="old"\n',
                 encoding="utf-8",
             )
@@ -358,6 +368,8 @@ class RewriterTests(unittest.TestCase):
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/bore', first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/bore_sched_ext_coexistence', first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/vram', first_wrapper)
+            self.assertIn('$RESOLVED_PATCH_ROOT/files/25-lz4kdr.patch', first_wrapper)
+            self.assertIn('$RESOLVED_PATCH_ROOT/files/26-lz4kdr-zswap.patch', first_wrapper)
             rewritten_lock = json.loads(lock_path.read_text())
             bore = rewritten_lock["components"]["bore"]
             self.assertRegex(bore["snapshot_commit"], r"^[0-9a-f]{40}$")
