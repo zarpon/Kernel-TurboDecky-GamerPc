@@ -47,9 +47,8 @@ ou a verificação deve ser desativada.
 - **I/O e carregamento:** ADIOS ajusta deadlines e lotes conforme a latência
   do dispositivo, favorecendo operações síncronas durante acesso intenso a
   disco.
-- **Memória:** Marie LRU reduz reclaim agressivo e thrashing; ZRAM-IR usa
-  LZ4KDR como compressor primário e ZSTD na recompressão para manter mais
-  páginas úteis sob pressão de memória.
+- **Memória:** Marie LRU reduz reclaim agressivo e thrashing; ZRAM-IR usa LZ4
+  e ZSTD para manter mais páginas úteis sob pressão de memória.
 - **Gerenciamento de VRAM:** o controlador `dmem` e o port TTM priorizam o
   despejo de buffers não protegidos e respeitam `dmem.low` e `dmem.min`. Em
   GPUs AMD sob pressão de VRAM, isso pode reduzir migrações indesejadas para
@@ -83,10 +82,8 @@ aplicar qualquer patch.
   completam o perfil também ficam registrados no `patch-lock.json`.
 - **Marie LRU** — [firelzrd/lru_marie](https://github.com/firelzrd/lru_marie): reclaim adaptativo para desktops.
 - **ADIOS** — [firelzrd/adios](https://github.com/firelzrd/adios): scheduler de I/O adaptativo, embutido e padrão.
-- **ZRAM-IR + LZ4KDR** — [firelzrd/zram-ir](https://github.com/firelzrd/zram-ir):
-  LZ4KDR primário e ZSTD como recompressor de prioridade `1`. O backend
-  LZ4KDR é portado para a série estável atual e também é exposto ao zswap;
-  `zswap.compressor=lz4kdr` o seleciona no boot. O pacote
+- **ZRAM-IR** — [firelzrd/zram-ir](https://github.com/firelzrd/zram-ir): LZ4
+  primário e ZSTD como recompressor de prioridade `1`. O pacote
   `turbodecky-tuning` instala um *drop-in* para o `zram-generator` que substitui
   a política de compressor da distribuição antes de `zram0` receber `disksize`,
   preservando o tamanho e a prioridade de swap configurados pelo sistema. Um

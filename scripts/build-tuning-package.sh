@@ -45,7 +45,7 @@ Recommends: grub2-common
 Description: Runtime, boot and external-module defaults for TurboDecky GamerPc
  Sets Marie memory defaults, selects ADIOS, applies the requested Transparent
  Hugepage policy, appends performance parameters to GRUB, configures every new
- zram device for ZRAM-IR with LZ4KDR primary compression and ZSTD priority-1
+ zram device for ZRAM-IR with LZ4 primary compression and ZSTD priority-1
  recompression, and installs the LLVM toolchain required to compile VirtualBox,
  DKMS and other external modules against this Clang kernel.
 EOF

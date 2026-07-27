@@ -36,8 +36,8 @@ if [ "$(cat "$sys/initstate" 2>/dev/null || printf 1)" != 0 ]; then
   exit 0
 fi
 
-if [ ! -w "$sys/comp_algorithm" ] || ! grep -qw lz4kdr "$sys/comp_algorithm"; then
-  log_notice "$name does not expose lz4kdr; ZRAM-IR setup skipped"
+if [ ! -w "$sys/comp_algorithm" ] || ! grep -qw lz4 "$sys/comp_algorithm"; then
+  log_notice "$name does not expose lz4; ZRAM-IR setup skipped"
   exit 0
 fi
 
@@ -46,7 +46,7 @@ if [ ! -w "$sys/recomp_algorithm" ] || ! grep -qw zstd "$sys/recomp_algorithm"; 
   exit 0
 fi
 
-printf '%s\n' lz4kdr > "$sys/comp_algorithm"
+printf '%s\n' lz4 > "$sys/comp_algorithm"
 printf '%s\n' 'algo=zstd priority=1' > "$sys/recomp_algorithm"
 
 # Sysfs shows the selected algorithm in brackets. Accept direct write forms
@@ -57,7 +57,7 @@ is_selected() {
   grep -Eq "(^|[[:space:]])\\[${algorithm}\\]([[:space:]]|$)|(^|[[:space:]])algo=${algorithm}([[:space:]]|$)|^${algorithm}$" "$path"
 }
 
-is_selected lz4kdr "$sys/comp_algorithm"
+is_selected lz4 "$sys/comp_algorithm"
 is_selected zstd "$sys/recomp_algorithm"
 
-log_notice "$name configured for ZRAM-IR: lz4kdr priority 0 -> zstd priority 1"
+log_notice "$name configured for ZRAM-IR: lz4 priority 0 -> zstd priority 1"

@@ -30,7 +30,7 @@ bash -n "$root/scripts/build-tuning-package.sh"
 sh -n "$helper"
 
 require_line "$zram_generator_dropin" "[zram0]"
-require_line "$zram_generator_dropin" "compression-algorithm = lz4kdr zstd"
+require_line "$zram_generator_dropin" "compression-algorithm = lz4 zstd"
 require_line "$zram_setup_dropin" "[Service]"
 require_line "$zram_setup_dropin" "ExecStartPre=/usr/lib/turbodecky/configure-zram-ir %I"
 
@@ -61,18 +61,18 @@ parser.read_string(base)
 parser.read(sys.argv[1], encoding="utf-8")
 
 zram0 = parser["zram0"]
-assert zram0["compression-algorithm"] == "lz4kdr zstd"
+assert zram0["compression-algorithm"] == "lz4 zstd"
 assert zram0["zram-size"] == "ram / 2"
 assert zram0["swap-priority"] == "100"
 assert zram0["fs-type"] == "swap"
 PY
 
 # Exercise the exact UDEV helper against regular files standing in for sysfs
-# and procfs. An uninitialized device must receive LZ4KDR + ZSTD priority 1.
+# and procfs. An uninitialized device must receive LZ4 + ZSTD priority 1.
 mkdir -p "$sandbox/sys/block/zram0" "$sandbox/proc/sys/vm" "$sandbox/bin"
 printf '0\n' > "$sandbox/sys/block/zram0/initstate"
-printf 'zstd lz4kdr\n' > "$sandbox/sys/block/zram0/comp_algorithm"
-printf 'zstd lz4kdr\n' > "$sandbox/sys/block/zram0/recomp_algorithm"
+printf 'zstd lz4\n' > "$sandbox/sys/block/zram0/comp_algorithm"
+printf 'zstd lz4\n' > "$sandbox/sys/block/zram0/recomp_algorithm"
 printf '0\n' > "$sandbox/proc/sys/vm/zram_recomp_immediate"
 printf '#!/bin/sh\nexit 0\n' > "$sandbox/bin/logger"
 chmod +x "$sandbox/bin/logger"
@@ -82,7 +82,7 @@ PATH="$sandbox/bin:$PATH" \
   TURBODECKY_PROC_SYS_ROOT="$sandbox/proc/sys" \
   sh "$helper" zram0
 require_value "$sandbox/proc/sys/vm/zram_recomp_immediate" "1"
-require_value "$sandbox/sys/block/zram0/comp_algorithm" "lz4kdr"
+require_value "$sandbox/sys/block/zram0/comp_algorithm" "lz4"
 require_value "$sandbox/sys/block/zram0/recomp_algorithm" "algo=zstd priority=1"
 
 # A later UDEV change event must reassert the sysctl but must not reset an
