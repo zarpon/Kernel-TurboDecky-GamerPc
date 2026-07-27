@@ -98,43 +98,6 @@
         "ZRAM_IR_VERSION"
       ]
     },
-    "lz4kdr": {
-      "kind": "git_patch",
-      "repo": "https://github.com/firelzrd/zram-ir.git",
-      "ref": "main",
-      "exact_globs": [
-        "patches/*linux{kernel_version}*lz4kdr*.patch",
-        "patches/*linux{series}*lz4kdr*.patch"
-      ],
-      "fallback_globs": [
-        "patches/stable/*lz4kdr*.patch",
-        "patches/testing/*lz4kdr*.patch",
-        "patches/*lz4kdr*.patch"
-      ],
-      "require_exact_series": false,
-      "output": "25-lz4kdr.patch",
-      "project_version_regex": "lz4kdr[-_]?([0-9]+(?:\\.[0-9]+)+)",
-      "required_markers": [
-        "ZRAM_BACKEND_LZ4KDR",
-        "ZRAM_DEF_COMP_LZ4KDR",
-        "lz4kdr_encode"
-      ],
-      "local_port_patch": "../patches/lz4kdr/7.1.5-lz4kdr-1.3.patch",
-      "local_port_metadata": "../patches/lz4kdr/7.1.5-lz4kdr-1.3.json",
-      "local_port_upstream_sha256": "854da8dcb96f511b38abdbe91f6214e29ac798e35a5b68258304055f82976bd3"
-    },
-    "lz4kdr_zswap": {
-      "kind": "local_patch",
-      "local_patch": "../patches/lz4kdr/7.1.5-lz4kdr-zswap-1.0.patch",
-      "local_metadata": "../patches/lz4kdr/7.1.5-lz4kdr-zswap-1.0.json",
-      "output": "26-lz4kdr-zswap.patch",
-      "required_markers": [
-        "CRYPTO_LZ4KDR",
-        "crypto_register_acomp",
-        "zswap.compressor=lz4kdr",
-        "ZSWAP_COMPRESSOR_DEFAULT_LZ4KDR"
-      ]
-    },
     "poc": {
       "kind": "git_patch",
       "repo": "https://github.com/firelzrd/poc-selector.git",

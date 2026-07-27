@@ -190,52 +190,6 @@ jobs:
           assert sched_ext['path'] == 'patches/additions/0002-sched-ext-coexistence-fix.patch'
           PY
 
-      - name: Verify LZ4KDR zram and zswap integration
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          grep -Fq 'LZ4KDR zram backend applied successfully' logs/build.log
-          grep -Fq 'LZ4KDR zswap adapter applied successfully' logs/build.log
-          grep -Fq 'CONFIG_ZRAM_BACKEND_LZ4KDR=y' logs/final.config
-          grep -Fq 'CONFIG_ZRAM_DEF_COMP_LZ4KDR=y' logs/final.config
-          grep -Fq 'CONFIG_CRYPTO_LZ4KDR=y' logs/final.config
-          if grep -Fq 'CONFIG_ZRAM_DEF_COMP_LZ4=y' logs/final.config; then
-            echo 'LZ4 must not remain the zram default' >&2
-            exit 1
-          fi
-          test -s .resolved-patches/files/25-lz4kdr.patch
-          test -s .resolved-patches/files/26-lz4kdr-zswap.patch
-          test -s work/linux/drivers/block/zram/backend_lz4kdr.c
-          test -s work/linux/lib/lz4kdr/lz4kdr_encode.c
-          test -s work/linux/lib/lz4kdr/lz4kdr_decode.c
-          test -s work/linux/crypto/lz4kdr.c
-          grep -Fq 'zram_recomp_immediate' work/linux/drivers/block/zram/zram_drv.c
-          if grep -Eq '^diff --git a/(drivers/block/zram|lib/lz4kdr)/' \
-              .resolved-patches/files/26-lz4kdr-zswap.patch; then
-            echo 'the zswap adapter unexpectedly changes the zram implementation' >&2
-            exit 1
-          fi
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          lock = json.loads(Path('logs/patch-lock.json').read_text(encoding='utf-8'))
-          kernel = lock['kernel']['version']
-          lz4kdr = lock['components']['lz4kdr']
-          assert lz4kdr['project_version'] == '1.3'
-          assert lz4kdr['selection'] in {'exact', 'exact-fallback-ref', 'fallback', 'fallback-fallback-ref', 'upstream-port'}
-          if lz4kdr['selection'] == 'upstream-port':
-              assert lz4kdr['origin'] == 'local-port'
-              assert lz4kdr['port']['kernel_target'] == kernel
-              assert lz4kdr['upstream']['repository'] == 'https://github.com/firelzrd/zram-ir.git'
-              assert lz4kdr['port']['upstream_sha256'] == lz4kdr['upstream']['sha256']
-          zswap = lock['components']['lz4kdr_zswap']
-          assert zswap['origin'] == 'local-port'
-          assert zswap['selection'] == 'local-port'
-          assert zswap['kernel_target'] == kernel
-          assert zswap['project_version'] == '1.0'
-          PY
-
       - name: Verify validation module coverage
         if: ${{ env.BUILD_MODE == 'validate' }}
         shell: bash

@@ -11,11 +11,6 @@ pelo workflow.
 - entre patches igualmente compatíveis, vence a versão mais nova do projeto;
 - quando não existe patch para a série atual, pode ser escolhida a série anterior
   mais próxima apenas para componentes que permitem port controlado;
-- LZ4KDR segue explicitamente esta ordem: a branch upstream atual é consultada
-  primeiro para a versão exata ou para a série atual; só então o patch upstream
-  compatível mais próximo é selecionado e o port revisado para Linux 7.1.5 é
-  usado. Os metadados registram commit, caminho e SHA-256 upstream; qualquer
-  alteração upstream interrompe o resolver até que o port seja revisado;
 - componentes marcados como `require_exact_series` interrompem o build se não
   houver correspondência exata;
 - commits históricos são usados apenas como fallback quando a branch atual
@@ -119,12 +114,6 @@ A resolução dinâmica cobre BORE, sua correção de coexistência com `sched_e
 Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP, REFLEX, o perfil Zen interativo,
 patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a configuração-base do
 Liquorix.
-
-O componente `lz4kdr` adiciona o backend da zram e torna LZ4KDR o algoritmo
-primário selecionado. `lz4kdr_zswap` é um adaptador local revisado para a API
-de compressão do kernel; ele não altera `drivers/block/zram` nem `lib/lz4kdr`.
-ZSTD continua sendo o recompressor do ZRAM-IR, e o zswap mantém seu padrão
-existente salvo quando `zswap.compressor=lz4kdr` é solicitado no boot.
 
 Patches de correção sem versão própria, como commits upstream específicos e
 séries enviadas por e-mail, são baixados novamente e registrados por SHA-256,
