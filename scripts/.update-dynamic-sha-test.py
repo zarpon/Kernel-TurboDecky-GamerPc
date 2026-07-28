@@ -69,7 +69,7 @@ new = '''    def test_dynamic_upstream_sha_is_recorded_in_the_lock(self) -> None
                         "fallback_globs": [],
                         "require_exact_series": True,
                         "output": "bore.patch",
-                        "project_version_regex": r"bore-([0-9]+(?:\.[0-9]+){1,2}(?:-rc[0-9]+)?)\.patch$",
+                        "project_version_regex": r"bore[-_]?([0-9]+(?:\.[0-9]+)+(?:-rc[0-9]+)?)",
                         "required_markers": ["kernel/sched/bore"],
                     }
                 },
@@ -100,4 +100,13 @@ new = '''    def test_dynamic_upstream_sha_is_recorded_in_the_lock(self) -> None
 if text.count(old) != 1:
     raise SystemExit(f"legacy approved SHA test matched {text.count(old)} times")
 path.write_text(text.replace(old, new), encoding="utf-8")
+
+bore_test = root / "tests/test_bore_liquorix_port.py"
+bore_text = bore_test.read_text(encoding="utf-8")
+old_regex = '            r"bore-([0-9]+(?:\\.[0-9]+){1,2}(?:-rc[0-9]+)?)\\.patch$",\n'
+new_regex = '            r"bore[-_]?([0-9]+(?:\\.[0-9]+)+(?:-rc[0-9]+)?)",\n'
+if bore_text.count(old_regex) != 1:
+    raise SystemExit(f"BORE manifest regex assertion matched {bore_text.count(old_regex)} times")
+bore_test.write_text(bore_text.replace(old_regex, new_regex), encoding="utf-8")
+
 Path(__file__).unlink()
