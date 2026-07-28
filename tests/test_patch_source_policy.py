@@ -29,7 +29,6 @@ VERSIONED_COMPONENTS = {
 }
 
 IMMUTABLE_HTTP_COMPONENTS = {
-    "c23_libbpf",
     "bt_ssp",
     "libbpf_uninitialized",
     "firmware_name",
@@ -44,9 +43,7 @@ EXPECTED_COMPONENTS = {
     "poc",
     "nap",
     "reflex",
-    "c23_libbpf",
     "clear",
-    "fsync",
     "o3",
     "bt_ssp",
     "libbpf_uninitialized",
@@ -62,7 +59,15 @@ EXPECTED_COMPONENTS = {
     "liquorix_config",
 }
 
-OBSOLETE_ATH11K_MARKERS = {
+OBSOLETE_PATCH_MARKERS = {
+    "c23_libbpf",
+    "08-c23-libbpf.patch",
+    "C23 libbpf fix",
+    "d70f79fef65810faf64dbae1f3a1b5623cdb2345",
+    "fsync",
+    "10-fsync-futex-waitv.patch",
+    "fsync FUTEX_WAIT_MULTIPLE compatibility",
+    "FUTEX_WAIT_MULTIPLE",
     "ath11k_disable_key",
     "ath11k_upstream",
     "22-ath11k-disable-key.patch",
@@ -167,9 +172,9 @@ class PatchSourcePolicyTests(unittest.TestCase):
         self.assertIn('("BORE", "bore"), ("MARIE", "marie"), ("REFLEX", "reflex")', DYNAMIC_REWRITER)
         self.assertIn('replace_assignment(text, "PATCH_REFLEX_VERSION"', DYNAMIC_REWRITER)
 
-    def test_obsolete_ath11k_patches_are_not_resolved_or_applied(self) -> None:
+    def test_obsolete_patches_are_not_resolved_or_applied(self) -> None:
         serialized_manifest = json.dumps(self.manifest, sort_keys=True)
-        for marker in OBSOLETE_ATH11K_MARKERS:
+        for marker in OBSOLETE_PATCH_MARKERS:
             with self.subTest(marker=marker):
                 self.assertNotIn(marker, serialized_manifest)
                 self.assertNotIn(marker, DYNAMIC_REWRITER)
