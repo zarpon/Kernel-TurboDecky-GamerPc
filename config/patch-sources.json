@@ -160,14 +160,6 @@
         "cpufreq_reflex"
       ]
     },
-    "c23_libbpf": {
-      "kind": "http_patch",
-      "urls": [
-        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=d70f79fef65810faf64dbae1f3a1b5623cdb2345",
-        "https://github.com/torvalds/linux/commit/d70f79fef65810faf64dbae1f3a1b5623cdb2345.patch"
-      ],
-      "output": "08-c23-libbpf.patch"
-    },
     "clear": {
       "kind": "git_patch",
       "repo": "https://github.com/Frogging-Family/linux-tkg.git",
@@ -180,23 +172,6 @@
       ],
       "require_exact_series": false,
       "output": "09-clear.patch",
-      "fallback_refs": [
-        "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
-        "d837d80398a62ea884caabad36530093f9711d49"
-      ]
-    },
-    "fsync": {
-      "kind": "git_patch",
-      "repo": "https://github.com/Frogging-Family/linux-tkg.git",
-      "ref": "master",
-      "exact_globs": [
-        "linux-tkg-patches/{series}/0007-v{series}-fsync1_via_futex_waitv.patch"
-      ],
-      "fallback_globs": [
-        "linux-tkg-patches/*/0007-v*-fsync1_via_futex_waitv.patch"
-      ],
-      "require_exact_series": false,
-      "output": "10-fsync-futex-waitv.patch",
       "fallback_refs": [
         "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
         "d837d80398a62ea884caabad36530093f9711d49"
