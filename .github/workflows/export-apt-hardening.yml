@@ -1,0 +1,80 @@
+name: Export bounded APT dependency step
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [agent/bore-680-sha-hardening-20260728]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: export-bounded-apt-step
+  cancel-in-progress: true
+
+jobs:
+  export:
+    if: github.head_ref == 'agent/bore-680-sha-hardening-20260728' || github.ref_name == 'agent/bore-680-sha-hardening-20260728'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/bore-680-sha-hardening-20260728
+          fetch-depth: 1
+
+      - name: Harden APT dependency installation
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/validate-kernel.yml')
+          text = path.read_text(encoding='utf-8')
+          old = '''          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get install -y --no-install-recommends software-properties-common
+          sudo add-apt-repository -y universe
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get install -y --no-install-recommends \\
+'''
+          new = '''          apt_options=(
+            -o Acquire::Retries=5
+            -o Acquire::http::Timeout=30
+            -o Acquire::https::Timeout=30
+            -o Dpkg::Use-Pty=0
+          )
+          sudo timeout --signal=TERM --kill-after=30s 10m \\
+            apt-get "${apt_options[@]}" update
+          sudo timeout --signal=TERM --kill-after=30s 15m \\
+            apt-get "${apt_options[@]}" install -y --no-install-recommends \\
+'''
+          if text.count(old) != 1:
+              raise SystemExit(f'APT dependency block matched {text.count(old)} times')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+      - name: Validate exported workflow
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'Acquire::https::Timeout=30' .github/workflows/validate-kernel.yml
+          grep -Fq 'timeout --signal=TERM --kill-after=30s 15m' .github/workflows/validate-kernel.yml
+          ! grep -Fq 'add-apt-repository -y universe' .github/workflows/validate-kernel.yml
+          git diff --check -- .github/workflows/validate-kernel.yml
+
+      - name: Stage exported workflow
+        run: |
+          mkdir -p exported/.github/workflows
+          cp .github/workflows/validate-kernel.yml exported/.github/workflows/validate-kernel.yml
+
+      - name: Upload validated workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamerpc-bounded-apt-${{ github.sha }}
+          path: exported
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
