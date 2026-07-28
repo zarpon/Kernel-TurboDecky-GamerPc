@@ -219,24 +219,38 @@ def project_version(path: str, pattern: str | None) -> str | None:
     return match.group(1) if match else None
 
 
-def compatibility_score(target: KernelVersion | None, kernel: KernelVersion) -> tuple[int, tuple[int, ...]]:
+def kernel_distance(target: KernelVersion, kernel: KernelVersion) -> int:
+    left = target.parts + (0,) * (3 - len(target.parts))
+    right = kernel.parts + (0,) * (3 - len(kernel.parts))
+    # Compare a monotonic kernel-version ordinal. Component-wise absolute
+    # differences incorrectly rank 6.18 closer to 7.1 than 6.19.
+    left_ordinal = left[0] * 1_000_000 + left[1] * 1_000 + left[2]
+    right_ordinal = right[0] * 1_000_000 + right[1] * 1_000 + right[2]
+    return abs(left_ordinal - right_ordinal)
+
+
+def compatibility_score(target: KernelVersion | None, kernel: KernelVersion) -> tuple[int, int]:
     if target is None:
-        return 4, ()
+        return 4, 0
+    distance_rank = -kernel_distance(target, kernel)
     if target.parts == kernel.parts:
-        return 6, target.parts
+        return 6, distance_rank
     if target.series == kernel.series:
-        return 5, target.parts
-    if target.series < kernel.series:
-        return 3, target.parts
-    return 0, target.parts
+        return 5, distance_rank
+    # If no same-series source exists, either direction can be a valid porting
+    # base. Prefer the numerically closest kernel instead of the highest path.
+    return 3, distance_rank
 
 
 def candidate_score(path: str, kernel: KernelVersion, version_pattern: str | None) -> tuple[Any, ...]:
     target = extract_kernel_target(path)
-    compat_rank, target_parts = compatibility_score(target, kernel)
+    compat_rank, distance_rank = compatibility_score(target, kernel)
+    target_parts = target.parts if target else ()
     channel_rank = 2 if "/stable/" in f"/{path}" else 1 if "/testing/" in f"/{path}" else 0
     version = project_version(path, version_pattern)
-    return compat_rank, target_parts, version_key(version), channel_rank, path
+    # Prefer the newer kernel target when distance is tied (Linux 7.2 over 7.0
+    # for a Linux 7.1 build), then the newest project version.
+    return compat_rank, distance_rank, target_parts, version_key(version), channel_rank, path
 
 
 def match_paths(paths: list[str], patterns: list[str], values: dict[str, str]) -> list[str]:

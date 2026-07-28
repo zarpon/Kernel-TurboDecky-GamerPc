@@ -109,8 +109,8 @@ apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
         self.assertEqual(
             component["exact_globs"],
             [
-                "patches/testing/0001-linux{series}-rc*-bore-*.patch",
-                "patches/stable/linux-{series}-bore/0001-linux{series}-rc*-bore-*.patch",
+                "patches/testing/0001-linux{series}*-bore-*.patch",
+                "patches/stable/linux-{series}-bore/0001-linux{series}*-bore-*.patch",
             ],
         )
         self.assertEqual(
