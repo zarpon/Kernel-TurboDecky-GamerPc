@@ -9,7 +9,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: apply-bore-sha-hardening-gamerpc
@@ -39,17 +39,15 @@ jobs:
           ! grep -Fq '87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36' .github/workflows/validate-kernel.yml
           git diff --check
 
-      - name: Commit workflow hardening
-        shell: bash
+      - name: Stage exported workflow
         run: |
-          set -Eeuo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git diff --cached --check
-          git commit -m 'Validate dynamic patch bytes from lock'
+          mkdir -p exported/.github/workflows
+          cp .github/workflows/validate-kernel.yml exported/.github/workflows/validate-kernel.yml
 
-      - name: Push workflow hardening
-        env:
-          BRANCH: agent/bore-680-sha-hardening-20260728
-        run: git push origin "HEAD:${BRANCH}"
+      - name: Upload validated workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamerpc-validated-workflow-${{ github.sha }}
+          path: exported
+          if-no-files-found: error
+          retention-days: 7
