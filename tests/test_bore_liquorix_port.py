@@ -115,7 +115,7 @@ apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
         )
         self.assertEqual(
             component["project_version_regex"],
-            r"bore-([0-9]+(?:\.[0-9]+){1,2}(?:-rc[0-9]+)?)\.patch$",
+            r"bore[-_]?([0-9]+(?:\.[0-9]+)+(?:-rc[0-9]+)?)",
         )
         self.assertNotIn("approved_sha256", component)
 
