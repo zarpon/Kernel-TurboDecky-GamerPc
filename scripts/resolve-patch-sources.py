@@ -229,6 +229,16 @@ def kernel_distance(target: KernelVersion, kernel: KernelVersion) -> int:
     )
 
 
+def kernel_distance(target: KernelVersion, kernel: KernelVersion) -> int:
+    left = target.parts + (0,) * (3 - len(target.parts))
+    right = kernel.parts + (0,) * (3 - len(kernel.parts))
+    return (
+        abs(left[0] - right[0]) * 1_000_000
+        + abs(left[1] - right[1]) * 1_000
+        + abs(left[2] - right[2])
+    )
+
+
 def compatibility_score(target: KernelVersion | None, kernel: KernelVersion) -> tuple[int, int]:
     if target is None:
         return 4, 0
