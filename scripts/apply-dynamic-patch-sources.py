@@ -28,8 +28,6 @@ REQUESTED = {
     "minstrel_fluctuation": ("19-minstrel-fluctuation.patch", "19-minstrel-fluctuation"),
     "minstrel_downgrade": ("20-minstrel-downgrade.patch", "20-minstrel-downgrade"),
     "ath11k_remapped_ce": ("21-ath11k-remapped-ce.patch", "21-ath11k-remapped-ce"),
-    "ath11k_disable_key": ("22-ath11k-disable-key.patch", "22-ath11k-disable-key"),
-    "ath11k_upstream": ("23-ath11k-upstream.patch", "23-ath11k-upstream"),
 }
 
 
