@@ -1,0 +1,93 @@
+name: Diagnose kernel patch chain
+
+on:
+  push:
+    branches: [diagnostic/gamerpc-patch-chain-20260728]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-gamerpc-patch-chain
+  cancel-in-progress: true
+
+jobs:
+  patch-chain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          ref: diagnostic/gamerpc-patch-chain-20260728
+          fetch-depth: 1
+
+      - name: Resolve latest stable Linux
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p logs
+          python3 scripts/resolve-latest-stable.py \
+            --github-env "$GITHUB_ENV" \
+            --log-dir logs
+
+      - name: Materialize dynamic integrations
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          scripts/validate-dynamic-patches-local.sh
+          python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-zen-interactive.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
+          python3 scripts/finalize-bore-stable-port.py scripts/build-kernelnote-core.sh
+          bash -n scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+
+      - name: Stop build after applying patches
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/build-kernelnote-core.sh')
+          text = path.read_text(encoding='utf-8')
+          marker = 'cp "$WORKDIR/liquorix-amd64.config" .config\n'
+          if text.count(marker) != 1:
+              raise SystemExit(f'patch-chain stop marker matched {text.count(marker)} times')
+          tail = '''echo "==> Validating applied patch chain"
+          test -s kernel/sched/bore.c
+          test -s include/linux/sched/bore.h
+          grep -Fq 'SCHED_BORE_VERSION  "6.8.0"' include/linux/sched/bore.h
+          grep -Fq 'sched_bore' kernel/sched/fair.c
+          grep -Fq 'void reweight_task(struct task_struct *p, int prio)' kernel/sched/fair.c
+          grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' include/linux/sched/bore.h
+          grep -Fq 'config LRU_MARIE' mm/Kconfig
+          grep -Fq 'CONFIG_MQ_IOSCHED_DEFAULT_ADIOS' block/elevator.c
+          git diff --check | tee "$LOGDIR/patch-chain-final-diff-check.log"
+          git status --short | tee "$LOGDIR/patch-chain-status.txt"
+          echo "==> Patch chain applied successfully"
+          '''
+          path.write_text(text.split(marker, 1)[0] + tail, encoding='utf-8')
+          PY
+          bash -n scripts/build-kernelnote-core.sh
+
+      - name: Apply patches without compiling
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          chmod +x scripts/build-kernelnote-core.sh
+          scripts/build-kernelnote-core.sh validate
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamerpc-patch-chain-${{ github.sha }}
+          path: logs/
+          if-no-files-found: warn
+          retention-days: 7
