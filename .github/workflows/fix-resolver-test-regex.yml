@@ -1,0 +1,41 @@
+name: Correct resolver regression test version regex
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.head_ref == 'validation/patch-resolver-hardening-20260727'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Fix, validate and commit test
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/test_dynamic_patch_resolver.py')
+          text = path.read_text(encoding='utf-8')
+          old = '"project_version_regex": r"demo-v([0-9.]+)",'
+          new = '"project_version_regex": r"demo-v([0-9]+(?:\\.[0-9]+)*)",'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one test regex anchor, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python3 tests/test_dynamic_patch_resolver.py
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add tests/test_dynamic_patch_resolver.py
+          git commit -m "Fix resolver regression version parsing"
+          git push origin "HEAD:$HEAD_BRANCH"
