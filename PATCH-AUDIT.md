@@ -1,8 +1,8 @@
 # Auditoria de patches: Charcoal → TurboDecky GamerPc
 
-Auditoria realizada em 2026-07-25 comparando o `PKGBUILD` e
-`automation/patch-sources.json` de `linux-charcoal-vulcano` com o manifesto e
-os scripts de geração do `Kernel-TurboDecky-GamerPc`.
+Auditoria realizada em 2026-07-25 e revisada em 2026-07-27 comparando o
+`PKGBUILD` e `automation/patch-sources.json` de `linux-charcoal-vulcano` com o
+manifesto e os scripts de geração do `Kernel-TurboDecky-GamerPc`.
 
 ## Patches do Charcoal e destino no GamerPC
 
@@ -29,11 +29,11 @@ os scripts de geração do `Kernel-TurboDecky-GamerPc`.
 | OpenWrt minstrel 303 | `minstrel_fluctuation` | Coberto |
 | OpenWrt minstrel 304 | `minstrel_downgrade` | Coberto por port para a série atual |
 | OpenWrt ath11k 910 remapped CE | `ath11k_remapped_ce` | Coberto |
-| CodeLinaro ath11k `DISABLE_KEY` revert | `ath11k_disable_key` | Coberto |
-| Qualcomm ath11k upstream series | `ath11k_upstream` | Coberto |
-| REFLEX CPUFreq 0.3.1 | `reflex` | Coberto; `intel_pstate` e `amd_pstate` ficam em `passive` |
+| CodeLinaro ath11k `DISABLE_KEY` revert | Kernel Linux 7.1.4 | Removido do patchset: a correção substituta upstream `97acb0259cc9` já pertence à tag base |
+| Qualcomm ath11k stop-AMPDU/TID | Kernel Linux 7.1.4 | Removido do patchset: o commit upstream `e225b36f83d7` já pertence à tag base |
+| REFLEX CPUFreq | `reflex` | Coberto por resolução dinâmica; a versão compatível mais recente é selecionada e validada, atualmente 0.3.2; `intel_pstate` e `amd_pstate` ficam em `passive` |
 | Zen: evdev `call_rcu`, remoção da dependência schedutil dos P-State e cinco hunks do perfil interativo | `zen_interactive` | Coberto pelo perfil oficial da série selecionada |
-| Zen: os dois commits equivalentes modernos de evdev e P-State | `zen_interactive.compatibility_sources` | Integrados neste PR; são buscados a cada build na branch oficial mais nova compatível |
+| Zen: os dois commits equivalentes modernos de evdev e P-State | `zen_interactive.compatibility_sources` | Buscados a cada build na branch oficial mais nova compatível |
 
 ## Itens específicos do Steam Deck que não devem ser copiados
 
@@ -47,13 +47,18 @@ genérico do GamerPC.
 
 ## Política de atualização
 
-Nenhum patch novo deste PR é um arquivo estático versionado. O resolver Zen
-consulta `refs/heads/*/zen-sauce`, escolhe a série exata ou a série anterior
-compatível mais próxima, seleciona o HEAD atual e localiza os dois commits de
-compatibilidade na história daquela branch. O patch materializado, os commits,
-os caminhos, a série, o SHA-256 e o tamanho ficam no `patch-lock.json` de cada
-build. Se a fonte deixar de aplicar, o fluxo tenta o port controlado com fuzz
-limitado e grava os rejeitos; qualquer rejeito não resolvido interrompe o build.
+Os componentes versionados consultam a branch oficial mantida pelo desenvolvedor
+em cada build. O resolvedor escolhe primeiro a série exata do kernel e, entre
+fontes igualmente compatíveis, a maior versão do projeto. Componentes sem patch
+para a série atual só usam a série anterior quando o manifesto permite port
+controlado. Commits fixos são mantidos apenas quando a correção ainda não existe
+na árvore-base; patches já incorporados ao Linux são removidos do manifesto e da
+sequência de aplicação.
+
+O patch materializado, o commit, o caminho, a série, a versão, o SHA-256 e o
+tamanho ficam no `patch-lock.json` de cada build. Se uma fonte deixar de aplicar,
+o fluxo tenta somente os ports autorizados, com fuzz limitado e rejeitos
+registrados; qualquer rejeito não resolvido interrompe o build.
 
 O GamerPC também contém componentes que não existiam no Charcoal, como VRAM/
 TTM e a configuração Liquorix genérica.
