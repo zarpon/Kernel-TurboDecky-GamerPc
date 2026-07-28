@@ -138,6 +138,17 @@ def rewrite_core(path: Path, record: dict[str, Any], kernel_version: str) -> Non
     )
     text = replace_regex_once(
         text,
+        r'^\s*git diff --check \| tee "\$LOGDIR/01-bore-diff-check\.log"$',
+        '''  if ! git diff --check > "$LOGDIR/01-bore-diff-check.log" 2>&1; then
+    cat "$LOGDIR/01-bore-diff-check.log"
+    echo "==> Normalizing whitespace introduced by BORE patch"
+    normalize_changed_whitespace
+    git diff --check | tee "$LOGDIR/01-bore-diff-check-after-fix.log"
+  fi''',
+        "BORE whitespace validation",
+    )
+    text = replace_regex_once(
+        text,
         r'^\s*grep -Fq \'SCHED_BORE_VERSION\' kernel/sched/bore\.c$',
         '  grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" include/linux/sched/bore.h',
         "BORE installed version assertion",
