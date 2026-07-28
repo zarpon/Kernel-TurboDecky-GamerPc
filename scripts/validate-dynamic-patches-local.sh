@@ -11,6 +11,7 @@ python3 -m py_compile \
   "$ROOT/scripts/resolve-zen-interactive.py" \
   "$ROOT/scripts/update-marie-fallback.py" \
   "$ROOT/scripts/validate-marie-fallback.py" \
+  "$ROOT/scripts/validate-resolved-patches.py" \
   "$ROOT/scripts/apply-dynamic-patch-sources.py" \
   "$ROOT/scripts/apply-validation-modules.py" \
   "$ROOT/scripts/patch-external-module-toolchain.py" \
@@ -42,7 +43,7 @@ grep -Fq '"bore_sched_ext_coexistence"' "$ROOT/config/patch-sources.json"
 grep -Fq 'firelzrd/bore-scheduler' "$ROOT/config/patch-sources.json"
 grep -Fq '7.1.4-bore-6.8.0-rc1.patch' "$ROOT/scripts/build-kernelnote-core.sh"
 grep -Fq '7.1.4-sched-ext-coexistence-fix.patch' "$ROOT/scripts/build-kernelnote-core.sh"
-grep -Fq 'approved_sha256' "$ROOT/config/patch-sources.json"
+! grep -Fq 'approved_sha256' "$ROOT/config/patch-sources.json"
 grep -Fq 'CONFIG_SCHED_BORE=y' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_ZEN_INTERACTIVE=y' "$ROOT/config/kernelnote.config"
 grep -Fq 'KERNEL_SERIES' "$ROOT/scripts/resolve-zen-interactive.py"
