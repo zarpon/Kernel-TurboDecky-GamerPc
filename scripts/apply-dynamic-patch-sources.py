@@ -14,9 +14,7 @@ from typing import Any
 MARKER = "# Dynamic patch source lock"
 
 REQUESTED = {
-    "c23_libbpf": ("08-c23-libbpf.patch", "08-c23-libbpf"),
     "clear": ("09-clear.patch", "09-clear"),
-    "fsync": ("10-fsync-futex-waitv.patch", "10-fsync"),
     "o3": ("11-o3.patch", "11-o3"),
     "bt_ssp": ("12-bt-ssp-key-size.patch", "12-bt-ssp"),
     "libbpf_uninitialized": ("13-libbpf-uninitialized.patch", "13-libbpf-uninitialized"),
