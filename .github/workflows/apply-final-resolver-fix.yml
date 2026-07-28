@@ -1,14 +1,14 @@
-name: Diagnose final resolver correction
+name: Commit final validated resolver correction
 
 on:
   pull_request:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  apply:
     if: github.head_ref == 'validation/patch-resolver-hardening-20260727'
     runs-on: ubuntu-24.04
     steps:
@@ -16,30 +16,18 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
-      - name: Run final resolver diagnostics
-        id: test
-        continue-on-error: true
+      - name: Apply, validate and commit final correction
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
         shell: bash
         run: |
-          set -u
-          status=0
-          {
-            set -Eeuo pipefail
-            python3 scripts/stage-resolver-distance-fix.py
-            python3 -m py_compile scripts/resolve-patch-sources.py scripts/apply-reflex-core.py tests/test_dynamic_patch_resolver.py tests/test_bore_liquorix_port.py
-            scripts/validate-dynamic-patches-local.sh
-            git diff --check
-          } > final-resolver-debug.log 2>&1 || status=$?
-          cat final-resolver-debug.log
-          echo "status=$status" >> "$GITHUB_OUTPUT"
-      - name: Upload final diagnostic log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gamerpc-final-resolver-debug
-          path: final-resolver-debug.log
-          if-no-files-found: error
-          retention-days: 3
-      - name: Fail when diagnostics failed
-        if: steps.test.outputs.status != '0'
-        run: exit 1
+          set -Eeuo pipefail
+          python3 scripts/stage-resolver-distance-fix.py
+          python3 -m py_compile scripts/resolve-patch-sources.py scripts/apply-reflex-core.py tests/test_dynamic_patch_resolver.py tests/test_bore_liquorix_port.py
+          scripts/validate-dynamic-patches-local.sh
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/resolve-patch-sources.py scripts/apply-reflex-core.py tests/test_dynamic_patch_resolver.py tests/test_bore_liquorix_port.py
+          git commit -m "Fix nearest kernel patch ordering"
+          git push origin "HEAD:$HEAD_BRANCH"
