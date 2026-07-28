@@ -1,0 +1,42 @@
+name: Commit resolver correction with offline tests
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'validation/patch-resolver-hardening-20260727'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Apply correction
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/stage-resolver-distance-fix.py
+          python3 -m py_compile scripts/resolve-patch-sources.py scripts/apply-reflex-core.py
+      - name: Run affected offline regression tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest -v tests.test_dynamic_patch_resolver tests.test_bore_liquorix_port
+          python3 tests/test_reflex_dynamic_bootstrap.py
+          git diff --check
+      - name: Commit resolver correction
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/resolve-patch-sources.py scripts/apply-reflex-core.py tests/test_bore_liquorix_port.py
+          git commit -m "Fix nearest kernel patch ordering"
+          git push origin "HEAD:$HEAD_BRANCH"
