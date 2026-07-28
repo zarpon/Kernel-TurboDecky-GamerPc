@@ -93,6 +93,8 @@ class BoreStableFinalizerTests(unittest.TestCase):
 '''
                 '''    report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.5" "$LOGDIR/sched-ext-rejects.log"
 '''
+                '''  git diff --check | tee "$LOGDIR/01-bore-diff-check.log"
+'''
                 '''  grep -Fq 'SCHED_BORE_VERSION' kernel/sched/bore.c
 '''
                 '''  echo "==> BORE 6.8.0-rc1 Linux port applied successfully"
@@ -114,6 +116,8 @@ class BoreStableFinalizerTests(unittest.TestCase):
                 'report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.5"',
                 result,
             )
+            self.assertIn("Normalizing whitespace introduced by BORE patch", result)
+            self.assertIn("01-bore-diff-check-after-fix.log", result)
             self.assertNotIn("6.8.0-rc1", result)
 
     def test_workflow_finalizes_bore_after_dynamic_resolution(self) -> None:
