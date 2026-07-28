@@ -24,13 +24,18 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
+
           path = Path('tests/test_dynamic_patch_resolver.py')
           text = path.read_text(encoding='utf-8')
-          old = '"project_version_regex": r"demo-v([0-9.]+)",'
-          new = '"project_version_regex": r"demo-v([0-9]+(?:\\.[0-9]+)*)",'
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one test regex anchor, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          start = text.index('    def test_nearest_fallback_prefers_distance_over_newest_kernel')
+          end = text.index('    def test_fallback_ref_restores_exact_series', start)
+          section = text[start:end]
+          old = 'r"demo-v([0-9.]+)"'
+          new = 'r"demo-v([0-9]+(?:\\.[0-9]+)*)"'
+          if section.count(old) != 1:
+              raise SystemExit(f'expected one scoped regex anchor, found {section.count(old)}')
+          section = section.replace(old, new, 1)
+          path.write_text(text[:start] + section + text[end:], encoding='utf-8')
           PY
           python3 tests/test_dynamic_patch_resolver.py
           git diff --check
