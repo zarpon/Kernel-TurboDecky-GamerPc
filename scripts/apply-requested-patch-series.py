@@ -156,15 +156,6 @@ fetch_requested_patch_series() {
   fetch_candidate_patch "ath11k remapped CE 64-bit fix" \
     "$REQUESTED_SERIES_DIR/21-ath11k-remapped-ce.patch" "21-ath11k-remapped-ce" \
     "https://git.openwrt.org/openwrt/openwrt/plain/package/kernel/mac80211/patches/ath11k/910-ath11k-fix-remapped-ce-accessing-issue-on-64bit-OS.patch?id=0ff1553bd731c0db28043fc9caab90bdc32587f3"
-
-  fetch_candidate_patch "ath11k DISABLE_KEY revert" \
-    "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key" \
-    "https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch" \
-    "https://git.infobricfleet.com/gtu/openwrt/-/raw/95341cc9c560ff371c06db2a8221d19bb62d0c30/package/kernel/mac80211/patches/ath11k/940-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"
-
-  fetch_candidate_patch "ath11k Qualcomm upstream series" \
-    "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream" \
-    "https://lore.kernel.org/all/20260319065608.2408179-1-reshma.rajkumar@oss.qualcomm.com/raw"
 }
 
 report_requested_rejects() {
@@ -245,8 +236,6 @@ apply_requested_patch_series() {
     echo "ath11k remapped CE port left ATH11K_CE_OFFSET references behind" >&2
     return 1
   fi
-  apply_requested_patch "ath11k DISABLE_KEY revert" "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key"
-  apply_requested_patch "ath11k Qualcomm upstream series" "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream"
 
   grep -Fq 'const char *res;' tools/lib/bpf/libbpf.c
   grep -Fq '#define FUTEX_WAIT_MULTIPLE' include/uapi/linux/futex.h
