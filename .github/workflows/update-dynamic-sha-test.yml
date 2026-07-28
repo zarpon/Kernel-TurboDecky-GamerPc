@@ -1,0 +1,52 @@
+name: Update dynamic SHA tests
+
+on:
+  push:
+    branches:
+      - agent/bore-680-sha-hardening-20260728
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-dynamic-sha-tests
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/bore-680-sha-hardening-20260728
+          fetch-depth: 0
+
+      - name: Update legacy SHA test
+        run: python3 scripts/.update-dynamic-sha-test.py
+
+      - name: Validate updated tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile tests/test_dynamic_patch_resolver.py tests/test_bore_liquorix_port.py
+          python3 -m unittest \
+            tests.test_dynamic_patch_resolver.ResolverTests.test_dynamic_upstream_sha_is_recorded_in_the_lock \
+            tests.test_bore_liquorix_port.BoreLinuxPortTests.test_dynamic_manifest_requires_native_bore_71_source
+          git diff --check
+
+      - name: Commit updated tests
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Update tests for lock-driven SHA tracking'
+
+      - name: Push updated tests
+        env:
+          BRANCH: agent/bore-680-sha-hardening-20260728
+        run: git push origin "HEAD:${BRANCH}"
