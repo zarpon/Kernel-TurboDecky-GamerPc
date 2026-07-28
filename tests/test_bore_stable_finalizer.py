@@ -91,6 +91,8 @@ class BoreStableFinalizerTests(unittest.TestCase):
 '''
                 '''    report_bore_rejects "BORE 6.8.0-rc1 for Linux 7.1.5" "$LOGDIR/rejects.log"
 '''
+                '''    report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.5" "$LOGDIR/sched-ext-rejects.log"
+'''
                 '''  grep -Fq 'SCHED_BORE_VERSION' kernel/sched/bore.c
 '''
                 '''  echo "==> BORE 6.8.0-rc1 Linux port applied successfully"
@@ -104,6 +106,14 @@ class BoreStableFinalizerTests(unittest.TestCase):
             self.assertIn(str(record["sha256"]), result)
             self.assertIn("linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}", result)
             self.assertIn("include/linux/sched/bore.h", result)
+            self.assertIn(
+                'report_bore_rejects "BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"',
+                result,
+            )
+            self.assertIn(
+                'report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.5"',
+                result,
+            )
             self.assertNotIn("6.8.0-rc1", result)
 
     def test_workflow_finalizes_bore_after_dynamic_resolution(self) -> None:
