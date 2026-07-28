@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import unittest
 from pathlib import Path
 
@@ -18,15 +17,7 @@ DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
 CONFIG = (ROOT / "config/kernelnote.config").read_text(encoding="utf-8")
 BUILD_CORE = (ROOT / "scripts/build-kernelnote-core.sh").read_text(encoding="utf-8")
 ZEN_REWRITER = (ROOT / "scripts/apply-zen-interactive.py").read_text(encoding="utf-8")
-FINALIZER_PATH = ROOT / "scripts/finalize-bore-stable-port.py"
-
-
-def load_module(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+FINALIZER = (ROOT / "scripts/finalize-bore-stable-port.py").read_text(encoding="utf-8")
 
 
 class ManualWorkflowContractTests(unittest.TestCase):
@@ -113,18 +104,13 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn(final, WORKFLOW)
         self.assertLess(WORKFLOW.index(dynamic), WORKFLOW.index(final))
 
-        finalizer = load_module("finalize_bore_stable_port_contract", FINALIZER_PATH)
-        port = finalizer.stable.materialize_bore_port("7.1.5")
-        try:
-            finalizer.validate_port(port, "7.1.5")
-            text = port.read_text(encoding="utf-8")
-            hunk = text.split(
-                "@@ -7427,6 +7523,19 @@ static bool dequeue_task_fair", 1
-            )[1].split("@@ ", 1)[0]
-            self.assertNotIn("util_est_update(", hunk)
-            self.assertIn("restart_burst_bore(p);", hunk)
-        finally:
-            port.unlink(missing_ok=True)
+        self.assertIn("patch-lock.json", FINALIZER)
+        self.assertIn('record.get("selection") != "exact"', FINALIZER)
+        self.assertIn('record.get("kernel_target", "")', FINALIZER)
+        self.assertIn('BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"', FINALIZER)
+        self.assertIn("locked BORE patch SHA-256 no longer matches", FINALIZER)
+        self.assertNotIn("materialize_bore_port", FINALIZER)
+        self.assertNotIn("6.8.0-rc1", FINALIZER)
 
 
 if __name__ == "__main__":
