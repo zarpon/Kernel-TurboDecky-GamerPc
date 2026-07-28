@@ -222,21 +222,11 @@ def project_version(path: str, pattern: str | None) -> str | None:
 def kernel_distance(target: KernelVersion, kernel: KernelVersion) -> int:
     left = target.parts + (0,) * (3 - len(target.parts))
     right = kernel.parts + (0,) * (3 - len(kernel.parts))
-    return (
-        abs(left[0] - right[0]) * 1_000_000
-        + abs(left[1] - right[1]) * 1_000
-        + abs(left[2] - right[2])
-    )
-
-
-def kernel_distance(target: KernelVersion, kernel: KernelVersion) -> int:
-    left = target.parts + (0,) * (3 - len(target.parts))
-    right = kernel.parts + (0,) * (3 - len(kernel.parts))
-    return (
-        abs(left[0] - right[0]) * 1_000_000
-        + abs(left[1] - right[1]) * 1_000
-        + abs(left[2] - right[2])
-    )
+    # Compare a monotonic kernel-version ordinal. Component-wise absolute
+    # differences incorrectly rank 6.18 closer to 7.1 than 6.19.
+    left_ordinal = left[0] * 1_000_000 + left[1] * 1_000 + left[2]
+    right_ordinal = right[0] * 1_000_000 + right[1] * 1_000 + right[2]
+    return abs(left_ordinal - right_ordinal)
 
 
 def compatibility_score(target: KernelVersion | None, kernel: KernelVersion) -> tuple[int, int]:
@@ -255,9 +245,12 @@ def compatibility_score(target: KernelVersion | None, kernel: KernelVersion) -> 
 def candidate_score(path: str, kernel: KernelVersion, version_pattern: str | None) -> tuple[Any, ...]:
     target = extract_kernel_target(path)
     compat_rank, distance_rank = compatibility_score(target, kernel)
+    target_parts = target.parts if target else ()
     channel_rank = 2 if "/stable/" in f"/{path}" else 1 if "/testing/" in f"/{path}" else 0
     version = project_version(path, version_pattern)
-    return compat_rank, distance_rank, version_key(version), channel_rank, path
+    # Prefer the newer kernel target when distance is tied (Linux 7.2 over 7.0
+    # for a Linux 7.1 build), then the newest project version.
+    return compat_rank, distance_rank, target_parts, version_key(version), channel_rank, path
 
 
 def match_paths(paths: list[str], patterns: list[str], values: dict[str, str]) -> list[str]:
