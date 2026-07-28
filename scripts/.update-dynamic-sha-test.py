@@ -4,6 +4,10 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 path = root / "tests/test_dynamic_patch_resolver.py"
 text = path.read_text(encoding="utf-8")
+if "import hashlib\n" not in text:
+    if text.count("import json\n") != 1:
+        raise SystemExit("json import did not match exactly once")
+    text = text.replace("import json\n", "import hashlib\nimport json\n", 1)
 old = '''    def test_approved_sha_prevents_a_stale_local_port(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -65,7 +69,7 @@ new = '''    def test_dynamic_upstream_sha_is_recorded_in_the_lock(self) -> None
                         "fallback_globs": [],
                         "require_exact_series": True,
                         "output": "bore.patch",
-                        "project_version_regex": r"bore-([0-9]+(?:\\.[0-9]+){1,2}(?:-rc[0-9]+)?)\\.patch$",
+                        "project_version_regex": r"bore-([0-9]+(?:\.[0-9]+){1,2}(?:-rc[0-9]+)?)\.patch$",
                         "required_markers": ["kernel/sched/bore"],
                     }
                 },
