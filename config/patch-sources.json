@@ -6,8 +6,8 @@
       "repo": "https://github.com/firelzrd/bore-scheduler.git",
       "ref": "main",
       "exact_globs": [
-        "patches/testing/0001-linux{series}-rc*-bore-*.patch",
-        "patches/stable/linux-{series}-bore/0001-linux{series}-rc*-bore-*.patch"
+        "patches/testing/0001-linux{series}*-bore-*.patch",
+        "patches/stable/linux-{series}-bore/0001-linux{series}*-bore-*.patch"
       ],
       "fallback_globs": [],
       "require_exact_series": true,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inject the pinned REFLEX CPUFreq patch into the CI build pipeline."""
+"""Inject the dynamic REFLEX CPUFreq bootstrap into the CI build pipeline."""
 
 from __future__ import annotations
 
@@ -31,18 +31,19 @@ def insert_after_marie_variables(text: str, block: str) -> str:
 
 def patch_core(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    if 'REFLEX_COMMIT="a7a7774b059a1f913521ffbfc52eeda72bdbb14c"' in source:
+    if "# REFLEX CPUFreq dynamic bootstrap" in source:
         return
 
     source = insert_after_marie_variables(
         source,
         '''
-# REFLEX CPUFreq: native Linux 7.1 patch, pinned to an exact upstream commit.
+# REFLEX CPUFreq dynamic bootstrap. The patch lock replaces these current defaults.
 REFLEX_REPO="https://github.com/firelzrd/reflex.git"
-REFLEX_COMMIT="a7a7774b059a1f913521ffbfc52eeda72bdbb14c"
-REFLEX_PATCH_PATH="patches/0001-linux7.1-reflex-v0.3.1.patch"
+REFLEX_COMMIT="a7205405c20a499fc1490e073fab03dc9a28e818"
+REFLEX_PATCH_PATH="patches/0001-linux7.1-reflex-v0.3.2.patch"
 REFLEXDIR="$WORKDIR/reflex"
-REFLEX_PATCH="$PATCHDIR/0007-reflex-v0.3.1-linux7.1.patch"
+REFLEX_PATCH="$PATCHDIR/0007-reflex-linux7.1.patch"
+PATCH_REFLEX_VERSION="${PATCH_REFLEX_VERSION:-0.3.2}"
 ''',
     )
 
@@ -50,7 +51,7 @@ REFLEX_PATCH="$PATCHDIR/0007-reflex-v0.3.1-linux7.1.patch"
         source,
         'normalize_changed_whitespace() {\n',
         r'''fetch_reflex_patch() {
-  echo "==> Fetching pinned REFLEX CPUFreq 0.3.1 source locally"
+  echo "==> Fetching REFLEX CPUFreq $PATCH_REFLEX_VERSION source locally"
   rm -rf "$REFLEXDIR"
   git init --quiet "$REFLEXDIR"
   git -C "$REFLEXDIR" remote add origin "$REFLEX_REPO"
@@ -61,15 +62,15 @@ REFLEX_PATCH="$PATCHDIR/0007-reflex-v0.3.1-linux7.1.patch"
 
   git -C "$REFLEXDIR" show "FETCH_HEAD:$REFLEX_PATCH_PATH" > "$REFLEX_PATCH"
   test -s "$REFLEX_PATCH"
-  grep -Fq 'Subject: [PATCH] linux7.1-reflex-v0.3.1' "$REFLEX_PATCH"
+  grep -Fqi 'reflex' "$REFLEX_PATCH"
 
   {
-    echo "Component: REFLEX CPUFreq Governor 0.3.1"
+    echo "Component: REFLEX CPUFreq Governor $PATCH_REFLEX_VERSION"
     echo "Repository: firelzrd/reflex"
     echo "Commit: $REFLEX_COMMIT"
     echo "Path: $REFLEX_PATCH_PATH"
     echo "SHA256: $(sha256sum "$REFLEX_PATCH" | awk '{print $1}')"
-    echo "Acquisition: pinned local partial Git checkout"
+    echo "Acquisition: dynamically locked local partial Git checkout"
   } | tee "$LOGDIR/07-reflex-provenance.txt"
 }
 
@@ -84,7 +85,7 @@ normalize_changed_whitespace() {
         r'''apply_reflex_patch() {
   local file="$1" status=0
 
-  echo "==> Applying native Linux 7.1 REFLEX CPUFreq 0.3.1 patch"
+  echo "==> Applying Linux 7.1 REFLEX CPUFreq $PATCH_REFLEX_VERSION patch"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/07-reflex.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -116,8 +117,8 @@ normalize_changed_whitespace() {
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
 
   # Upstream's README documents CPU_FREQ_DEFAULT_GOV_REFLEX, and the governor
-  # source implements cpufreq_default_governor() behind that symbol. The 0.3.1
-  # patch does not add the symbol to the default-governor choice, so complete
+  # source implements cpufreq_default_governor() behind that symbol. If the selected patch does not add the symbol to the default-governor
+   # choice, complete
   # that integration here before olddefconfig.
   python3 - <<'PY'
 from pathlib import Path
@@ -146,6 +147,7 @@ PY
 
   git diff --check -- \
     arch/x86/kernel/cpu/aperfmperf.c \
+    drivers/base/arch_topology.c \
     drivers/cpufreq \
     include/linux/sched/cpufreq.h \
     kernel/kthread.c kernel/sched/cpufreq.c \
@@ -153,11 +155,11 @@ PY
     | tee "$LOGDIR/07-reflex-diff-check.log"
 
   test -s drivers/cpufreq/cpufreq_reflex.c
-  grep -Fq '#define CPUFREQ_REFLEX_VERSION  "0.3.1"' drivers/cpufreq/cpufreq_reflex.c
+  [[ "$PATCH_REFLEX_VERSION" == "unknown" ]] || grep -Fq "$PATCH_REFLEX_VERSION" drivers/cpufreq/cpufreq_reflex.c
   grep -Fq 'config CPU_FREQ_GOV_REFLEX' drivers/cpufreq/Kconfig
   grep -Fq 'config CPU_FREQ_DEFAULT_GOV_REFLEX' drivers/cpufreq/Kconfig
   grep -Fq 'cpufreq_default_governor(void)' drivers/cpufreq/cpufreq_reflex.c
-  echo "==> REFLEX 0.3.1 patch and default-governor integration applied successfully"
+  echo "==> REFLEX $PATCH_REFLEX_VERSION patch and default-governor integration applied successfully"
 }
 
 apply_bore_patch() {

@@ -111,6 +111,45 @@ class ResolverTests(unittest.TestCase):
             shown = run("git", "-C", str(clone), "show", f"FETCH_HEAD:{record['path']}").stdout
             self.assertIn("lru_marie 0.8.0", shown)
 
+    def test_nearest_fallback_prefers_distance_over_newest_kernel(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            repo = tmp / "repo"
+            init_repo(
+                repo,
+                {
+                    "patches/stable/0001-linux7.2-demo-v1.0.patch": patch("demo 1.0"),
+                    "patches/stable/0001-linux7.9-demo-v9.0.patch": patch("demo 9.0"),
+                    "patches/stable/0001-linux7.0-demo-v2.0.patch": patch("demo 2.0"),
+                },
+            )
+            manifest = {
+                "schema": 1,
+                "components": {
+                    "demo": {
+                        "kind": "git_patch",
+                        "repo": str(repo),
+                        "ref": "main",
+                        "exact_globs": ["patches/stable/*linux{series}*demo*.patch"],
+                        "fallback_globs": ["patches/stable/*demo*.patch"],
+                        "require_exact_series": False,
+                        "output": "demo.patch",
+                        "project_version_regex": r"demo-v([0-9.]+)",
+                    }
+                },
+            }
+            manifest_path = tmp / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = tmp / "resolved"
+            run(
+                "python3", str(RESOLVER), "--manifest", str(manifest_path),
+                "--output-dir", str(output), "--kernel-version", "7.1.3",
+                "--kernel-series", "7.1",
+            )
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
+            self.assertIn("linux7.2", record["selected_path"])
+            self.assertEqual(record["project_version"], "1.0")
+
     def test_fallback_ref_restores_exact_series(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
