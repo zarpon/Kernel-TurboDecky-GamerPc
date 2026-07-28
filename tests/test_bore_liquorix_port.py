@@ -114,9 +114,10 @@ apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
             ],
         )
         self.assertEqual(
-            component["approved_sha256"],
-            "87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36",
+            component["project_version_regex"],
+            r"bore-([0-9]+(?:\.[0-9]+){1,2}(?:-rc[0-9]+)?)\.patch$",
         )
+        self.assertNotIn("approved_sha256", component)
 
         sched_ext = json.loads(MANIFEST.read_text(encoding="utf-8"))[
             "components"
