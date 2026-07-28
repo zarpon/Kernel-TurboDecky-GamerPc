@@ -15,6 +15,7 @@ MANIFEST_PATH = ROOT / "config/patch-sources.json"
 RESOLVER_PATH = ROOT / "scripts/resolve-patch-sources.py"
 REFLEX_REWRITER = (ROOT / "scripts/apply-reflex-core.py").read_text(encoding="utf-8")
 DYNAMIC_REWRITER = (ROOT / "scripts/apply-dynamic-patch-sources.py").read_text(encoding="utf-8")
+REQUESTED_REWRITER = (ROOT / "scripts/apply-requested-patch-series.py").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github/workflows/validate-kernel.yml").read_text(encoding="utf-8")
 
 VERSIONED_COMPONENTS = {
@@ -32,8 +33,6 @@ IMMUTABLE_HTTP_COMPONENTS = {
     "bt_ssp",
     "libbpf_uninitialized",
     "firmware_name",
-    "ath11k_disable_key",
-    "ath11k_upstream",
 }
 
 EXPECTED_COMPONENTS = {
@@ -59,10 +58,18 @@ EXPECTED_COMPONENTS = {
     "minstrel_fluctuation",
     "minstrel_downgrade",
     "ath11k_remapped_ce",
-    "ath11k_disable_key",
-    "ath11k_upstream",
     "vram",
     "liquorix_config",
+}
+
+OBSOLETE_ATH11K_MARKERS = {
+    "ath11k_disable_key",
+    "ath11k_upstream",
+    "22-ath11k-disable-key.patch",
+    "23-ath11k-upstream.patch",
+    "ath11k DISABLE_KEY revert",
+    "ath11k Qualcomm upstream series",
+    "20260319065608.2408179",
 }
 
 
@@ -159,6 +166,14 @@ class PatchSourcePolicyTests(unittest.TestCase):
 
         self.assertIn('("BORE", "bore"), ("MARIE", "marie"), ("REFLEX", "reflex")', DYNAMIC_REWRITER)
         self.assertIn('replace_assignment(text, "PATCH_REFLEX_VERSION"', DYNAMIC_REWRITER)
+
+    def test_obsolete_ath11k_patches_are_not_resolved_or_applied(self) -> None:
+        serialized_manifest = json.dumps(self.manifest, sort_keys=True)
+        for marker in OBSOLETE_ATH11K_MARKERS:
+            with self.subTest(marker=marker):
+                self.assertNotIn(marker, serialized_manifest)
+                self.assertNotIn(marker, DYNAMIC_REWRITER)
+                self.assertNotIn(marker, REQUESTED_REWRITER)
 
     def test_ci_resolves_sources_after_injecting_reflex(self) -> None:
         reflex = "python3 scripts/apply-reflex-core.py"
