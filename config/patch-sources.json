@@ -346,21 +346,6 @@
         "0ff1553bd731c0db28043fc9caab90bdc32587f3"
       ]
     },
-    "ath11k_disable_key": {
-      "kind": "http_patch",
-      "urls": [
-        "https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch",
-        "https://git.infobricfleet.com/gtu/openwrt/-/raw/95341cc9c560ff371c06db2a8221d19bb62d0c30/package/kernel/mac80211/patches/ath11k/940-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"
-      ],
-      "output": "22-ath11k-disable-key.patch"
-    },
-    "ath11k_upstream": {
-      "kind": "http_patch",
-      "urls": [
-        "https://lore.kernel.org/all/20260319065608.2408179-1-reshma.rajkumar@oss.qualcomm.com/raw"
-      ],
-      "output": "23-ath11k-upstream.patch"
-    },
     "vram": {
       "kind": "git_patch",
       "repo": "https://github.com/CachyOS/kernel-patches.git",
