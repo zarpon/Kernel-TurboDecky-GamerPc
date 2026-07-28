@@ -132,8 +132,8 @@ def rewrite_core(path: Path, record: dict[str, Any], kernel_version: str) -> Non
     )
     text = replace_regex_once(
         text,
-        r'BORE [^"\n]+ for Linux [0-9.]+',
-        'BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION',
+        r'report_bore_rejects "BORE [0-9][^"]* for Linux [0-9.]+"',
+        'report_bore_rejects "BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"',
         "BORE reject label",
     )
     text = replace_regex_once(
