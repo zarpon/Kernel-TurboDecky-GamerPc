@@ -61,6 +61,14 @@ if text.count(old_testing) != 1 or text.count(old_stable) != 1:
 text = text.replace(old_testing, new_testing, 1).replace(old_stable, new_stable, 1)
 bore_test.write_text(text, encoding="utf-8")
 
+resolver_test = Path("tests/test_dynamic_patch_resolver.py")
+text = resolver_test.read_text(encoding="utf-8")
+old_regex = '"project_version_regex": r"demo-v([0-9.]+)",'
+new_regex = '"project_version_regex": r"demo-v([0-9]+(?:\\.[0-9]+)*)",'
+if text.count(old_regex) != 1:
+    raise SystemExit(f"resolver test version regex anchors: {text.count(old_regex)}")
+resolver_test.write_text(text.replace(old_regex, new_regex, 1), encoding="utf-8")
+
 reflex = Path("scripts/apply-reflex-core.py")
 text = reflex.read_text(encoding="utf-8")
 text = re.sub(
