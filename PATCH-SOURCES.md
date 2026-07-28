@@ -17,30 +17,39 @@ pelo workflow.
   removeu um arquivo ainda necessário;
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
+- consultas Git remotas não são interativas e têm limite de tempo; uma origem
+  lenta ou indisponível falha de forma explícita em vez de bloquear o build.
 
-## BORE 6.8.0-rc1 e coexistência com sched_ext para Linux 7.1.4
+## BORE atual e coexistência com sched_ext
 
-O resolvedor consulta os patches oficiais de BORE para Linux 7.1 nas árvores
-`testing` e `stable` de
+O resolvedor consulta os patches oficiais de BORE para a série estável atual
+nas árvores `testing` e `stable` de
 [`firelzrd/bore-scheduler`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/testing)
-e seleciona a versão mais nova. O lock registra seu commit, caminho e SHA-256.
-O build atual usa a tag estável Linux `v7.1.4`; por isso o patch upstream puro
-não é aplicado diretamente quando seu contexto diverge dessa revisão.
+e escolhe a versão mais nova com correspondência de série exata. Os bytes do
+patch selecionado, commit, caminho, tamanho e SHA-256 entram no
+`patch-lock.json`; o finalizador aplica exatamente esse arquivo materializado.
+Não há hash aprovado fixo no manifesto para impedir uma atualização legítima.
 
-O build usa `patches/bore/7.1.4-bore-6.8.0-rc1.patch`, uma adaptação mínima
-revisada contra essa tag. Antes de aplicá-la sem fuzz, ele baixa e verifica o
-patch upstream correspondente. O SHA-256 aprovado no manifesto e no script
-de build bloqueia uma versão oficial nova até que o port seja renovado e
-validado. A compilação local cobre `bore.o`, `fair.o`, `core.o` e
-`build_utility.o` com `CONFIG_SCHED_BORE=y`.
+O patch upstream BORE é aplicado somente depois de `patch --dry-run` contra a
+árvore Linux baixada para aquele build. Assim, um patch novo que não tenha
+contexto compatível falha antes de modificar a árvore ou publicar um pacote;
+nenhuma aplicação usa `--fuzz`.
 
 O lock também resolve
 [`0002-sched-ext-coexistence-fix.patch`](https://github.com/firelzrd/bore-scheduler/tree/main/patches/additions).
-Ele é aplicado imediatamente após BORE por
-`patches/bore/7.1.4-sched-ext-coexistence-fix.patch`. O port preserva o
-helper upstream `reweight_task()`, fixa o contexto Linux 7.1.4 sem fuzz e
-declara o helper em `include/linux/sched/bore.h`, necessário porque este build
-trata protótipos ausentes como erro.
+Como esse helper precisa de contexto e de um protótipo específicos da série
+Linux 7.1, o finalizador gera um port derivado a cada build. Ele mantém apenas
+o contexto revisado de `fair.c` e a declaração em `include/linux/sched/bore.h`,
+copiando o corpo atual de `reweight_task()` dos bytes upstream bloqueados. O
+registro `compatibility_port` no lock contém SHA-256, tamanho, alvo do kernel,
+adaptador e SHA-256 da fonte pai.
+
+Essa adaptação falha fechada se o patch upstream deixar de ter exatamente uma
+função `reweight_task()` em `kernel/sched/fair.c`, perder os marcadores
+necessários ou se o template revisado mudar de estrutura. O port materializado
+é validado pelo lock antes do download da árvore Linux e novamente por
+`patch --dry-run` antes da aplicação. A compilação cobre `bore.o`, `fair.o`,
+`core.o` e `build_utility.o` com `CONFIG_SCHED_BORE=y`.
 
 ## BORE e POC Selector
 
@@ -104,6 +113,12 @@ componente:
 - SHA-256 e tamanho dos bytes aplicados;
 - indicação de correspondência exata, fallback de série ou fallback de commit.
 
+Quando uma fonte precisa de um contexto de compatibilidade mantido pelo
+projeto, o mesmo componente pode incluir `compatibility_port`: o arquivo
+derivado, sua identidade de adaptador, versão-alvo, SHA-256, tamanho e o
+SHA-256 do upstream de origem. A validação rejeita qualquer port que não seja
+filho exato da fonte bloqueada.
+
 O build usa repositórios Git mínimos e autocontidos gerados a partir dos bytes
 selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 `logs/patch-lock.json`.
@@ -133,7 +148,7 @@ Os testes confirmam:
 - recuperação por commit histórico;
 - consumo do snapshot como repositório Git local autocontido;
 - rastreamento do patch BORE upstream, da correção de coexistência com
-  `sched_ext` e dos ports Linux versionados;
+  `sched_ext` e de seu port derivado bloqueado;
 - aplicação combinada de BORE e POC Selector;
 - aplicação do perfil Zen com exclusão e invariância verificável de THP;
 - reescrita das validações de build.

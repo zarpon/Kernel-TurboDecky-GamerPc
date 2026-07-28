@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract checks for the reviewed BORE port used by the stable Linux build."""
+"""Contract checks for the dynamic BORE and sched_ext build path."""
 
 from __future__ import annotations
 
@@ -10,42 +10,21 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PORT = ROOT / "patches/bore/7.1.4-bore-6.8.0-rc1.patch"
 SCHED_EXT_PORT = ROOT / "patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
 CORE = ROOT / "scripts/build-kernelnote-core.sh"
 WRAPPER = ROOT / "scripts/build-kernelnote.sh"
 MANIFEST = ROOT / "config/patch-sources.json"
+FINALIZER = ROOT / "scripts/finalize-bore-stable-port.py"
 
 
 class BoreLinuxPortTests(unittest.TestCase):
-    def test_port_is_pinned_and_contains_the_scheduler_integration(self) -> None:
-        data = PORT.read_bytes()
-        self.assertEqual(
-            hashlib.sha256(data).hexdigest(),
-            "37aad7f129a09c4e858cf0017e5c801bd3415230715e97a98283bf3c21d603bd",
-        )
-        text = data.decode("utf-8")
-        for marker in (
-            "Subject: [PATCH] sched: port BORE 6.8.0-rc1 to Linux 7.1.4",
-            "diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c",
-            "SCHED_BORE_VERSION  \"6.8.0-rc1\"",
-            "obj-$(CONFIG_SCHED_BORE) += bore.o",
-            "sched_update_min_base_slice",
-        ):
-            self.assertIn(marker, text)
-
-    def test_build_tracks_upstream_but_applies_the_exact_local_port(self) -> None:
+    def test_build_defers_bore_to_the_exact_dynamic_lock(self) -> None:
         core = CORE.read_text(encoding="utf-8")
+        finalizer = FINALIZER.read_text(encoding="utf-8")
         self.assertIn('BORE_REPO="https://github.com/firelzrd/bore-scheduler.git"', core)
-        self.assertIn(
-            'BORE_PATCH_PATH="patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"',
-            core,
-        )
-        self.assertIn('BORE_PATCH="$ROOT/patches/bore/7.1.4-bore-6.8.0-rc1.patch"', core)
-        self.assertIn(
-            'BORE_PORT_UPSTREAM_SHA256="87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36"',
-            core,
-        )
+        self.assertIn("load_locked_bore", finalizer)
+        self.assertIn('BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"', finalizer)
+        self.assertNotIn("6.8.0-rc1", finalizer)
         self.assertIn('apply_bore_patch "$BORE_PATCH"', core)
         function = core.split("apply_bore_patch() {", 1)[1].split("apply_adios_patch() {", 1)[0]
         self.assertIn("--dry-run", function)

@@ -17,10 +17,10 @@ KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
 LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
 
-# BORE 6.8.0-rc1 has an official Linux 7.1 patch. The generated build follows
-# the current stable Linux source, so the reviewed, reproducible 7.1.4 port is
-# applied instead. The official patch is fetched and recorded on every build;
-# its SHA-256 must match the reviewed port before the build can continue.
+# Bootstrap anchors for the generated build only. The resolver obtains current
+# upstream BORE and sched_ext bytes, then finalize-bore-stable-port.py replaces
+# every version, digest and port path from that exact lock before this script is
+# executed. These template values must never be treated as an active pin.
 BORE_REPO="https://github.com/firelzrd/bore-scheduler.git"
 BORE_BRANCH="main"
 BORE_COMMIT="16bf5baebbb42cdba393c501ba9c2af5f84e4749"

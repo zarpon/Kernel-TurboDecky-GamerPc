@@ -41,7 +41,6 @@ bash "$ROOT/tests/test_runtime_tuning.sh"
 grep -Fq '"bore"' "$ROOT/config/patch-sources.json"
 grep -Fq '"bore_sched_ext_coexistence"' "$ROOT/config/patch-sources.json"
 grep -Fq 'firelzrd/bore-scheduler' "$ROOT/config/patch-sources.json"
-grep -Fq '7.1.4-bore-6.8.0-rc1.patch' "$ROOT/scripts/build-kernelnote-core.sh"
 grep -Fq '7.1.4-sched-ext-coexistence-fix.patch' "$ROOT/scripts/build-kernelnote-core.sh"
 ! grep -Fq 'approved_sha256' "$ROOT/config/patch-sources.json"
 grep -Fq 'CONFIG_SCHED_BORE=y' "$ROOT/config/kernelnote.config"
@@ -121,6 +120,9 @@ if [[ -n "${KERNEL_VERSION:-}" && -n "${KERNEL_SERIES:-}" ]]; then
       "$preflight_dir/core.sh" "$preflight_dir/build-kernelnote.sh"
   run_rewriter final-bore-port \
     python3 "$ROOT/scripts/finalize-bore-stable-port.py" "$preflight_dir/core.sh"
+  run_rewriter validate-materialized-bore-port \
+    python3 "$ROOT/scripts/validate-resolved-patches.py" \
+      --lock "$ROOT/.resolved-patches/patch-lock.json"
   bash -n "$preflight_dir/core.sh" "$preflight_dir/build-kernelnote.sh"
 
   rm -rf "$preflight_dir" "$ROOT/.resolved-patches"

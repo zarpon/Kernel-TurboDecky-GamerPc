@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 
@@ -17,16 +18,23 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def insert_after_assignment(text: str, variable: str, addition: str, label: str) -> str:
+    """Insert after one shell assignment without depending on its stale value."""
+
+    pattern = re.compile(rf"^{re.escape(variable)}=.*\n", re.MULTILINE)
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        raise RewriteError(f"expected one {label} assignment, found {len(matches)}")
+    match = matches[0]
+    return text[: match.end()] + addition + text[match.end() :]
+
+
 def rewrite(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
 
     variables_marker = 'ZEN_INTERACTIVE_REF="${KERNEL_SERIES:-7.1}/zen-sauce"\n'
     if variables_marker not in text:
-        anchor = (
-            'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='
-            '"cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c"\n'
-        )
-        replacement = anchor + '''
+        variables = '''
 # Follow the current kernel series when Zen publishes an exact sauce branch;
 # the resolver falls back to the nearest older compatible official series and
 # records the selected ref and compatibility commits in patch-lock.json.
@@ -36,7 +44,12 @@ ZEN_INTERACTIVE_DIR="$WORKDIR/zen-interactive"
 ZEN_INTERACTIVE_PATCH="$PATCHDIR/00-zen-interactive-profile.patch"
 ZEN_INTERACTIVE_PROVENANCE="$LOGDIR/00-zen-interactive-provenance.txt"
 '''
-        text = replace_once(text, anchor, replacement, "Zen variables")
+        text = insert_after_assignment(
+            text,
+            "BORE_SCHED_EXT_PORT_UPSTREAM_SHA256",
+            variables,
+            "Zen variables",
+        )
 
     function_marker = "apply_zen_interactive_profile() {\n"
     if function_marker not in text:
