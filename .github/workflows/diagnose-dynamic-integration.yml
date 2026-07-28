@@ -1,0 +1,86 @@
+name: Diagnose dynamic patch integration
+
+on:
+  push:
+    branches:
+      - agent/bore-680-sha-hardening-20260728
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-dynamic-integration
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    if: github.head_ref == 'agent/bore-680-sha-hardening-20260728' || github.ref_name == 'agent/bore-680-sha-hardening-20260728'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/bore-680-sha-hardening-20260728
+          fetch-depth: 1
+
+      - name: Resolve latest stable Linux
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p logs
+          python3 scripts/resolve-latest-stable.py --github-env "$GITHUB_ENV" --log-dir logs
+
+      - name: Validate local contracts
+        run: scripts/validate-dynamic-patches-local.sh
+
+      - name: Apply REFLEX integration
+        run: python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+
+      - name: Apply upstream generic integration
+        run: python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
+
+      - name: Apply requested patch series
+        run: python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
+
+      - name: Apply latest stable series
+        run: python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
+
+      - name: Apply Zen interactive integration
+        run: python3 scripts/apply-zen-interactive.py scripts/build-kernelnote-core.sh
+
+      - name: Resolve and apply Zarpon dynamic sources
+        run: python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+
+      - name: Validate materialized patch bytes
+        run: python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
+
+      - name: Validate resolved-patch regression tests
+        run: python3 tests/test-resolved-patch-integrity.py
+
+      - name: Finalize BORE stable port
+        run: python3 scripts/finalize-bore-stable-port.py scripts/build-kernelnote-core.sh
+
+      - name: Compile transformed Python
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)
+          python3 -m py_compile "${sources[@]}"
+
+      - name: Upload diagnostic state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dynamic-integration-diagnostic-${{ github.sha }}
+          path: |
+            logs
+            .resolved-patches/patch-lock.json
+            .resolved-patches/files
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
