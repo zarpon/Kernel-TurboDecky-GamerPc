@@ -92,20 +92,10 @@ def main() -> None:
 fetch_requested_patch_series() {
   echo "==> Resolving requested patch series, preferring Linux 7.1 revisions"
 
-  fetch_candidate_patch "C23 libbpf fix" \
-    "$REQUESTED_SERIES_DIR/08-c23-libbpf.patch" "08-c23-libbpf" \
-    "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=d70f79fef65810faf64dbae1f3a1b5623cdb2345" \
-    "https://github.com/torvalds/linux/commit/d70f79fef65810faf64dbae1f3a1b5623cdb2345.patch"
-
   fetch_candidate_patch "Clear Linux performance patches" \
     "$REQUESTED_SERIES_DIR/09-clear.patch" "09-clear" \
     "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/489513b1a3b9339d40d9e4718c7eb4e90c2e2723/linux-tkg-patches/7.1/0002-clear-patches.patch" \
     "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/d837d80398a62ea884caabad36530093f9711d49/linux-tkg-patches/6.16/0002-clear-patches.patch"
-
-  fetch_candidate_patch "fsync FUTEX_WAIT_MULTIPLE compatibility" \
-    "$REQUESTED_SERIES_DIR/10-fsync-futex-waitv.patch" "10-fsync" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/489513b1a3b9339d40d9e4718c7eb4e90c2e2723/linux-tkg-patches/7.1/0007-v7.1-fsync1_via_futex_waitv.patch" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/d837d80398a62ea884caabad36530093f9711d49/linux-tkg-patches/6.11/0007-v6.11-fsync1_via_futex_waitv.patch"
 
   fetch_candidate_patch "Optimize harder O3" \
     "$REQUESTED_SERIES_DIR/11-o3.patch" "11-o3" \
@@ -217,9 +207,7 @@ apply_requested_patch() {
 }
 
 apply_requested_patch_series() {
-  apply_requested_patch "C23 libbpf fix" "$REQUESTED_SERIES_DIR/08-c23-libbpf.patch" "08-c23-libbpf"
   apply_requested_patch "Clear Linux performance patches" "$REQUESTED_SERIES_DIR/09-clear.patch" "09-clear"
-  apply_requested_patch "fsync FUTEX_WAIT_MULTIPLE compatibility" "$REQUESTED_SERIES_DIR/10-fsync-futex-waitv.patch" "10-fsync"
   apply_requested_patch "Optimize harder O3" "$REQUESTED_SERIES_DIR/11-o3.patch" "11-o3"
   apply_requested_patch "Bluetooth SSP key-size check" "$REQUESTED_SERIES_DIR/12-bt-ssp-key-size.patch" "12-bt-ssp"
   apply_requested_patch "libbpf Wmaybe-uninitialized workaround" "$REQUESTED_SERIES_DIR/13-libbpf-uninitialized.patch" "13-libbpf-uninitialized"
@@ -238,7 +226,6 @@ apply_requested_patch_series() {
   fi
 
   grep -Fq 'const char *res;' tools/lib/bpf/libbpf.c
-  grep -Fq '#define FUTEX_WAIT_MULTIPLE' include/uapi/linux/futex.h
   grep -Fq 'config CC_OPTIMIZE_FOR_PERFORMANCE_O3' init/Kconfig
   grep -Fq 'config POLLY_CLANG' init/Kconfig
   echo "==> Requested patch series applied or confirmed integrated"
