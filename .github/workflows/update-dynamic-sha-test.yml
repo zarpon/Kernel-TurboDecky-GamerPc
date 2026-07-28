@@ -30,15 +30,17 @@ jobs:
       - name: Update legacy SHA test
         run: python3 scripts/.update-dynamic-sha-test.py
 
-      - name: Validate updated tests
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          python3 -m py_compile tests/test_dynamic_patch_resolver.py tests/test_bore_liquorix_port.py
-          python3 -m unittest \
-            tests.test_dynamic_patch_resolver.ResolverTests.test_dynamic_upstream_sha_is_recorded_in_the_lock \
-            tests.test_bore_liquorix_port.BoreLinuxPortTests.test_dynamic_manifest_requires_native_bore_71_source
-          git diff --check
+      - name: Compile migrated tests
+        run: python3 -m py_compile tests/test_dynamic_patch_resolver.py tests/test_bore_liquorix_port.py
+
+      - name: Validate lock-recorded SHA test
+        run: python3 -m unittest tests.test_dynamic_patch_resolver.ResolverTests.test_dynamic_upstream_sha_is_recorded_in_the_lock
+
+      - name: Validate BORE manifest contract
+        run: python3 -m unittest tests.test_bore_liquorix_port.BoreLinuxPortTests.test_dynamic_manifest_requires_native_bore_71_source
+
+      - name: Validate test diff
+        run: git diff --check
 
       - name: Commit updated tests
         shell: bash
