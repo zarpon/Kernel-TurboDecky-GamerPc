@@ -147,6 +147,10 @@ jobs:
           python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
           python3 tests/test-resolved-patch-integrity.py
           python3 scripts/finalize-bore-stable-port.py scripts/build-kernelnote-core.sh
+          # The finalizer adds the derived sched_ext compatibility port to the
+          # same lock. Verify both the immutable upstream bytes and that
+          # generated port before any kernel source is downloaded or patched.
+          python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
           shopt -s nullglob
           python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)
           python3 -m py_compile "${python_sources[@]}"
@@ -217,6 +221,21 @@ jobs:
           assert sched_ext['ref'] == 'main'
           assert sched_ext['selection'] == 'exact'
           assert sched_ext['path'] == 'patches/additions/0002-sched-ext-coexistence-fix.patch'
+          assert re.fullmatch(r'[0-9a-f]{64}', sched_ext['sha256'])
+          sched_ext_source = Path('.resolved-patches') / sched_ext['output']
+          sched_ext_data = sched_ext_source.read_bytes()
+          assert hashlib.sha256(sched_ext_data).hexdigest() == sched_ext['sha256']
+          assert len(sched_ext_data) == sched_ext['size']
+
+          port = sched_ext['compatibility_port']
+          assert port['adapter'] == 'linux7.1-sched-ext-reweight-task'
+          assert port['kernel_target'] == lock['kernel']['version']
+          assert port['source_sha256'] == sched_ext['sha256']
+          assert re.fullmatch(r'[0-9a-f]{64}', port['sha256'])
+          materialized_port = Path('.resolved-patches') / port['output']
+          port_data = materialized_port.read_bytes()
+          assert hashlib.sha256(port_data).hexdigest() == port['sha256']
+          assert len(port_data) == port['size']
           PY
 
       - name: Verify validation module coverage

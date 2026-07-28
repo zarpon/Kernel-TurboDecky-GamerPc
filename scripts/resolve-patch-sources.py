@@ -33,6 +33,10 @@ PATCH_PREFIXES = (
     b"--- /dev/null",
 )
 USER_AGENT = "TurboDecky-GamerPc-Patch-Resolver/2.0"
+DEFAULT_COMMAND_TIMEOUT = 90
+FETCH_TIMEOUT = 180
+REMOTE_LOW_SPEED_LIMIT = "1024"
+REMOTE_LOW_SPEED_TIME = "120"
 
 
 class ResolverError(RuntimeError):
@@ -57,15 +61,38 @@ class KernelVersion:
         return self.parts[0], self.parts[1]
 
 
-def run(command: list[str], *, cwd: Path | None = None, capture: bool = False) -> str:
-    result = subprocess.run(
-        command,
-        cwd=cwd,
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE if capture else None,
-        stderr=subprocess.PIPE if capture else None,
-    )
+def git_environment() -> dict[str, str]:
+    """Keep remote Git resolution non-interactive and bounded on slow links."""
+
+    environment = os.environ.copy()
+    environment.setdefault("GIT_TERMINAL_PROMPT", "0")
+    environment["GIT_HTTP_LOW_SPEED_LIMIT"] = REMOTE_LOW_SPEED_LIMIT
+    environment["GIT_HTTP_LOW_SPEED_TIME"] = REMOTE_LOW_SPEED_TIME
+    return environment
+
+
+def run(
+    command: list[str],
+    *,
+    cwd: Path | None = None,
+    capture: bool = False,
+    timeout: int = DEFAULT_COMMAND_TIMEOUT,
+) -> str:
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            env=git_environment(),
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE if capture else None,
+            stderr=subprocess.PIPE if capture else None,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ResolverError(
+            f"command timed out after {timeout}s: {' '.join(command)}"
+        ) from exc
     if result.returncode != 0:
         detail = ""
         if capture:
@@ -91,9 +118,12 @@ def snapshot_repo(repo: str, ref: str, destination: Path) -> str:
         "--filter=blob:none", "origin", ref,
     ]
     try:
-        run(command)
+        run(command, timeout=FETCH_TIMEOUT)
     except ResolverError:
-        run(["git", "-C", str(destination), "fetch", "--no-tags", "--depth=1", "origin", ref])
+        run(
+            ["git", "-C", str(destination), "fetch", "--no-tags", "--depth=1", "origin", ref],
+            timeout=FETCH_TIMEOUT,
+        )
     commit = run(["git", "-C", str(destination), "rev-parse", "FETCH_HEAD"], capture=True)
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ResolverError(f"invalid resolved commit for {repo}@{ref}: {commit}")
@@ -134,12 +164,19 @@ def read_git_blob(
         if len(fields) < 3 or listed_path != current:
             raise ResolverError(f"unexpected ls-tree response for {current}: {first!r}")
         mode, obj_type = fields[0], fields[1]
-        result = subprocess.run(
-            ["git", "-C", str(repo_dir), "show", f"{commit}:{current}"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(repo_dir), "show", f"{commit}:{current}"],
+                env=git_environment(),
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=FETCH_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise ResolverError(
+                f"timed out after {FETCH_TIMEOUT}s while reading {current} from {commit}"
+            ) from exc
         if result.returncode != 0:
             raise ResolverError(
                 f"unable to read {current} from {commit}: "

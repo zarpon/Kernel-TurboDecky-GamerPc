@@ -8,8 +8,8 @@ os scripts de geração do `Kernel-TurboDecky-GamerPc`.
 
 | Fonte/patch observado no Charcoal | Destino no GamerPC | Resultado |
 | --- | --- | --- |
-| BORE 6.8.0-rc1 | `bore` + `patches/bore/7.1.4-bore-6.8.0-rc1.patch` | Equivalente compatível; fonte oficial é resolvida por série e o port revisado é validado por SHA-256 |
-| BORE `sched-ext` coexistence fix | `bore_sched_ext_coexistence` + `patches/bore/7.1.4-sched-ext-coexistence-fix.patch` | Coberto |
+| BORE | `bore` | Fonte oficial mais nova da série exata, materializada e bloqueada por commit/caminho/SHA-256/tamanho; aplicação sem fuzz exige `patch --dry-run` na árvore real |
+| BORE `sched-ext` coexistence fix | `bore_sched_ext_coexistence` + template revisado | Coberto por port derivado: copia o helper upstream bloqueado, preserva somente o contexto Linux 7.1 revisado e falha fechada se a estrutura mudar |
 | Marie LRU 0.6.7 | `marie` | Coberto por resolução dinâmica; o fallback local é sincronizado automaticamente com a versão upstream compatível mais recente |
 | ZRAM-IR 1.2 | `zram_ir` | Coberto por fonte compatível de Linux 7.1 |
 | POC Selector 2.6.1r2 | `poc` | Coberto por versão mais nova compatível, atualmente 2.6.2r2 |

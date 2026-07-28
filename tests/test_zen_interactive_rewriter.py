@@ -69,6 +69,23 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
                 result,
             )
 
+    def test_rewriter_does_not_depend_on_a_sched_ext_digest_anchor(self) -> None:
+        original = CORE.read_text(encoding="utf-8")
+        original = original.replace(
+            'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='
+            '"cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c"',
+            'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="new-lock-digest"',
+            1,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "build-core.sh"
+            path.write_text(original, encoding="utf-8")
+            rewriter.rewrite(path)
+            result = path.read_text(encoding="utf-8")
+
+        self.assertIn('BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="new-lock-digest"', result)
+        self.assertIn('ZEN_INTERACTIVE_REF="${KERNEL_SERIES:-7.1}/zen-sauce"', result)
+
     def test_rewriter_rejects_missing_anchor(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "build-core.sh"

@@ -2,16 +2,24 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 RESOLVER = ROOT / "scripts/resolve-patch-sources.py"
 REWRITER = ROOT / "scripts/apply-dynamic-patch-sources.py"
+SPEC = importlib.util.spec_from_file_location("resolve_patch_sources", RESOLVER)
+assert SPEC and SPEC.loader
+resolver_module = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = resolver_module
+SPEC.loader.exec_module(resolver_module)
 
 
 def run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
@@ -43,6 +51,15 @@ def init_repo(path: Path, files: dict[str, str]) -> None:
 
 
 class ResolverTests(unittest.TestCase):
+    def test_remote_commands_have_a_bounded_timeout(self) -> None:
+        with mock.patch.object(
+            resolver_module.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(["git", "fetch"], 7),
+        ):
+            with self.assertRaisesRegex(resolver_module.ResolverError, "timed out after 7s"):
+                resolver_module.run(["git", "fetch"], timeout=7)
+
     def test_latest_exact_version_and_nearest_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)

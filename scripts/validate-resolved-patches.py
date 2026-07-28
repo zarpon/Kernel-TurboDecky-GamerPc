@@ -36,6 +36,28 @@ def contained_file(root: Path, relative: str) -> Path:
     return candidate
 
 
+def validate_materialized_output(root: Path, name: str, record: dict[str, Any]) -> None:
+    digest = record.get("sha256")
+    size = record.get("size")
+    output = record.get("output")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise IntegrityError(f"{name}: invalid SHA-256 in lock")
+    if not isinstance(size, int) or size <= 0:
+        raise IntegrityError(f"{name}: invalid size in lock")
+    if not isinstance(output, str) or not output:
+        raise IntegrityError(f"{name}: missing output path")
+    path = contained_file(root, output)
+    try:
+        data = path.read_bytes()
+    except OSError as exc:
+        raise IntegrityError(f"{name}: unable to read materialized output {path}: {exc}") from exc
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != digest:
+        raise IntegrityError(f"{name}: materialized SHA-256 {actual} != lock {digest}")
+    if len(data) != size:
+        raise IntegrityError(f"{name}: materialized size {len(data)} != lock {size}")
+
+
 def validate_lock(lock_path: Path) -> int:
     lock = load_lock(lock_path)
     root = lock_path.parent
@@ -43,25 +65,7 @@ def validate_lock(lock_path: Path) -> int:
     for name, raw in lock["components"].items():
         if not isinstance(raw, dict):
             raise IntegrityError(f"{name}: lock record must be an object")
-        digest = raw.get("sha256")
-        size = raw.get("size")
-        output = raw.get("output")
-        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-            raise IntegrityError(f"{name}: invalid SHA-256 in lock")
-        if not isinstance(size, int) or size <= 0:
-            raise IntegrityError(f"{name}: invalid size in lock")
-        if not isinstance(output, str) or not output:
-            raise IntegrityError(f"{name}: missing output path")
-        path = contained_file(root, output)
-        try:
-            data = path.read_bytes()
-        except OSError as exc:
-            raise IntegrityError(f"{name}: unable to read materialized output {path}: {exc}") from exc
-        actual = hashlib.sha256(data).hexdigest()
-        if actual != digest:
-            raise IntegrityError(f"{name}: materialized SHA-256 {actual} != lock {digest}")
-        if len(data) != size:
-            raise IntegrityError(f"{name}: materialized size {len(data)} != lock {size}")
+        validate_materialized_output(root, name, raw)
 
         kind = raw.get("kind")
         if kind in {"git_patch", "git_file"}:
@@ -75,6 +79,29 @@ def validate_lock(lock_path: Path) -> int:
                 raise IntegrityError(f"{name}: invalid resolved HTTPS URL")
         else:
             raise IntegrityError(f"{name}: unsupported component kind {kind!r}")
+        checked += 1
+
+        compatibility_port = raw.get("compatibility_port")
+        if compatibility_port is None:
+            continue
+        if kind != "git_patch" or not isinstance(compatibility_port, dict):
+            raise IntegrityError(f"{name}: invalid compatibility port record")
+        if raw.get("selection") != "exact":
+            raise IntegrityError(
+                f"{name}: compatibility port requires an exact upstream selection"
+            )
+        source_sha256 = compatibility_port.get("source_sha256")
+        if source_sha256 != raw.get("sha256"):
+            raise IntegrityError(
+                f"{name}: compatibility port source SHA-256 does not match upstream lock"
+            )
+        if not isinstance(compatibility_port.get("adapter"), str) or not compatibility_port["adapter"]:
+            raise IntegrityError(f"{name}: compatibility port has no adapter identity")
+        if compatibility_port.get("kernel_target") != lock.get("kernel", {}).get("version"):
+            raise IntegrityError(f"{name}: compatibility port targets the wrong kernel")
+        if compatibility_port.get("output") == raw.get("output"):
+            raise IntegrityError(f"{name}: compatibility port overwrites its upstream source")
+        validate_materialized_output(root, f"{name}.compatibility_port", compatibility_port)
         checked += 1
     return checked
 
