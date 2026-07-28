@@ -26,7 +26,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m unittest -v tests.test_dynamic_patch_resolver tests.test_bore_liquorix_port
+          python3 tests/test_dynamic_patch_resolver.py
+          python3 tests/test_bore_liquorix_port.py
           python3 tests/test_reflex_dynamic_bootstrap.py
           git diff --check
       - name: Commit resolver correction
