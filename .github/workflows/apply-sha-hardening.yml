@@ -30,24 +30,29 @@ jobs:
       - name: Apply deterministic transform
         run: python3 scripts/.apply-sha-hardening.py
 
-      - name: Validate transformation
-        shell: bash
+      - name: Compile transformed Python
         run: |
-          set -Eeuo pipefail
           python3 -m py_compile \
             scripts/resolve-patch-sources.py \
             scripts/validate-resolved-patches.py \
             tests/test-resolved-patch-integrity.py
-          python3 tests/test-resolved-patch-integrity.py
+
+      - name: Validate resolved-patch integrity tests
+        run: python3 tests/test-resolved-patch-integrity.py
+
+      - name: Validate dynamic SHA policy
+        shell: bash
+        run: |
+          set -Eeuo pipefail
           python3 -m json.tool config/patch-sources.json >/dev/null
           ! grep -Rq 'approved_sha256' config/patch-sources.json scripts/resolve-patch-sources.py
           ! grep -Fq '87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36' .github/workflows/validate-kernel.yml config/patch-sources.json
           grep -Fq 'validate-resolved-patches.py' .github/workflows/validate-kernel.yml
-          git diff --check
 
-      - name: Commit validated changes
-        env:
-          BRANCH: agent/bore-680-sha-hardening-20260728
+      - name: Validate generated diff
+        run: git diff --check
+
+      - name: Prepare validated commit
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -56,4 +61,8 @@ jobs:
           git add -A
           git diff --cached --check
           git commit -m 'Harden dynamic BORE SHA tracking'
-          git push origin "HEAD:${BRANCH}"
+
+      - name: Push validated commit
+        env:
+          BRANCH: agent/bore-680-sha-hardening-20260728
+        run: git push origin "HEAD:${BRANCH}"
