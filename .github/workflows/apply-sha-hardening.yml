@@ -52,6 +52,9 @@ jobs:
       - name: Validate generated diff
         run: git diff --check
 
+      - name: Exclude workflow files from runner commit
+        run: git checkout -- .github/workflows/validate-kernel.yml .github/workflows/apply-sha-hardening.yml
+
       - name: Prepare validated commit
         shell: bash
         run: |
