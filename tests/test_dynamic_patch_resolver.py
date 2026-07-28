@@ -134,7 +134,7 @@ class ResolverTests(unittest.TestCase):
                         "fallback_globs": ["patches/stable/*demo*.patch"],
                         "require_exact_series": False,
                         "output": "demo.patch",
-                        "project_version_regex": r"demo-v([0-9.]+)",
+                        "project_version_regex": r"demo-v([0-9]+(?:\.[0-9]+)*)",
                     }
                 },
             }
