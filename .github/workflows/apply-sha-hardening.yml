@@ -49,5 +49,6 @@ jobs:
         with:
           name: gamerpc-validated-workflow-${{ github.sha }}
           path: exported
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
