@@ -1,14 +1,14 @@
 {
-  "conclusion": "",
-  "created_at": "2026-08-01T12:43:42Z",
+  "conclusion": "cancelled",
+  "created_at": "2026-08-01T12:43:34Z",
   "event": "push",
   "head_branch": "integration/bore-7.1",
-  "head_sha": "4b84a888e87c4e00ccf85fe6e3f6193d2eae32c4",
-  "html_url": "https://github.com/zarpon/Kernel-TurboDecky-GamerPc/actions/runs/30700281943",
+  "head_sha": "20c8b6572869fd59884f010467577edf1509f7e2",
+  "html_url": "https://github.com/zarpon/Kernel-TurboDecky-GamerPc/actions/runs/30700277313",
   "run_attempt": 1,
-  "run_id": 30700281943,
-  "run_number": 415,
-  "status": "queued",
-  "updated_at": "2026-08-01T12:43:42Z",
+  "run_id": 30700277313,
+  "run_number": 414,
+  "status": "completed",
+  "updated_at": "2026-08-01T12:43:43Z",
   "workflow": "Build latest upstream TurboDecky GamerPc kernel"
 }
