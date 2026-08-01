@@ -1,5 +1,5 @@
 {
-  "conclusion": "cancelled",
+  "conclusion": "",
   "created_at": "2026-08-01T12:43:34Z",
   "event": "push",
   "head_branch": "integration/bore-7.1",
@@ -8,7 +8,7 @@
   "run_attempt": 1,
   "run_id": 30700277313,
   "run_number": 414,
-  "status": "completed",
+  "status": "in_progress",
   "updated_at": "2026-08-01T12:43:43Z",
   "workflow": "Build latest upstream TurboDecky GamerPc kernel"
 }
