@@ -8,7 +8,7 @@
   "run_attempt": 1,
   "run_id": 30748024118,
   "run_number": 416,
-  "status": "queued",
-  "updated_at": "2026-08-02T12:32:11Z",
+  "status": "in_progress",
+  "updated_at": "2026-08-02T12:32:14Z",
   "workflow": "Build latest upstream TurboDecky GamerPc kernel"
 }
