@@ -108,7 +108,9 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn('record.get("selection") != "exact"', FINALIZER)
         self.assertIn('record.get("kernel_target", "")', FINALIZER)
         self.assertIn('BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"', FINALIZER)
-        self.assertIn("locked BORE patch SHA-256 no longer matches", FINALIZER)
+        self.assertIn('authenticated_patch(lock_path, record, "BORE")', FINALIZER)
+        self.assertIn('authenticated_patch(lock_path, record, "BORE sched_ext")', FINALIZER)
+        self.assertIn('f"locked {label} patch SHA-256 no longer matches the lock"', FINALIZER)
         self.assertNotIn("materialize_bore_port", FINALIZER)
         self.assertNotIn("6.8.0-rc1", FINALIZER)
 
