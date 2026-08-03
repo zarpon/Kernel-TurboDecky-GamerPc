@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""Finalize BORE using the exact dynamically locked upstream patch."""
-
+"""Finalize locked BORE sources for the resolved stable kernel."""
 from __future__ import annotations
 
 import hashlib
@@ -11,10 +10,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = ROOT / ".resolved-patches/patch-lock.json"
 SCHED_EXT_PORT_TEMPLATE = ROOT / "patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
+_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 
 
 class FinalizeError(RuntimeError):
@@ -29,59 +28,73 @@ def replace_regex_once(text: str, pattern: str, replacement: str, label: str) ->
     return compiled.sub(lambda _match: replacement, text, count=1)
 
 
-def load_locked_bore(lock_path: Path, kernel_version: str) -> tuple[dict[str, Any], Path]:
+def version_tuple(value: str, label: str) -> tuple[int, int, int]:
+    match = _VERSION_RE.fullmatch(value)
+    if not match:
+        raise FinalizeError(f"invalid {label}: {value!r}")
+    return tuple(int(part) for part in match.groups())
+
+
+def load_lock_record(lock_path: Path, component: str) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
         lock = json.loads(lock_path.read_text(encoding="utf-8"))
-        record = lock["components"]["bore"]
+        record = lock["components"][component]
     except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-        raise FinalizeError(f"unable to read the BORE patch lock: {lock_path}") from exc
+        raise FinalizeError(f"unable to read the {component} patch lock: {lock_path}") from exc
+    if not isinstance(lock, dict) or not isinstance(record, dict):
+        raise FinalizeError(f"invalid {component} patch lock")
+    return lock, record
 
-    if not isinstance(record, dict) or record.get("kind") != "git_patch":
+
+def authenticated_patch(lock_path: Path, record: dict[str, Any], label: str) -> tuple[Path, bytes]:
+    sha256 = str(record.get("sha256", ""))
+    output = str(record.get("output", ""))
+    size = record.get("size")
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise FinalizeError(f"locked {label} SHA-256 is invalid")
+    if not output:
+        raise FinalizeError(f"locked {label} output path is missing")
+    if not isinstance(size, int) or size <= 0:
+        raise FinalizeError(f"locked {label} size is invalid")
+    root = lock_path.parent.resolve()
+    path = (lock_path.parent / output).resolve()
+    if root not in path.parents:
+        raise FinalizeError(f"locked {label} output escapes the resolver root: {output}")
+    if not path.is_file() or path.stat().st_size <= 0:
+        raise FinalizeError(f"locked {label} patch is missing: {path}")
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise FinalizeError(f"locked {label} patch SHA-256 no longer matches the lock")
+    if len(data) != size:
+        raise FinalizeError(f"locked {label} patch size no longer matches the lock")
+    return path, data
+
+
+def load_locked_bore(lock_path: Path, kernel_version: str) -> tuple[dict[str, Any], Path]:
+    lock, record = load_lock_record(lock_path, "bore")
+    if record.get("kind") != "git_patch":
         raise FinalizeError("locked BORE source is not a Git patch record")
     locked_kernel = str(lock.get("kernel", {}).get("version", ""))
     if locked_kernel != kernel_version:
-        raise FinalizeError(
-            f"BORE lock kernel mismatch: {locked_kernel!r} != {kernel_version!r}"
-        )
+        raise FinalizeError(f"BORE lock kernel mismatch: {locked_kernel!r} != {kernel_version!r}")
     if record.get("selection") != "exact":
         raise FinalizeError(
-            "the latest stable kernel has no exact BORE source; "
-            "refuse to reuse an older reviewed port"
+            "the latest stable kernel has no exact BORE source; refuse to reuse an older reviewed port"
         )
-    if str(record.get("kernel_target", "")) != kernel_version:
+    source_target = str(record.get("kernel_target", ""))
+    source_version = version_tuple(source_target, "locked BORE kernel target")
+    target_version = version_tuple(kernel_version, "Linux version for BORE")
+    if source_version[:2] != target_version[:2] or target_version < source_version:
         raise FinalizeError(
-            f"BORE target mismatch: {record.get('kernel_target')!r} != {kernel_version!r}"
+            f"BORE target mismatch: {source_target!r} is not a compatible same-series source for {kernel_version!r}"
         )
-
     version = str(record.get("project_version", ""))
-    sha256 = str(record.get("sha256", ""))
-    output = str(record.get("output", ""))
     if not version:
         raise FinalizeError("locked BORE project version is missing")
-    if not re.fullmatch(r"[0-9a-f]{64}", sha256):
-        raise FinalizeError("locked BORE SHA-256 is invalid")
-    if not output:
-        raise FinalizeError("locked BORE output path is missing")
-    size = record.get("size")
-    if not isinstance(size, int) or size <= 0:
-        raise FinalizeError("locked BORE size is invalid")
-
-    resolved_root = lock_path.parent.resolve()
-    patch_path = (lock_path.parent / output).resolve()
-    if resolved_root not in patch_path.parents:
-        raise FinalizeError(f"locked BORE output escapes the resolver root: {output}")
-    if not patch_path.is_file() or patch_path.stat().st_size <= 0:
-        raise FinalizeError(f"locked BORE patch is missing: {patch_path}")
-
-    data = patch_path.read_bytes()
-    if hashlib.sha256(data).hexdigest() != sha256:
-        raise FinalizeError("locked BORE patch SHA-256 no longer matches the lock")
-    if len(data) != size:
-        raise FinalizeError("locked BORE patch size no longer matches the lock")
-
+    patch_path, data = authenticated_patch(lock_path, record, "BORE")
     text = data.decode("utf-8")
     required = (
-        f"Subject: [PATCH] linux{kernel_version}-bore-{version}",
+        f"Subject: [PATCH] linux{source_target}-bore-{version}",
         "SCHED_BORE_VERSION",
         f'"{version}"',
         "diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c",
@@ -90,30 +103,12 @@ def load_locked_bore(lock_path: Path, kernel_version: str) -> tuple[dict[str, An
     missing = [marker for marker in required if marker not in text]
     if missing:
         raise FinalizeError(f"locked BORE patch is missing markers: {missing}")
-
     return record, patch_path
 
 
-def load_locked_sched_ext(
-    lock_path: Path, kernel_version: str
-) -> tuple[dict[str, Any], Path]:
-    """Load and authenticate the exact sched_ext coexistence source from the lock.
-
-    The sched_ext fix still needs a small Linux 7.1 context port because its
-    original hunk targets an older scheduler file. Its upstream bytes must
-    nevertheless be dynamic: the generated build verifies them against this
-    lock instead of a SHA embedded in the repository.
-    """
-
-    try:
-        lock = json.loads(lock_path.read_text(encoding="utf-8"))
-        record = lock["components"]["bore_sched_ext_coexistence"]
-    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-        raise FinalizeError(
-            f"unable to read the BORE sched_ext patch lock: {lock_path}"
-        ) from exc
-
-    if not isinstance(record, dict) or record.get("kind") != "git_patch":
+def load_locked_sched_ext(lock_path: Path, kernel_version: str) -> tuple[dict[str, Any], Path]:
+    lock, record = load_lock_record(lock_path, "bore_sched_ext_coexistence")
+    if record.get("kind") != "git_patch":
         raise FinalizeError("locked BORE sched_ext source is not a Git patch record")
     locked_kernel = str(lock.get("kernel", {}).get("version", ""))
     if locked_kernel != kernel_version:
@@ -122,35 +117,9 @@ def load_locked_sched_ext(
         )
     if record.get("selection") != "exact":
         raise FinalizeError(
-            "the BORE sched_ext coexistence source was not selected exactly; "
-            "refuse to use a fallback port"
+            "the BORE sched_ext coexistence source was not selected exactly; refuse to use a fallback port"
         )
-
-    sha256 = str(record.get("sha256", ""))
-    output = str(record.get("output", ""))
-    if not re.fullmatch(r"[0-9a-f]{64}", sha256):
-        raise FinalizeError("locked BORE sched_ext SHA-256 is invalid")
-    if not output:
-        raise FinalizeError("locked BORE sched_ext output path is missing")
-    size = record.get("size")
-    if not isinstance(size, int) or size <= 0:
-        raise FinalizeError("locked BORE sched_ext size is invalid")
-
-    resolved_root = lock_path.parent.resolve()
-    patch_path = (lock_path.parent / output).resolve()
-    if resolved_root not in patch_path.parents:
-        raise FinalizeError(
-            f"locked BORE sched_ext output escapes the resolver root: {output}"
-        )
-    if not patch_path.is_file() or patch_path.stat().st_size <= 0:
-        raise FinalizeError(f"locked BORE sched_ext patch is missing: {patch_path}")
-
-    data = patch_path.read_bytes()
-    if hashlib.sha256(data).hexdigest() != sha256:
-        raise FinalizeError("locked BORE sched_ext SHA-256 no longer matches the lock")
-    if len(data) != size:
-        raise FinalizeError("locked BORE sched_ext size no longer matches the lock")
-
+    patch_path, data = authenticated_patch(lock_path, record, "BORE sched_ext")
     text = data.decode("utf-8")
     required = (
         "Subject: [PATCH] sched-ext-coexistence-fix",
@@ -160,56 +129,33 @@ def load_locked_sched_ext(
     )
     missing = [marker for marker in required if marker not in text]
     if missing:
-        raise FinalizeError(
-            f"locked BORE sched_ext patch is missing markers: {missing}"
-        )
-
+        raise FinalizeError(f"locked BORE sched_ext patch is missing markers: {missing}")
     return record, patch_path
 
 
 def patch_section(text: str, path: str, label: str) -> str:
-    """Return exactly one conventional diff section for a reviewed file."""
-
     escaped = re.escape(path)
-    section = re.compile(
-        rf"^diff --git a/{escaped} b/{escaped}\n", re.MULTILINE
-    )
+    section = re.compile(rf"^diff --git a/{escaped} b/{escaped}\n", re.MULTILINE)
     matches = list(section.finditer(text))
     if len(matches) != 1:
-        raise FinalizeError(
-            f"{label} must contain exactly one diff section for {path}"
-        )
+        raise FinalizeError(f"{label} must contain exactly one diff section for {path}")
     start = matches[0].start()
-    next_section = re.search(r"^diff --git ", text[matches[0].end() :], re.MULTILINE)
+    next_section = re.search(r"^diff --git ", text[matches[0].end():], re.MULTILINE)
     end = matches[0].end() + next_section.start() if next_section else len(text)
     return text[start:end]
 
 
 def reweight_task_implementation(text: str, label: str) -> str:
-    """Return a formatting/comment-insensitive reweight_task implementation.
-
-    Both the upstream source and the Linux 7.1 port are unified patches. The
-    local port deliberately changes context and adds the declaration required
-    by the newer BORE header, but it must not silently preserve an older helper
-    implementation if upstream changes the function itself.
-    """
-
-    lines = []
+    lines: list[str] = []
     for line in text.splitlines():
         if line.startswith("+++"):
             continue
         lines.append(line[1:] if line.startswith("+") else line)
-
     signature = "void reweight_task(struct task_struct *p, int prio)"
     try:
-        start = next(
-            index
-            for index, line in enumerate(lines)
-            if line.strip().startswith(signature)
-        )
+        start = next(i for i, line in enumerate(lines) if line.strip().startswith(signature))
     except StopIteration as exc:
         raise FinalizeError(f"{label} has no reweight_task implementation") from exc
-
     function: list[str] = []
     depth = 0
     opened = False
@@ -221,7 +167,6 @@ def reweight_task_implementation(text: str, label: str) -> str:
             break
     else:
         raise FinalizeError(f"{label} reweight_task implementation is incomplete")
-
     rendered = "\n".join(function)
     rendered = re.sub(r"/\*.*?\*/", "", rendered, flags=re.DOTALL)
     rendered = re.sub(r"//[^\n]*", "", rendered)
@@ -229,19 +174,15 @@ def reweight_task_implementation(text: str, label: str) -> str:
 
 
 def reweight_task_patch_lines(text: str, label: str) -> list[str]:
-    """Extract the added helper from one structurally compatible upstream patch."""
-
     lines = text.splitlines(keepends=True)
     signature = "+void reweight_task(struct task_struct *p, int prio)"
-    matches = [index for index, line in enumerate(lines) if line.rstrip("\n") == signature]
+    matches = [i for i, line in enumerate(lines) if line.rstrip("\n") == signature]
     if len(matches) != 1:
         raise FinalizeError(f"{label} must add exactly one reweight_task helper")
-
-    start = matches[0]
     function: list[str] = []
     depth = 0
     opened = False
-    for line in lines[start:]:
+    for line in lines[matches[0]:]:
         if not line.startswith("+"):
             raise FinalizeError(f"{label} reweight_task helper has unexpected patch context")
         function.append(line)
@@ -252,7 +193,6 @@ def reweight_task_patch_lines(text: str, label: str) -> list[str]:
             break
     else:
         raise FinalizeError(f"{label} reweight_task helper is incomplete")
-
     rendered = "".join(function)
     if "reweight_entity" not in rendered or "sched_prio_to_weight" not in rendered:
         raise FinalizeError(
@@ -262,19 +202,12 @@ def reweight_task_patch_lines(text: str, label: str) -> list[str]:
 
 
 def replace_port_function(template: str, upstream: str) -> str:
-    """Keep the Linux 7.1 context/declaration while carrying current upstream code."""
-
     port_lines = template.splitlines(keepends=True)
     upstream_lines = reweight_task_patch_lines(upstream, "locked BORE sched_ext source")
     signature = "+void reweight_task(struct task_struct *p, int prio)"
-    matches = [
-        index
-        for index, line in enumerate(port_lines)
-        if line.rstrip("\n") == signature
-    ]
+    matches = [i for i, line in enumerate(port_lines) if line.rstrip("\n") == signature]
     if len(matches) != 1:
         raise FinalizeError("Linux 7.1 sched_ext port template must contain one reweight_task helper")
-
     start = matches[0]
     end = start
     depth = 0
@@ -291,8 +224,72 @@ def replace_port_function(template: str, upstream: str) -> str:
             break
     else:
         raise FinalizeError("Linux 7.1 sched_ext port template helper is incomplete")
-
     return "".join(port_lines[:start] + upstream_lines + port_lines[end:])
+
+
+def update_compatibility_lock(
+    lock_path: Path, component: str, source_sha256: str, port_record: dict[str, Any]
+) -> None:
+    lock, locked_record = load_lock_record(lock_path, component)
+    if locked_record.get("sha256") != source_sha256:
+        raise FinalizeError(f"{component} lock changed while its port was materialized")
+    locked_record["compatibility_port"] = port_record
+    temporary = lock_path.with_suffix(lock_path.suffix + ".tmp")
+    temporary.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, lock_path)
+
+
+def write_port(lock_path: Path, output: str, data: bytes) -> Path:
+    target = lock_path.parent / output
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_bytes(data)
+    os.replace(temporary, target)
+    return target
+
+
+def materialize_bore_patchlevel_port(
+    lock_path: Path,
+    record: dict[str, Any],
+    upstream_patch: Path,
+    kernel_version: str,
+) -> dict[str, Any] | None:
+    source_target = str(record.get("kernel_target", ""))
+    source_version = version_tuple(source_target, "locked BORE kernel target")
+    target_version = version_tuple(kernel_version, "Linux version for BORE")
+    if source_target == kernel_version:
+        return None
+    if source_version[:2] != target_version[:2] or target_version < source_version:
+        raise FinalizeError(
+            f"BORE target mismatch: {source_target!r} is not a compatible same-series source for {kernel_version!r}"
+        )
+    project_version = str(record["project_version"])
+    source_sha256 = str(record["sha256"])
+    source_text = upstream_patch.read_text(encoding="utf-8")
+    source_subject = f"Subject: [PATCH] linux{source_target}-bore-{project_version}"
+    target_subject = f"Subject: [PATCH] linux{kernel_version}-bore-{project_version}"
+    port = replace_regex_once(
+        source_text,
+        rf"^{re.escape(source_subject)}$",
+        target_subject,
+        "generated BORE patch-level port subject",
+    )
+    if port.replace(target_subject, source_subject, 1) != source_text:
+        raise FinalizeError("generated BORE patch-level port changed content outside its subject")
+    output = f"files/01-bore-linux{kernel_version}-patchlevel-port.patch"
+    data = port.encode("utf-8")
+    write_port(lock_path, output, data)
+    port_record = {
+        "adapter": "same-series-bore-patchlevel-metadata",
+        "kernel_target": kernel_version,
+        "source_kernel_target": source_target,
+        "output": output,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "size": len(data),
+        "source_sha256": source_sha256,
+    }
+    update_compatibility_lock(lock_path, "bore", source_sha256, port_record)
+    return port_record
 
 
 def materialize_sched_ext_port(
@@ -301,36 +298,17 @@ def materialize_sched_ext_port(
     upstream_patch: Path,
     kernel_version: str,
 ) -> dict[str, Any]:
-    """Create a lock-checked Linux 7.1 port from the current upstream helper.
-
-    Only the fair.c context and BORE header declaration come from the reviewed
-    template. The complete helper body is taken from the exact upstream bytes
-    recorded in this build's lock. If either patch stops following that narrow
-    structure, the build stops before the kernel checkout instead of applying
-    an old port to a new source.
-    """
-
     if not SCHED_EXT_PORT_TEMPLATE.is_file():
-        raise FinalizeError(
-            f"maintained BORE sched_ext port template is missing: {SCHED_EXT_PORT_TEMPLATE}"
-        )
-
-    if not re.fullmatch(r"\d+\.\d+\.\d+", kernel_version):
-        raise FinalizeError(f"invalid Linux version for sched_ext port: {kernel_version!r}")
-
+        raise FinalizeError(f"maintained BORE sched_ext port template is missing: {SCHED_EXT_PORT_TEMPLATE}")
+    version_tuple(kernel_version, "Linux version for sched_ext port")
     upstream = upstream_patch.read_text(encoding="utf-8")
     template = SCHED_EXT_PORT_TEMPLATE.read_text(encoding="utf-8")
-    upstream_fair = patch_section(
-        upstream, "kernel/sched/fair.c", "locked BORE sched_ext source"
-    )
+    upstream_fair = patch_section(upstream, "kernel/sched/fair.c", "locked BORE sched_ext source")
     patch_section(template, "kernel/sched/fair.c", "Linux 7.1 sched_ext port template")
-    patch_section(
-        template, "include/linux/sched/bore.h", "Linux 7.1 sched_ext port template"
-    )
+    patch_section(template, "include/linux/sched/bore.h", "Linux 7.1 sched_ext port template")
     declaration = "extern void reweight_task(struct task_struct *p, int prio);"
     if declaration not in template:
         raise FinalizeError("Linux 7.1 sched_ext port template lacks the required declaration")
-
     port = replace_port_function(template, upstream_fair)
     source_sha256 = str(record["sha256"])
     port = replace_regex_once(
@@ -351,23 +329,14 @@ def materialize_sched_ext_port(
         f"Upstream-sha256: {source_sha256}",
         "generated sched_ext port source digest",
     )
-
-    generated_fair = patch_section(
-        port, "kernel/sched/fair.c", "generated BORE sched_ext port"
-    )
-    if reweight_task_implementation(generated_fair, "generated BORE sched_ext port") != (
-        reweight_task_implementation(upstream_fair, "locked BORE sched_ext source")
+    generated_fair = patch_section(port, "kernel/sched/fair.c", "generated BORE sched_ext port")
+    if reweight_task_implementation(generated_fair, "generated BORE sched_ext port") != reweight_task_implementation(
+        upstream_fair, "locked BORE sched_ext source"
     ):
         raise FinalizeError("generated BORE sched_ext port does not preserve upstream helper")
-
     output = f"files/01-bore-sched-ext-coexistence-fix-linux{kernel_version}-port.patch"
-    target = lock_path.parent / output
-    target.parent.mkdir(parents=True, exist_ok=True)
     data = port.encode("utf-8")
-    temporary = target.with_suffix(target.suffix + ".tmp")
-    temporary.write_bytes(data)
-    os.replace(temporary, target)
-
+    write_port(lock_path, output, data)
     port_record = {
         "adapter": "linux7.1-sched-ext-reweight-task",
         "kernel_target": kernel_version,
@@ -376,21 +345,9 @@ def materialize_sched_ext_port(
         "size": len(data),
         "source_sha256": source_sha256,
     }
-    try:
-        lock = json.loads(lock_path.read_text(encoding="utf-8"))
-        locked_record = lock["components"]["bore_sched_ext_coexistence"]
-    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
-        raise FinalizeError(
-            f"unable to update the BORE sched_ext compatibility lock: {lock_path}"
-        ) from exc
-    if locked_record.get("sha256") != source_sha256:
-        raise FinalizeError("BORE sched_ext lock changed while its port was materialized")
-    locked_record["compatibility_port"] = port_record
-    temporary_lock = lock_path.with_suffix(lock_path.suffix + ".tmp")
-    temporary_lock.write_text(
-        json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    update_compatibility_lock(
+        lock_path, "bore_sched_ext_coexistence", source_sha256, port_record
     )
-    os.replace(temporary_lock, lock_path)
     return port_record
 
 
@@ -400,98 +357,31 @@ def rewrite_core(
     sched_ext_record: dict[str, Any],
     sched_ext_port: dict[str, Any],
     kernel_version: str,
+    bore_port: dict[str, Any] | None = None,
 ) -> None:
     text = path.read_text(encoding="utf-8")
     version = str(record["project_version"])
     sha256 = str(record["sha256"])
-    output = str(record["output"])
+    output = str((bore_port or record)["output"])
     sched_ext_sha256 = str(sched_ext_record["sha256"])
     sched_ext_output = str(sched_ext_port["output"])
-
-    text = replace_regex_once(
-        text,
-        r'^BORE_PATCH=.*$',
-        f'BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"',
-        "BORE patch assignment",
+    replacements = (
+        (r'^BORE_PATCH=.*$', f'BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"', "BORE patch assignment"),
+        (r'^BORE_PORT_VERSION=.*$', f'BORE_PORT_VERSION="{version}"', "BORE version assignment"),
+        (r'^BORE_PORT_UPSTREAM_SHA256=.*$', f'BORE_PORT_UPSTREAM_SHA256="{sha256}"', "BORE SHA assignment"),
+        (r'^BORE_SCHED_EXT_PORT_UPSTREAM_SHA256=.*$', f'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="{sched_ext_sha256}"', "BORE sched_ext SHA assignment"),
+        (r'^BORE_SCHED_EXT_PATCH=.*$', f'BORE_SCHED_EXT_PATCH="$RESOLVED_PATCH_ROOT/{sched_ext_output}"', "BORE sched_ext port assignment"),
+        (r'^\s*grep -Fq \'SCHED_BORE_VERSION  "[^"]+"\' "\$BORE_UPSTREAM_PATCH"$', '  grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" "$BORE_UPSTREAM_PATCH"', "BORE upstream version assertion"),
+        (r'^\s*grep -Fq \'sched: port BORE [^\']+ to Linux [^\']+\' "\$BORE_PATCH"$', '  grep -Fq "Subject: [PATCH] linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}" "$BORE_PATCH"', "BORE subject assertion"),
+        (r'^\s*grep -Fq \'sched: port 0002 sched-ext coexistence fix to Linux [^\']+\' "\$BORE_SCHED_EXT_PATCH"$', '  grep -Fq "Subject: [PATCH] sched: adapt locked sched-ext coexistence fix to Linux $KERNEL_VERSION" "$BORE_SCHED_EXT_PATCH"', "BORE sched_ext port subject assertion"),
+        (r'Applying the reviewed BORE [^"\n]+ Linux [0-9.]+ port', 'Applying upstream BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION', "BORE apply label"),
+        (r'report_bore_rejects "BORE [0-9][^"]* for Linux [0-9.]+"', 'report_bore_rejects "BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"', "BORE reject label"),
+        (r'^\s*git diff --check \| tee "\$LOGDIR/01-bore-diff-check\.log"$', '  if ! git diff --check > "$LOGDIR/01-bore-diff-check.log" 2>&1; then\n    cat "$LOGDIR/01-bore-diff-check.log"\n    echo "==> Normalizing whitespace introduced by BORE patch"\n    normalize_changed_whitespace\n    git diff --check | tee "$LOGDIR/01-bore-diff-check-after-fix.log"\n  fi', "BORE whitespace validation"),
+        (r'^\s*grep -Fq \'SCHED_BORE_VERSION\' kernel/sched/bore\.c$', '  grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" include/linux/sched/bore.h', "BORE installed version assertion"),
+        (r'BORE [^"\n]+ Linux port applied successfully', 'BORE $BORE_PORT_VERSION Linux port applied successfully', "BORE success label"),
     )
-    text = replace_regex_once(
-        text,
-        r'^BORE_PORT_VERSION=.*$',
-        f'BORE_PORT_VERSION="{version}"',
-        "BORE version assignment",
-    )
-    text = replace_regex_once(
-        text,
-        r'^BORE_PORT_UPSTREAM_SHA256=.*$',
-        f'BORE_PORT_UPSTREAM_SHA256="{sha256}"',
-        "BORE SHA assignment",
-    )
-    text = replace_regex_once(
-        text,
-        r'^BORE_SCHED_EXT_PORT_UPSTREAM_SHA256=.*$',
-        f'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="{sched_ext_sha256}"',
-        "BORE sched_ext SHA assignment",
-    )
-    text = replace_regex_once(
-        text,
-        r'^BORE_SCHED_EXT_PATCH=.*$',
-        f'BORE_SCHED_EXT_PATCH="$RESOLVED_PATCH_ROOT/{sched_ext_output}"',
-        "BORE sched_ext port assignment",
-    )
-    text = replace_regex_once(
-        text,
-        r'^\s*grep -Fq \'SCHED_BORE_VERSION  "[^"]+"\' "\$BORE_UPSTREAM_PATCH"$',
-        '  grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" "$BORE_UPSTREAM_PATCH"',
-        "BORE upstream version assertion",
-    )
-    text = replace_regex_once(
-        text,
-        r'^\s*grep -Fq \'sched: port BORE [^\']+ to Linux [^\']+\' "\$BORE_PATCH"$',
-        '  grep -Fq "Subject: [PATCH] linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}" "$BORE_PATCH"',
-        "BORE subject assertion",
-    )
-    text = replace_regex_once(
-        text,
-        r'^\s*grep -Fq \'sched: port 0002 sched-ext coexistence fix to Linux [^\']+\' "\$BORE_SCHED_EXT_PATCH"$',
-        '  grep -Fq "Subject: [PATCH] sched: adapt locked sched-ext coexistence fix to Linux $KERNEL_VERSION" "$BORE_SCHED_EXT_PATCH"',
-        "BORE sched_ext port subject assertion",
-    )
-    text = replace_regex_once(
-        text,
-        r'Applying the reviewed BORE [^"\n]+ Linux [0-9.]+ port',
-        'Applying upstream BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION',
-        "BORE apply label",
-    )
-    text = replace_regex_once(
-        text,
-        r'report_bore_rejects "BORE [0-9][^"]* for Linux [0-9.]+"',
-        'report_bore_rejects "BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"',
-        "BORE reject label",
-    )
-    text = replace_regex_once(
-        text,
-        r'^\s*git diff --check \| tee "\$LOGDIR/01-bore-diff-check\.log"$',
-        '''  if ! git diff --check > "$LOGDIR/01-bore-diff-check.log" 2>&1; then
-    cat "$LOGDIR/01-bore-diff-check.log"
-    echo "==> Normalizing whitespace introduced by BORE patch"
-    normalize_changed_whitespace
-    git diff --check | tee "$LOGDIR/01-bore-diff-check-after-fix.log"
-  fi''',
-        "BORE whitespace validation",
-    )
-    text = replace_regex_once(
-        text,
-        r'^\s*grep -Fq \'SCHED_BORE_VERSION\' kernel/sched/bore\.c$',
-        '  grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" include/linux/sched/bore.h',
-        "BORE installed version assertion",
-    )
-    text = replace_regex_once(
-        text,
-        r'BORE [^"\n]+ Linux port applied successfully',
-        'BORE $BORE_PORT_VERSION Linux port applied successfully',
-        "BORE success label",
-    )
-
+    for pattern, replacement, label in replacements:
+        text = replace_regex_once(text, pattern, replacement, label)
     path.write_text(text, encoding="utf-8")
 
 
@@ -501,23 +391,24 @@ def main() -> None:
     kernel_version = os.environ.get("KERNEL_VERSION")
     if not kernel_version:
         raise SystemExit("KERNEL_VERSION must be resolved before finalizing BORE")
-
     record, patch_path = load_locked_bore(LOCK_PATH, kernel_version)
+    bore_port = materialize_bore_patchlevel_port(LOCK_PATH, record, patch_path, kernel_version)
     sched_ext_record, sched_ext_patch = load_locked_sched_ext(LOCK_PATH, kernel_version)
     sched_ext_port = materialize_sched_ext_port(
         LOCK_PATH, sched_ext_record, sched_ext_patch, kernel_version
     )
     core = Path(sys.argv[1])
-    rewrite_core(core, record, sched_ext_record, sched_ext_port, kernel_version)
-
+    rewrite_core(
+        core, record, sched_ext_record, sched_ext_port, kernel_version, bore_port
+    )
     for legacy in (ROOT / "patches/bore").glob(".resolved-*-bore-*.patch"):
         legacy.unlink(missing_ok=True)
-
+    selected = bore_port["output"] if bore_port else str(patch_path.relative_to(ROOT))
+    mode = "same-series compatibility port" if bore_port else "exact upstream patch"
     print(
-        f"Finalized exact upstream BORE {record['project_version']} for Linux "
-        f"{kernel_version}: {patch_path.relative_to(ROOT)}; validated sched_ext "
-        f"source {sched_ext_patch.relative_to(ROOT)} and materialized "
-        f"{sched_ext_port['output']}",
+        f"Finalized BORE {record['project_version']} for Linux {kernel_version} via {mode}: "
+        f"{selected}; validated sched_ext source {sched_ext_patch.relative_to(ROOT)} and "
+        f"materialized {sched_ext_port['output']}",
         flush=True,
     )
 
