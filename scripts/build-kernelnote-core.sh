@@ -41,10 +41,10 @@ BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec
 # Marie is fetched as a pinned local Git checkout rather than through a raw
 # patch URL. Only the exact patch blob is materialized in the workspace.
 MARIE_REPO="https://github.com/firelzrd/lru_marie.git"
-MARIE_COMMIT="c92f3168364ceaf689d098e45f79544e8fcb8fe4"
-MARIE_PATCH_PATH="patches/testing/0001-linux7.1-rc5-lru_marie-0.9.2.patch"
+MARIE_COMMIT="0e08603653374a891b1fc0353e27de896a84a664"
+MARIE_PATCH_PATH="patches/testing/0001-linux7.1-rc5-lru_marie-0.9.3.patch"
 MARIE_PATCH="$PATCHDIR/02-lru-marie.patch"
-PATCH_MARIE_VERSION="${PATCH_MARIE_VERSION:-0.9.2}"
+PATCH_MARIE_VERSION="${PATCH_MARIE_VERSION:-0.9.3}"
 MARIE_FALLBACK_PATCH="$ROOT/patches/fallback/lru_marie.patch"
 MARIE_FALLBACK_METADATA="$ROOT/patches/fallback/lru_marie.json"
 
