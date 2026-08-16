@@ -57,7 +57,14 @@ jobs:
             tests.test_marie_fallback_updater \
             tests.test_marie_version_reporting
           bash -n scripts/build-kernelnote-core.sh
-          git diff --check
+          # The fallback patch is a byte-for-byte upstream snapshot. Do not reject
+          # legitimate upstream whitespace; validate only repository-authored files.
+          git diff --check -- \
+            patches/fallback/lru_marie.json \
+            scripts/build-kernelnote-core.sh \
+            scripts/update-marie-fallback.py \
+            scripts/validate-marie-fallback.py \
+            .github/workflows/update-marie-fallback.yml
 
       - name: Publish fallback update
         env:
