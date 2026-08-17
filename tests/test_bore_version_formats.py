@@ -23,9 +23,23 @@ class BoreVersionFormatTests(unittest.TestCase):
     def test_patchlevel_final_release(self) -> None:
         self.assertEqual(finalizer.version_tuple("8.0.1", "kernel"), (8, 0, 1))
 
-    def test_release_candidate_is_rejected(self) -> None:
+    def test_release_candidate_is_rejected_as_final_kernel(self) -> None:
         with self.assertRaises(finalizer.FinalizeError):
             finalizer.version_tuple("8.1-rc1", "kernel")
+
+    def test_bore_rc_subject_is_authenticated_for_final_series(self) -> None:
+        patch = (
+            "From 1 Mon Sep 17 00:00:00 2001\n"
+            "Subject: [PATCH] linux7.2-rc1-bore-6.8.0\n"
+        )
+        target = finalizer.bore_subject_target(patch, "6.8.0")
+        self.assertEqual(target, "7.2-rc1")
+        self.assertEqual(finalizer.final_target_from_bore_subject(target), "7.2")
+
+    def test_bore_subject_project_version_must_match_lock(self) -> None:
+        patch = "Subject: [PATCH] linux7.2-rc1-bore-6.8.0\n"
+        with self.assertRaises(finalizer.FinalizeError):
+            finalizer.bore_subject_target(patch, "6.7.0")
 
 
 if __name__ == "__main__":
