@@ -18,14 +18,12 @@ if _spec is None or _spec.loader is None:
 _base = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_base)
 
-# Preserve the original module API for tests and callers.
 for _name in dir(_base):
     if not _name.startswith("__"):
         globals()[_name] = getattr(_base, _name)
 
 
 def _bore_subject_match(text: str, source_target: str, version: str) -> re.Match[str] | None:
-    """Match exactly the locked BORE subject, allowing only an upstream -rcN qualifier."""
     pattern = re.compile(
         rf"^Subject: \[PATCH\] linux{re.escape(source_target)}(?:-rc\d+)?-bore-{re.escape(version)}$",
         re.MULTILINE,
@@ -116,16 +114,9 @@ def materialize_bore_patchlevel_port(lock_path, record, upstream_patch, kernel_v
     return port_record
 
 
-# Make the base main() use the corrected functions while retaining the rest of its
-# fail-closed implementation unchanged.
 _base.load_locked_bore = load_locked_bore
 _base.materialize_bore_patchlevel_port = materialize_bore_patchlevel_port
 
-# The base finalizer also rewrites a runtime assertion inside the generated shell
-# build. Its historical assertion required a subject without -rcN, even when the
-# authenticated exact source selected by the resolver legitimately carries the
-# upstream same-series -rcN qualifier. Intercept only that labeled rewrite and
-# keep every other replacement unchanged.
 _base_replace_regex_once = _base.replace_regex_once
 
 
@@ -134,8 +125,9 @@ def _replace_regex_once_with_rc_subject(
 ) -> str:
     if label == "BORE subject assertion":
         replacement = (
-            '  grep -Eq "^Subject: \\[PATCH\\] linux${KERNEL_VERSION}'
-            '(-rc[0-9]+)?-bore-${BORE_PORT_VERSION}$" "$BORE_PATCH"'
+            '  BORE_EXPECTED_SUBJECT="linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}"\n'
+            '  BORE_RC_SUBJECT="linux${KERNEL_VERSION}-rc[0-9]+-bore-${BORE_PORT_VERSION}"\n'
+            '  grep -Eq "^Subject: \\[PATCH\\] (${BORE_EXPECTED_SUBJECT}|${BORE_RC_SUBJECT})$" "$BORE_PATCH"'
         )
     return _base_replace_regex_once(text, pattern, replacement, label)
 
