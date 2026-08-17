@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 
 
+MARKER = "Applying deterministic Linux 7.2 CPU optimization Kconfig adapter"
+
 OLD = r'''  if ((status != 0)) || find "$KERNELDIR" -name '*.rej' -print -quit | grep -q .; then
     report_requested_rejects "$label" "$prefix"
     return 1
@@ -55,6 +57,8 @@ def main() -> None:
         raise SystemExit("usage: apply-cpu-optimizations-7.2-port.py <generated-core>")
     path = Path(sys.argv[1])
     text = path.read_text(encoding="utf-8")
+    if MARKER in text:
+        return
     count = text.count(OLD)
     if count != 1:
         raise SystemExit(
