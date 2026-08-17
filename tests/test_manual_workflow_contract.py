@@ -76,7 +76,7 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertNotIn("CONFIG_LTO_CLANG_THIN=y", CONFIG)
         self.assertIn("scripts/config --disable LTO_CLANG_THIN", UPSTREAM_REWRITER)
         self.assertIn("scripts/config --enable LTO_CLANG_FULL", UPSTREAM_REWRITER)
-        self.assertIn('assert_config \\"CONFIG_LTO_CLANG_FULL=y\\"', UPSTREAM_REWRITER)
+        self.assertIn('assert_config \\"CONFIG_LTO_CLANG_FULL=y\\"'.replace('\\\\', '\\'), UPSTREAM_REWRITER)
         self.assertIn("assert_disabled_or_absent LTO_CLANG_THIN", UPSTREAM_REWRITER)
         self.assertIn("Full LTO", UPSTREAM_REWRITER)
 
