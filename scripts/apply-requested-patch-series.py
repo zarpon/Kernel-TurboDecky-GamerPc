@@ -284,9 +284,11 @@ fetch_requested_patch_series
 
     source = replace_once(
         source,
-        '''# ThinLTO is mandatory for the final kernel. These symbols only survive
-''',
-        '''# Requested compiler and architecture optimizations.
+        'scripts/config --disable X86_NATIVE_CPU\n',
+        '''scripts/config --disable X86_NATIVE_CPU
+
+# Requested compiler and architecture optimizations. Keep this insertion tied
+# to the generic x86 profile rather than to any LTO mode or comment text.
 scripts/config --disable CC_OPTIMIZE_FOR_PERFORMANCE
 scripts/config --disable CC_OPTIMIZE_FOR_SIZE
 scripts/config --enable CC_OPTIMIZE_FOR_PERFORMANCE_O3
@@ -295,8 +297,6 @@ scripts/config --enable CC_OPTIMIZE_FOR_PERFORMANCE_O3
 scripts/config --disable MBROADWELL
 scripts/config --enable GENERIC_CPU
 scripts/config --enable POLLY_CLANG
-
-# ThinLTO is mandatory for the final kernel. These symbols only survive
 ''',
         "requested series configuration",
     )
