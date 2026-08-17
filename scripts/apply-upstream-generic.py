@@ -150,12 +150,9 @@ assert_config "CONFIG_LTO_CLANG_FULL=y"
         'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-fulllto"',
         "Full LTO localversion marker",
     )
-    source = replace_once(
-        source,
-        '# PR validation exercises the complete built-in kernel and ThinLTO link, but',
-        '# PR validation exercises the complete built-in kernel and Full LTO link, but',
-        "Full LTO validation description",
-    )
+    # Keep the historical ThinLTO wording in the validation comment until the
+    # integration wrapper consumes that block as a structural anchor. The
+    # actual Kconfig policy above is Full LTO and is verified after olddefconfig.
     source = replace_once(
         source,
         'echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"',
