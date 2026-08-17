@@ -39,6 +39,8 @@ def patch_core(path: Path) -> None:
             "already integrated in Linux $KERNEL_VERSION or an earlier patch",
         "if curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \\\n":
             "if curl --user-agent 'TurboDecky-GamerPc-CI/1.0 (+https://github.com/zarpon/Kernel-TurboDecky-GamerPc)' --fail --location \\\n        --retry 3 --retry-all-errors --retry-delay 2 \\\n",
+        "if patch --batch --forward --strip=1 < \"$file\" > \"$LOGDIR/03-adios.apply.log\" 2>&1; then":
+            "if patch --batch --forward --ignore-whitespace --strip=1 < \"$file\" > \"$LOGDIR/03-adios.apply.log\" 2>&1; then",
     }
 
     for old, new in replacements.items():

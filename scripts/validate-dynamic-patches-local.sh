@@ -33,6 +33,7 @@ python3 -m unittest -v \
   "$ROOT/tests/test_bore_liquorix_port.py" \
   "$ROOT/tests/test_bore_stable_port.py" \
   "$ROOT/tests/test_bore_stable_finalizer.py" \
+  "$ROOT/tests/test_bore_version_formats.py" \
   "$ROOT/tests/test_validation_modules.py" \
   "$ROOT/tests/test_manual_workflow_contract.py" \
   "$ROOT/tests/test_zen_interactive_rewriter.py"

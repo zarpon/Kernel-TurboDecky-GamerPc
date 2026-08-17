@@ -13,7 +13,14 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = ROOT / ".resolved-patches/patch-lock.json"
 SCHED_EXT_PORT_TEMPLATE = ROOT / "patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
+# Final upstream Linux releases can be X.Y (for example 7.2) or X.Y.Z.
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?$")
+_BORE_SUBJECT_RE = re.compile(
+    r"^Subject: \[PATCH\] linux"
+    r"(?P<target>\d+\.\d+(?:\.\d+)?(?:-rc\d+)?)"
+    r"-bore-(?P<version>[^\s]+)$",
+    re.MULTILINE,
+)
 
 
 class FinalizeError(RuntimeError):
@@ -29,11 +36,39 @@ def replace_regex_once(text: str, pattern: str, replacement: str, label: str) ->
 
 
 def version_tuple(value: str, label: str) -> tuple[int, int, int]:
+    """Normalize a final X.Y or X.Y.Z release to a comparable 3-tuple."""
     match = _VERSION_RE.fullmatch(value)
     if not match:
         raise FinalizeError(f"invalid {label}: {value!r}")
     major, minor, patch = match.groups()
     return int(major), int(minor), int(patch or 0)
+
+
+def bore_subject_target(text: str, project_version: str) -> str:
+    """Return the exact Linux target encoded in an upstream BORE subject.
+
+    Testing BORE patches may target an RC (for example 7.2-rc1) while the
+    resolver records the compatible final series target (7.2).  The exact
+    subject target is preserved for authentication and rewritten only when a
+    same-series compatibility patch is materialized.
+    """
+    matches = list(_BORE_SUBJECT_RE.finditer(text))
+    if len(matches) != 1:
+        raise FinalizeError(
+            f"locked BORE patch must contain exactly one recognized subject, found {len(matches)}"
+        )
+    match = matches[0]
+    version = match.group("version")
+    if version != project_version:
+        raise FinalizeError(
+            f"locked BORE subject version mismatch: {version!r} != {project_version!r}"
+        )
+    return match.group("target")
+
+
+def final_target_from_bore_subject(target: str) -> str:
+    """Strip only an RC suffix before comparing against a final Linux target."""
+    return re.sub(r"-rc\d+$", "", target)
 
 
 def load_lock_record(lock_path: Path, component: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -94,8 +129,19 @@ def load_locked_bore(lock_path: Path, kernel_version: str) -> tuple[dict[str, An
         raise FinalizeError("locked BORE project version is missing")
     patch_path, data = authenticated_patch(lock_path, record, "BORE")
     text = data.decode("utf-8")
+    subject_target = bore_subject_target(text, version)
+    subject_final_target = final_target_from_bore_subject(subject_target)
+    subject_version = version_tuple(subject_final_target, "BORE subject Linux target")
+    if subject_version != source_version:
+        raise FinalizeError(
+            f"BORE lock target {source_target!r} does not match subject target {subject_target!r}"
+        )
+    if subject_version[:2] != target_version[:2] or target_version < subject_version:
+        raise FinalizeError(
+            f"BORE subject target {subject_target!r} is not compatible with {kernel_version!r}"
+        )
     required = (
-        f"Subject: [PATCH] linux{source_target}-bore-{version}",
+        f"Subject: [PATCH] linux{subject_target}-bore-{version}",
         "SCHED_BORE_VERSION",
         f'"{version}"',
         "diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c",
@@ -256,34 +302,41 @@ def materialize_bore_patchlevel_port(
     kernel_version: str,
 ) -> dict[str, Any] | None:
     source_target = str(record.get("kernel_target", ""))
-    source_version = version_tuple(source_target, "locked BORE kernel target")
+    locked_source_version = version_tuple(source_target, "locked BORE kernel target")
     target_version = version_tuple(kernel_version, "Linux version for BORE")
-    if source_target == kernel_version:
-        return None
-    if source_version[:2] != target_version[:2] or target_version < source_version:
-        raise FinalizeError(
-            f"BORE target mismatch: {source_target!r} is not a compatible same-series source for {kernel_version!r}"
-        )
     project_version = str(record["project_version"])
     source_sha256 = str(record["sha256"])
     source_text = upstream_patch.read_text(encoding="utf-8")
-    source_subject = f"Subject: [PATCH] linux{source_target}-bore-{project_version}"
+    subject_target = bore_subject_target(source_text, project_version)
+    subject_final_target = final_target_from_bore_subject(subject_target)
+    source_version = version_tuple(subject_final_target, "BORE subject Linux target")
+    if source_version != locked_source_version:
+        raise FinalizeError(
+            f"BORE lock target {source_target!r} does not match subject target {subject_target!r}"
+        )
+    if subject_target == kernel_version:
+        return None
+    if source_version[:2] != target_version[:2] or target_version < source_version:
+        raise FinalizeError(
+            f"BORE target mismatch: {subject_target!r} is not a compatible same-series source for {kernel_version!r}"
+        )
+    source_subject = f"Subject: [PATCH] linux{subject_target}-bore-{project_version}"
     target_subject = f"Subject: [PATCH] linux{kernel_version}-bore-{project_version}"
     port = replace_regex_once(
         source_text,
         rf"^{re.escape(source_subject)}$",
         target_subject,
-        "generated BORE patch-level port subject",
+        "generated BORE same-series port subject",
     )
     if port.replace(target_subject, source_subject, 1) != source_text:
-        raise FinalizeError("generated BORE patch-level port changed content outside its subject")
+        raise FinalizeError("generated BORE same-series port changed content outside its subject")
     output = f"files/01-bore-linux{kernel_version}-patchlevel-port.patch"
     data = port.encode("utf-8")
     write_port(lock_path, output, data)
     port_record = {
         "adapter": "same-series-bore-patchlevel-metadata",
         "kernel_target": kernel_version,
-        "source_kernel_target": source_target,
+        "source_kernel_target": subject_target,
         "output": output,
         "sha256": hashlib.sha256(data).hexdigest(),
         "size": len(data),
