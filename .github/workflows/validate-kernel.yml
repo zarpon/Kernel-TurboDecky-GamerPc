@@ -1,0 +1,256 @@
+name: Build latest upstream TurboDecky GamerPc kernel
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [integration/bore-7.1]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the compiled packages as a GitHub release (main only)
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: turbodecky-generic-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      BUILD_MODE: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'validation/') && 'package' || github.event_name == 'pull_request' && 'validate' || 'package' }}
+      KBUILD_BUILD_USER: turbodecky
+      KBUILD_BUILD_HOST: github-actions
+      KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
+      KBUILD_BUILD_VERSION: "1"
+      SOURCE_DATE_EPOCH: "1767225600"
+      LC_ALL: C
+      TZ: UTC
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Free build space without removing LLVM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /opt/hostedtoolcache/PyPy \
+            2>/dev/null || true
+          sudo docker system prune -af >/dev/null 2>&1 || true
+          df -h /
+
+      - name: Resolve latest stable Linux
+        id: kernel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p logs
+          python3 scripts/resolve-latest-stable.py \
+            --github-env "$GITHUB_ENV" \
+            --github-output "$GITHUB_OUTPUT" \
+            --log-dir logs
+
+      - name: Configure resources
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          JOBS="$(nproc --all)"
+          echo "JOBS=$JOBS" >> "$GITHUB_ENV"
+          echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
+          parameters=/sys/module/zswap/parameters
+          if [[ -d "$parameters" ]]; then
+            echo zstd | sudo tee "$parameters/compressor"
+            echo 90 | sudo tee "$parameters/max_pool_percent"
+            echo 1 | sudo tee "$parameters/shrinker_enabled"
+            echo 1 | sudo tee "$parameters/enabled"
+          fi
+
+      - name: Configure 16 GiB swap
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+        with:
+          swap-size-gb: 16
+
+      - name: Install build dependencies and Polly
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo timeout 300 apt-get -o Acquire::Retries=3 update
+          if ! apt-cache show libpolly-18-dev >/dev/null 2>&1; then
+            sudo timeout 180 apt-get install -y --no-install-recommends software-properties-common
+            sudo add-apt-repository -y universe
+            sudo timeout 300 apt-get -o Acquire::Retries=3 update
+          fi
+          sudo timeout 900 apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            bc bison build-essential ccache clang-18 cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
+            kmod libdw-dev libelf-dev libssl-dev lld-18 llvm-18 llvm-18-dev libpolly-18-dev \
+            pahole patchutils python3 rsync unzip xz-utils zip zstd
+          echo "/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
+          POLLY_SO="$(find /usr/lib/llvm-18 /usr/lib/x86_64-linux-gnu -type f -name 'LLVMPolly.so*' 2>/dev/null | head -n 1)"
+          test -n "$POLLY_SO"
+          echo "LLVM_POLLY_SO=$(readlink -f "$POLLY_SO")" >> "$GITHUB_ENV"
+          clang-18 --version | head -n 1
+          ld.lld-18 --version | head -n 1
+
+      - name: Validate and build kernel
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          scripts/validate-dynamic-patches-local.sh
+          python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-requested-patch-series.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-latest-stable-series.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-zen-interactive.py scripts/build-kernelnote-core.sh
+          python3 scripts/apply-zarpon-generic-name.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
+          python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
+          python3 tests/test-resolved-patch-integrity.py
+          python3 scripts/finalize-bore-stable-port.py scripts/build-kernelnote-core.sh
+          python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
+          shopt -s nullglob
+          python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)
+          python3 -m py_compile "${python_sources[@]}"
+          chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
+          mkdir -p logs
+          set +e
+          scripts/build-kernelnote.sh "$BUILD_MODE" 2>&1 | tee logs/kernel-build-driver.log
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Verify BORE scheduler, POC and Full LTO
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          grep -Fq 'CONFIG_LTO=y' logs/final.config
+          grep -Fq 'CONFIG_LTO_CLANG=y' logs/final.config
+          grep -Fq 'CONFIG_LTO_CLANG_FULL=y' logs/final.config
+          ! grep -Fq 'CONFIG_LTO_CLANG_THIN=y' logs/final.config
+          grep -Fq '# CONFIG_LTO_CLANG_THIN is not set' logs/final.config
+          grep -Fq 'CONFIG_CC_IS_CLANG=y' logs/final.config
+          grep -Fq 'CONFIG_LD_IS_LLD=y' logs/final.config
+          grep -Fq 'CONFIG_AS_IS_LLVM=y' logs/final.config
+
+          BORE_VERSION="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          lock = json.loads(Path('.resolved-patches/patch-lock.json').read_text(encoding='utf-8'))
+          print(lock['components']['bore']['project_version'])
+          PY
+          )"
+          test -n "$BORE_VERSION"
+          grep -Fq "Component: BORE scheduler ${BORE_VERSION}" logs/01-bore-provenance.txt
+          grep -Fq 'Component: BORE sched_ext coexistence fix' logs/01-bore-sched-ext-provenance.txt
+          grep -Fq "BORE ${BORE_VERSION} Linux port applied successfully" logs/build.log
+          grep -Fq 'BORE sched_ext coexistence fix applied successfully' logs/build.log
+          grep -Fq 'struct bore_ctx' work/linux/include/linux/sched.h
+          test -s work/linux/kernel/sched/bore.c
+          grep -Fq 'sched_bore' work/linux/kernel/sched/fair.c
+          grep -Fq 'void reweight_task(struct task_struct *p, int prio)' work/linux/kernel/sched/fair.c
+          grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' work/linux/include/linux/sched/bore.h
+          grep -Fq 'CONFIG_SCHED_POC_SELECTOR=y' logs/final.config
+          grep -Fq 'CONFIG_SCHED_BORE=y' logs/final.config
+          grep -Fq 'CONFIG_ZEN_INTERACTIVE=y' logs/final.config
+          grep -Fq 'CONFIG_X86_INTEL_PSTATE=y' logs/final.config
+          grep -Fq 'CONFIG_X86_AMD_PSTATE=y' logs/final.config
+          grep -Fq 'CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2' logs/final.config
+          grep -Fq 'intel_pstate=passive' logs/final.config
+          grep -Fq 'amd_pstate=passive' logs/final.config
+
+      - name: Verify validation module coverage
+        if: ${{ env.BUILD_MODE == 'validate' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test -s logs/modules-build.log
+          test -s logs/modules-products.txt
+
+      - name: Prepare release files
+        if: ${{ env.BUILD_MODE == 'package' }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          packages=(artifacts/*.deb)
+          (( ${#packages[@]} > 0 ))
+          cd artifacts
+          sha256sum -- *.deb > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          zip -q -9 "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip" -- *.deb SHA256SUMS
+          unzip -tq "turbodecky-linux-${KERNEL_RELEASE_NAME}.zip"
+
+      - name: Upload Debian packages
+        if: ${{ env.BUILD_MODE == 'package' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.kernel.outputs.artifact_name }}
+          path: |
+            artifacts/*.deb
+            artifacts/SHA256SUMS
+            artifacts/turbodecky-linux-*.zip
+            logs/patch-lock.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish GitHub release
+        if: >-
+          (github.event_name == 'push' &&
+           github.ref_name == 'integration/bore-7.1') ||
+          (github.event_name == 'workflow_dispatch' &&
+           github.ref_name == 'main' &&
+           inputs.publish_release)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TARGET: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          short_sha="${RELEASE_TARGET:0:7}"
+          tag="${KERNEL_RELEASE_NAME}-${short_sha}"
+          packages=(artifacts/*.deb)
+          ((${#packages[@]} > 0))
+          assets=("${packages[@]}" artifacts/SHA256SUMS artifacts/turbodecky-linux-*.zip)
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            git fetch --force origin "+refs/tags/${tag}:refs/tags/${tag}"
+          else
+            git tag "$tag" "$RELEASE_TARGET"
+            git push origin "refs/tags/${tag}"
+          fi
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$KERNEL_RELEASE_NAME"
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$KERNEL_RELEASE_NAME" --generate-notes --verify-tag
+          fi
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
+
+      - name: Upload validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: turbodecky-upstream-validation-logs
+          path: |
+            logs/**
+            .resolved-patches/patch-lock.json
+            .resolved-patches/resolution-summary.txt
+          if-no-files-found: warn
+          retention-days: 14
