@@ -16,8 +16,11 @@ DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
 )
 CONFIG = (ROOT / "config/kernelnote.config").read_text(encoding="utf-8")
 BUILD_CORE = (ROOT / "scripts/build-kernelnote-core.sh").read_text(encoding="utf-8")
+UPSTREAM_REWRITER = (ROOT / "scripts/apply-upstream-generic.py").read_text(encoding="utf-8")
 ZEN_REWRITER = (ROOT / "scripts/apply-zen-interactive.py").read_text(encoding="utf-8")
-FINALIZER = (ROOT / "scripts/finalize-bore-stable-port.py").read_text(encoding="utf-8")
+FINALIZER_WRAPPER = (ROOT / "scripts/finalize-bore-stable-port.py").read_text(encoding="utf-8")
+FINALIZER_BASE = (ROOT / "scripts/finalize-bore-stable-port-base.py").read_text(encoding="utf-8")
+FINALIZER = FINALIZER_WRAPPER + "\n" + FINALIZER_BASE
 
 
 class ManualWorkflowContractTests(unittest.TestCase):
@@ -66,6 +69,16 @@ class ManualWorkflowContractTests(unittest.TestCase):
         )
         self.assertIn('python3 -m py_compile "${python_sources[@]}"', WORKFLOW)
 
+    def test_full_lto_is_mandatory_and_verified_after_olddefconfig(self) -> None:
+        self.assertIn("CONFIG_LTO_CLANG_FULL=y", CONFIG)
+        self.assertIn("# CONFIG_LTO_CLANG_THIN is not set", CONFIG)
+        self.assertNotIn("CONFIG_LTO_CLANG_THIN=y", CONFIG)
+        self.assertIn("scripts/config --disable LTO_CLANG_THIN", UPSTREAM_REWRITER)
+        self.assertIn("scripts/config --enable LTO_CLANG_FULL", UPSTREAM_REWRITER)
+        self.assertIn("CONFIG_LTO_CLANG_FULL=y", UPSTREAM_REWRITER)
+        self.assertIn("assert_disabled_or_absent LTO_CLANG_THIN", UPSTREAM_REWRITER)
+        self.assertIn("Full LTO", UPSTREAM_REWRITER)
+
     def test_zen_interactive_is_persistent_and_verified(self) -> None:
         self.assertIn("CONFIG_ZEN_INTERACTIVE=y", CONFIG)
         self.assertIn(
@@ -104,6 +117,7 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn(final, WORKFLOW)
         self.assertLess(WORKFLOW.index(dynamic), WORKFLOW.index(final))
 
+        self.assertIn('with_name("finalize-bore-stable-port-base.py")', FINALIZER_WRAPPER)
         self.assertIn("patch-lock.json", FINALIZER)
         self.assertIn('record.get("selection") != "exact"', FINALIZER)
         self.assertIn('record.get("kernel_target", "")', FINALIZER)
