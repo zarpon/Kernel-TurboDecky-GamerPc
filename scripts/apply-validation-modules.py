@@ -65,6 +65,12 @@ fi
 
 
 def patch_cpu_optimization_fallback(path: Path) -> None:
+    # Unit tests for module validation intentionally use a minimal generated
+    # core that has no requested-patch machinery. The real generated build has
+    # this marker after apply-requested-patch-series.py runs.
+    source = path.read_text(encoding="utf-8")
+    if "report_requested_rejects()" not in source:
+        return
     helper = Path(__file__).with_name("apply-cpu-optimizations-7.2-port.py")
     subprocess.run([sys.executable, str(helper), str(path)], check=True)
 
