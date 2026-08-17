@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Follow the resolved stable series for non-scheduler build rewrites.
-
-BORE is finalized from the build's dynamic patch lock after every source
-resolver run.  Keeping a second, version-specific BORE port here used to make
-the preliminary rewrite fail as soon as Linux advanced beyond the small list
-of hand-maintained versions, before the dynamic finalizer had a chance to run.
-"""
+"""Follow the resolved stable series for non-scheduler build rewrites."""
 
 from __future__ import annotations
 
@@ -47,6 +41,39 @@ def patch_core(path: Path) -> None:
         if old not in source:
             raise SystemExit(f"latest-stable patch-series anchor missing: {old!r}")
         source = source.replace(old, new)
+
+    source = replace_once(
+        source,
+        "scripts/config --disable LTO_CLANG_FULL\nscripts/config --enable LTO_CLANG_THIN\n",
+        "scripts/config --disable LTO_CLANG_THIN\nscripts/config --enable LTO_CLANG_FULL\n",
+        "Full LTO Kconfig selection",
+    )
+    source = replace_once(
+        source,
+        "assert_disabled_or_absent LTO_CLANG_FULL\n",
+        "assert_disabled_or_absent LTO_CLANG_THIN\n",
+        "Full LTO disabled-mode assertion",
+    )
+    source = replace_once(
+        source,
+        'assert_config "CONFIG_LTO_CLANG_THIN=y"\n',
+        'assert_config "CONFIG_LTO_CLANG_FULL=y"\n',
+        "Full LTO enabled-mode assertion",
+    )
+
+    thin_labels = source.count("ThinLTO")
+    if thin_labels != 5:
+        raise SystemExit(
+            f"Full LTO policy: expected 5 ThinLTO labels in generated core, found {thin_labels}"
+        )
+    source = source.replace("ThinLTO", "Full LTO")
+
+    thin_localversions = source.count("thinlto")
+    if thin_localversions != 1:
+        raise SystemExit(
+            f"Full LTO policy: expected one thinlto localversion anchor, found {thin_localversions}"
+        )
+    source = source.replace("thinlto", "full-lto")
 
     path.write_text(source, encoding="utf-8")
 
@@ -112,6 +139,22 @@ assert_cmdline_token "kvm.enable_virt_at_load=0"
 ''',
         "VirtualBox/KVM command-line assertion",
     )
+
+    wrapper_thin_labels = source.count("ThinLTO")
+    if wrapper_thin_labels != 2:
+        raise SystemExit(
+            f"Full LTO wrapper policy: expected 2 ThinLTO labels, found {wrapper_thin_labels}"
+        )
+    source = source.replace("ThinLTO", "Full LTO")
+
+    wrapper_thin_localversions = source.count("thinlto")
+    if wrapper_thin_localversions != 1:
+        raise SystemExit(
+            "Full LTO wrapper policy: expected one thinlto localversion anchor, "
+            f"found {wrapper_thin_localversions}"
+        )
+    source = source.replace("thinlto", "full-lto")
+
     path.write_text(source, encoding="utf-8")
 
 
