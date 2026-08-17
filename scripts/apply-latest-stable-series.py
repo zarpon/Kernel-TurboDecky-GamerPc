@@ -141,19 +141,21 @@ assert_cmdline_token "kvm.enable_virt_at_load=0"
     )
 
     wrapper_thin_labels = source.count("ThinLTO")
-    if wrapper_thin_labels != 2:
+    if wrapper_thin_labels not in (0, 2):
         raise SystemExit(
-            f"Full LTO wrapper policy: expected 2 ThinLTO labels, found {wrapper_thin_labels}"
+            f"Full LTO wrapper policy: expected 0 or 2 ThinLTO labels, found {wrapper_thin_labels}"
         )
-    source = source.replace("ThinLTO", "Full LTO")
+    if wrapper_thin_labels:
+        source = source.replace("ThinLTO", "Full LTO")
 
     wrapper_thin_localversions = source.count("thinlto")
-    if wrapper_thin_localversions != 1:
+    if wrapper_thin_localversions not in (0, 1):
         raise SystemExit(
-            "Full LTO wrapper policy: expected one thinlto localversion anchor, "
+            "Full LTO wrapper policy: expected 0 or 1 thinlto localversion anchors, "
             f"found {wrapper_thin_localversions}"
         )
-    source = source.replace("thinlto", "full-lto")
+    if wrapper_thin_localversions:
+        source = source.replace("thinlto", "full-lto")
 
     path.write_text(source, encoding="utf-8")
 
