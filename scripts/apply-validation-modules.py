@@ -6,32 +6,36 @@ import sys
 from pathlib import Path
 
 
-def replace_once(text: str, old: str, new: str, label: str) -> str:
-    count = text.count(old)
-    if count != 1:
-        raise SystemExit(f"{label}: expected exactly one anchor, found {count}")
-    return text.replace(old, new, 1)
-
-
 def patch_validation(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    old = '''else
-  echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"
-  "${MAKE[@]}" -j"$JOBS" bzImage
+    matched = None
+    for lto_mode in ("Full LTO", "ThinLTO"):
+        candidate = f'''else
+  echo "==> Validating built-in kernel and Clang {lto_mode} link with $JOBS parallel jobs"
+  "${{MAKE[@]}}" -j"$JOBS" bzImage
   test -s arch/x86/boot/bzImage
   test -s vmlinux
   file arch/x86/boot/bzImage vmlinux | tee "$LOGDIR/build-products.txt"
 fi
 '''
-    new = '''else
-  echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"
-  "${MAKE[@]}" -j"$JOBS" bzImage
+        if candidate in source:
+            if matched is not None:
+                raise SystemExit("loadable module validation: multiple build-mode anchors found")
+            matched = (lto_mode, candidate)
+
+    if matched is None:
+        raise SystemExit("loadable module validation: expected exactly one Full LTO or ThinLTO build anchor, found 0")
+
+    lto_mode, old = matched
+    new = f'''else
+  echo "==> Validating built-in kernel and Clang {lto_mode} link with $JOBS parallel jobs"
+  "${{MAKE[@]}}" -j"$JOBS" bzImage
   test -s arch/x86/boot/bzImage
   test -s vmlinux
   file arch/x86/boot/bzImage vmlinux | tee "$LOGDIR/build-products.txt"
 
   echo "==> Validating every configured loadable module"
-  "${MAKE[@]}" -j"$JOBS" modules 2>&1 | tee "$LOGDIR/modules-build.log"
+  "${{MAKE[@]}}" -j"$JOBS" modules 2>&1 | tee "$LOGDIR/modules-build.log"
   module_products=(
     drivers/block/zram/zram.ko
     drivers/gpu/drm/ttm/ttm.ko
@@ -41,18 +45,19 @@ fi
     drivers/net/wireless/ath/ath11k/ath11k_ahb.ko
     drivers/net/wireless/ath/ath11k/ath11k_pci.ko
   )
-  for module in "${module_products[@]}"; do
+  for module in "${{module_products[@]}}"; do
     test -s "$module"
   done
-  file "${module_products[@]}" | tee "$LOGDIR/modules-products.txt"
-  find . -type f \\( -name '*.rej' -o -name '*.orig' \\) -print -quit | grep -q . && {
+  file "${{module_products[@]}}" | tee "$LOGDIR/modules-products.txt"
+  find . -type f \\( -name '*.rej' -o -name '*.orig' \\) -print -quit | grep -q . && {{
     echo "Patch reject/original files remain after module validation" >&2
     exit 1
-  }
+  }}
 fi
 '''
-    source = replace_once(source, old, new, "loadable module validation")
-    path.write_text(source, encoding="utf-8")
+    if source.count(old) != 1:
+        raise SystemExit(f"loadable module validation: expected one {lto_mode} build anchor")
+    path.write_text(source.replace(old, new, 1), encoding="utf-8")
 
 
 def main() -> None:
