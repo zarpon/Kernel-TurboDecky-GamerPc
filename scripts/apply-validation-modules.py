@@ -24,7 +24,10 @@ fi
             matched = (lto_mode, candidate)
 
     if matched is None:
-        raise SystemExit("loadable module validation: expected exactly one Full LTO or ThinLTO build anchor, found 0")
+        raise SystemExit(
+            "loadable module validation: expected exactly one anchor "
+            "(Full LTO or ThinLTO build), found 0"
+        )
 
     lto_mode, old = matched
     new = f'''else
@@ -56,7 +59,7 @@ fi
 fi
 '''
     if source.count(old) != 1:
-        raise SystemExit(f"loadable module validation: expected one {lto_mode} build anchor")
+        raise SystemExit(f"loadable module validation: expected exactly one anchor for {lto_mode} build")
     path.write_text(source.replace(old, new, 1), encoding="utf-8")
 
 
