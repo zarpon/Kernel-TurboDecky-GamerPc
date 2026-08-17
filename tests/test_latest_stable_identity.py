@@ -34,18 +34,20 @@ class FakeResponse:
 
 
 class LatestStableIdentityTest(unittest.TestCase):
-    def test_kernel_identity_is_debian_compatible_and_has_no_release_suffix(self) -> None:
+    def run_resolver(
+        self, version: str, moniker: str
+    ) -> tuple[dict[str, str], dict[str, str]]:
         payload = json.dumps(
             {
-                "latest_stable": {"version": "7.1.4"},
+                "latest_stable": {"version": version},
                 "releases": [
                     {
-                        "moniker": "stable",
-                        "version": "7.1.4",
+                        "moniker": moniker,
+                        "version": version,
                         "iseol": False,
-                        "source": "https://example.invalid/linux-7.1.4.tar.xz",
-                        "gitweb": "https://example.invalid/v7.1.4",
-                        "released": {"isodate": "2026-07-19"},
+                        "source": f"https://example.invalid/linux-{version}.tar.xz",
+                        "gitweb": f"https://example.invalid/v{version}",
+                        "released": {"isodate": "2026-08-16"},
                     }
                 ],
             }
@@ -80,11 +82,18 @@ class LatestStableIdentityTest(unittest.TestCase):
                 line.split("=", 1)
                 for line in output_file.read_text(encoding="utf-8").splitlines()
             )
+        return env, outputs
 
-        self.assertEqual(env["KERNEL_RELEASE_NAME"], "7.1.4.turbodecky")
-        self.assertEqual(env["KERNEL_PUBLISH_NAME"], "linux.7.1.4.turbodecky")
-        self.assertEqual(env["KERNEL_ARTIFACT_NAME"], "linux.7.1.4.turbodecky-debs")
-        self.assertEqual(outputs["kernel_release"], "7.1.4.turbodecky")
+    def assert_identity(self, version: str, moniker: str) -> None:
+        env, outputs = self.run_resolver(version, moniker)
+        expected_release = f"{version}.turbodecky"
+        expected_publish = f"linux.{expected_release}"
+        self.assertEqual(env["KERNEL_VERSION"], version)
+        self.assertEqual(env["KERNEL_SERIES"], ".".join(version.split(".")[:2]))
+        self.assertEqual(env["KERNEL_RELEASE_NAME"], expected_release)
+        self.assertEqual(env["KERNEL_PUBLISH_NAME"], expected_publish)
+        self.assertEqual(env["KERNEL_ARTIFACT_NAME"], f"{expected_publish}-debs")
+        self.assertEqual(outputs["kernel_release"], expected_release)
         self.assertNotIn(".release", "\n".join([*env.values(), *outputs.values()]))
         subprocess.run(
             ["dpkg", "--validate-version", env["KERNEL_RELEASE_NAME"]],
@@ -93,6 +102,38 @@ class LatestStableIdentityTest(unittest.TestCase):
             stderr=subprocess.PIPE,
             text=True,
         )
+
+    def test_patchlevel_stable_release(self) -> None:
+        self.assert_identity("7.1.8", "stable")
+
+    def test_new_two_component_mainline_release_is_latest_stable(self) -> None:
+        self.assert_identity("7.2", "mainline")
+
+    def test_future_two_component_release(self) -> None:
+        self.assert_identity("8.0", "mainline")
+
+    def test_future_patchlevel_release(self) -> None:
+        self.assert_identity("8.0.1", "stable")
+
+    def test_stable_record_wins_during_transition(self) -> None:
+        payload = {
+            "releases": [
+                {
+                    "moniker": "mainline",
+                    "version": "8.1",
+                    "iseol": False,
+                    "source": "https://example.invalid/mainline.tar.xz",
+                },
+                {
+                    "moniker": "stable",
+                    "version": "8.1",
+                    "iseol": False,
+                    "source": "https://example.invalid/stable.tar.xz",
+                },
+            ]
+        }
+        selected = resolver.select_release(payload, "8.1")
+        self.assertEqual(selected["moniker"], "stable")
 
 
 if __name__ == "__main__":
