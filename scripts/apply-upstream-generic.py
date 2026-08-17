@@ -45,7 +45,7 @@ def main() -> None:
     )
     source = replace_once(
         source,
-        '''git clone --no-checkout --depth 1 --single-branch --no-tags --branch \\
+        '''git clone --no-checkout --depth 1 --single-branch --no-tags --branch \
 "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 ''',
@@ -211,7 +211,7 @@ cp .config "$LOGDIR/final.config"
         'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"',
     )
     source = source.replace(
-        'echo "==> Latest-stable TurboDecky ThinLTO build completed successfully"',
+        'echo "==> Kernelnote Full LTO build completed successfully"',
         'echo "==> Latest-stable TurboDecky Full LTO build completed successfully"',
     )
 
