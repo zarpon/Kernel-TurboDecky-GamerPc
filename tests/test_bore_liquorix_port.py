@@ -15,12 +15,15 @@ CORE = ROOT / "scripts/build-kernelnote-core.sh"
 WRAPPER = ROOT / "scripts/build-kernelnote.sh"
 MANIFEST = ROOT / "config/patch-sources.json"
 FINALIZER = ROOT / "scripts/finalize-bore-stable-port.py"
+FINALIZER_BASE = ROOT / "scripts/finalize-bore-stable-port-base.py"
 
 
 class BoreLinuxPortTests(unittest.TestCase):
     def test_build_defers_bore_to_the_exact_dynamic_lock(self) -> None:
         core = CORE.read_text(encoding="utf-8")
-        finalizer = FINALIZER.read_text(encoding="utf-8")
+        finalizer = FINALIZER.read_text(encoding="utf-8") + FINALIZER_BASE.read_text(
+            encoding="utf-8"
+        )
         self.assertIn('BORE_REPO="https://github.com/firelzrd/bore-scheduler.git"', core)
         self.assertIn("load_locked_bore", finalizer)
         self.assertIn('BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"', finalizer)
