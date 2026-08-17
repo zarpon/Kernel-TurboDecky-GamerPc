@@ -13,7 +13,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = ROOT / ".resolved-patches/patch-lock.json"
 SCHED_EXT_PORT_TEMPLATE = ROOT / "patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
-_VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+# Final upstream Linux releases can be X.Y (for example 7.2) or X.Y.Z.
+# Release candidates/pre-release suffixes remain deliberately unsupported here.
+_VERSION_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?$")
 
 
 class FinalizeError(RuntimeError):
@@ -29,10 +31,12 @@ def replace_regex_once(text: str, pattern: str, replacement: str, label: str) ->
 
 
 def version_tuple(value: str, label: str) -> tuple[int, int, int]:
+    """Normalize a final X.Y or X.Y.Z release to a comparable 3-tuple."""
     match = _VERSION_RE.fullmatch(value)
     if not match:
         raise FinalizeError(f"invalid {label}: {value!r}")
-    return tuple(int(part) for part in match.groups())
+    major, minor, patch = match.groups()
+    return int(major), int(minor), int(patch or 0)
 
 
 def load_lock_record(lock_path: Path, component: str) -> tuple[dict[str, Any], dict[str, Any]]:
