@@ -42,7 +42,7 @@ BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec
 # patch URL. Only the exact patch blob is materialized in the workspace.
 MARIE_REPO="https://github.com/firelzrd/lru_marie.git"
 MARIE_COMMIT="be5919e3efa671287bce9c093e71eedc5abac5fc"
-MARIE_PATCH_PATH="patches/testing/0001-linux7.1-rc5-lru_marie-0.10.1.patch"
+MARIE_PATCH_PATH="patches/testing/0001-linux7.2-rc1-lru_marie-0.10.1.patch"
 MARIE_PATCH="$PATCHDIR/02-lru-marie.patch"
 PATCH_MARIE_VERSION="${PATCH_MARIE_VERSION:-0.10.1}"
 MARIE_FALLBACK_PATCH="$ROOT/patches/fallback/lru_marie.patch"
