@@ -37,6 +37,23 @@ def insert_after_exact_line_once(
     return "".join(lines)
 
 
+def rewrite_shellcheck_clean_constructs(text: str) -> str:
+    """Keep generated shell strict without suppressing legitimate ShellCheck checks."""
+    # SC2016 flags awk's intentional $1 because the awk program is nested in a
+    # double-quoted command substitution. sha256sum output is space-delimited,
+    # so cut expresses the same first-field operation without an embedded '$'.
+    text = text.replace("| awk '{print $1}'", "| cut -d ' ' -f1")
+
+    # Likewise, use a double-quoted sed expression with escaped literal quotes.
+    # This preserves the end-of-line '$' regex while avoiding SC2016 on the
+    # single-quoted expression nested inside a double-quoted substitution.
+    old = r'''sed 's/^CONFIG_CMDLINE="//; s/"$//' '''.rstrip()
+    new = r'''sed "s/^CONFIG_CMDLINE=\"//; s/\"$//"'''
+    if old not in text:
+        raise RewriteError("CONFIG_CMDLINE ShellCheck cleanup anchor is missing")
+    return text.replace(old, new)
+
+
 def rewrite(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     marker = "fix_known_build_warnings() {"
@@ -97,6 +114,7 @@ PYFIX
         'assert_config "CONFIG_MULTIPLEXER=y"\n',
         "MULTIPLEXER assertion",
     )
+    text = rewrite_shellcheck_clean_constructs(text)
     path.write_text(text, encoding="utf-8")
 
 
