@@ -50,8 +50,15 @@ git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 ''',
         '''git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 actual_kernel_version="$(make -s -C "$KERNELDIR" kernelversion)"
-if [[ "$actual_kernel_version" != "$KERNEL_VERSION" ]]; then
-  echo "Cloned kernel version mismatch: $actual_kernel_version != $KERNEL_VERSION" >&2
+expected_kernel_version="$KERNEL_VERSION"
+# Final kernel.org tags may use X.Y while the kernel Makefile reports X.Y.0.
+# Canonicalize only that trailing-zero representation; all other mismatches
+# remain fatal so a wrong source tag cannot pass validation.
+if [[ "$expected_kernel_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  expected_kernel_version="${expected_kernel_version}.0"
+fi
+if [[ "$actual_kernel_version" != "$expected_kernel_version" ]]; then
+  echo "Cloned kernel version mismatch: $actual_kernel_version != $KERNEL_VERSION (canonical expected $expected_kernel_version)" >&2
   exit 1
 fi
 {
