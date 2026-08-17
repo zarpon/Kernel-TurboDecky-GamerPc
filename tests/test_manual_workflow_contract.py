@@ -79,6 +79,17 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn("assert_disabled_or_absent LTO_CLANG_THIN", UPSTREAM_REWRITER)
         self.assertIn("Full LTO", UPSTREAM_REWRITER)
 
+    def test_two_component_stable_kernel_version_is_normalized(self) -> None:
+        self.assertIn('expected_kernel_version="$KERNEL_VERSION"', UPSTREAM_REWRITER)
+        self.assertIn(
+            'expected_kernel_version="${expected_kernel_version}.0"',
+            UPSTREAM_REWRITER,
+        )
+        self.assertIn(
+            'actual_kernel_version" != "$expected_kernel_version',
+            UPSTREAM_REWRITER,
+        )
+
     def test_zen_interactive_is_persistent_and_verified(self) -> None:
         self.assertIn("CONFIG_ZEN_INTERACTIVE=y", CONFIG)
         self.assertIn(
