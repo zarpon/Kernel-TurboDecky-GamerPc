@@ -15,17 +15,13 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 def patch_validation(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    old = '''else
-  echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"
-  "${MAKE[@]}" -j"$JOBS" bzImage
+    old = '''  "${MAKE[@]}" -j"$JOBS" bzImage
   test -s arch/x86/boot/bzImage
   test -s vmlinux
   file arch/x86/boot/bzImage vmlinux | tee "$LOGDIR/build-products.txt"
 fi
 '''
-    new = '''else
-  echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"
-  "${MAKE[@]}" -j"$JOBS" bzImage
+    new = '''  "${MAKE[@]}" -j"$JOBS" bzImage
   test -s arch/x86/boot/bzImage
   test -s vmlinux
   file arch/x86/boot/bzImage vmlinux | tee "$LOGDIR/build-products.txt"
