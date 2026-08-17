@@ -28,7 +28,7 @@ def select_release(payload: dict, version: str) -> dict:
     """Return the downloadable record referenced by kernel.org latest_stable.
 
     kernel.org can expose a newly released X.Y kernel with moniker=mainline while
-    latest_stable already points at that final release.  Therefore latest_stable
+    latest_stable already points at that final release. Therefore latest_stable
     is authoritative and moniker is used only as a preference when duplicate
     records exist during a release transition.
     """
@@ -52,6 +52,19 @@ def select_release(payload: dict, version: str) -> dict:
     )
 
 
+def makefile_kernel_version(version: str) -> str:
+    """Return the version printed by `make kernelversion` for a final release.
+
+    Linux final X.Y tags keep SUBLEVEL=0 in the top-level Makefile, so
+    `make kernelversion` reports X.Y.0 even though kernel.org names the final
+    release and tag X.Y. Patchlevel releases X.Y.Z already match exactly.
+    """
+
+    if not VERSION_RE.fullmatch(version):
+        raise ValueError(f"invalid final Linux version: {version!r}")
+    return f"{version}.0" if version.count(".") == 1 else version
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--github-env", type=Path)
@@ -61,7 +74,7 @@ def main() -> None:
 
     request = urllib.request.Request(
         RELEASES_URL,
-        headers={"User-Agent": "TurboDecky-GamerPc-stable-resolver/1.1"},
+        headers={"User-Agent": "TurboDecky-GamerPc-stable-resolver/1.2"},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         raw = response.read()
@@ -73,6 +86,7 @@ def main() -> None:
 
     release = select_release(payload, version)
     series = ".".join(version.split(".")[:2])
+    make_version = makefile_kernel_version(version)
     kernel_release = f"{version}.turbodecky"
     publish_name = f"linux.{kernel_release}"
     if not DEBIAN_KERNEL_RELEASE_RE.fullmatch(kernel_release):
@@ -80,6 +94,7 @@ def main() -> None:
 
     values = {
         "KERNEL_VERSION": version,
+        "KERNEL_MAKE_VERSION": make_version,
         "KERNEL_SERIES": series,
         "KERNEL_TAG": f"v{version}",
         "KERNEL_RELEASE_NAME": kernel_release,
@@ -103,6 +118,7 @@ def main() -> None:
         args.github_output,
         {
             "version": version,
+            "make_version": make_version,
             "series": series,
             "tag": values["KERNEL_TAG"],
             "kernel_release": kernel_release,
@@ -113,6 +129,7 @@ def main() -> None:
     )
 
     print(f"Latest stable Linux: {version}")
+    print(f"Kernel Makefile identity: {make_version}")
     print(f"Kernel identity: {kernel_release}")
     print(f"Publish identity: {publish_name}")
     print(f"Source: {values['KERNEL_SOURCE_URL']}")

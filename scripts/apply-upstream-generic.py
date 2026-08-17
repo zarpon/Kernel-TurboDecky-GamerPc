@@ -25,6 +25,7 @@ def main() -> None:
         source,
         'KERNEL_TAG="v7.1.4"\n',
         ''': "${KERNEL_VERSION:?latest stable version was not resolved}"
+: "${KERNEL_MAKE_VERSION:?latest stable Makefile version was not resolved}"
 : "${KERNEL_SERIES:?latest stable series was not resolved}"
 : "${KERNEL_TAG:?latest stable tag was not resolved}"
 : "${KERNEL_DEB_VERSION:?Debian package version was not resolved}"
@@ -51,13 +52,14 @@ git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 ''',
         '''git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 actual_kernel_version="$(make -s -C "$KERNELDIR" kernelversion)"
-if [[ "$actual_kernel_version" != "$KERNEL_VERSION" ]]; then
-  echo "Cloned kernel version mismatch: $actual_kernel_version != $KERNEL_VERSION" >&2
+if [[ "$actual_kernel_version" != "$KERNEL_MAKE_VERSION" ]]; then
+  echo "Cloned kernel version mismatch: make kernelversion=$actual_kernel_version, expected=$KERNEL_MAKE_VERSION (kernel.org=$KERNEL_VERSION)" >&2
   exit 1
 fi
 {
   echo "Policy: kernel.org latest_stable"
   echo "Resolved version: $KERNEL_VERSION"
+  echo "Resolved Makefile version: $KERNEL_MAKE_VERSION"
   echo "Resolved series: $KERNEL_SERIES"
   echo "Source tag: $KERNEL_TAG"
   echo "Repository: $KERNEL_REPO"

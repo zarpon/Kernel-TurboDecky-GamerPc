@@ -88,7 +88,12 @@ class LatestStableIdentityTest(unittest.TestCase):
         env, outputs = self.run_resolver(version, moniker)
         expected_release = f"{version}.turbodecky"
         expected_publish = f"linux.{expected_release}"
+        expected_make_version = (
+            f"{version}.0" if version.count(".") == 1 else version
+        )
         self.assertEqual(env["KERNEL_VERSION"], version)
+        self.assertEqual(env["KERNEL_MAKE_VERSION"], expected_make_version)
+        self.assertEqual(outputs["make_version"], expected_make_version)
         self.assertEqual(env["KERNEL_SERIES"], ".".join(version.split(".")[:2]))
         self.assertEqual(env["KERNEL_RELEASE_NAME"], expected_release)
         self.assertEqual(env["KERNEL_PUBLISH_NAME"], expected_publish)
@@ -114,6 +119,17 @@ class LatestStableIdentityTest(unittest.TestCase):
 
     def test_future_patchlevel_release(self) -> None:
         self.assert_identity("8.0.1", "stable")
+
+    def test_two_component_release_maps_to_makefile_sublevel_zero(self) -> None:
+        self.assertEqual(resolver.makefile_kernel_version("7.2"), "7.2.0")
+        self.assertEqual(resolver.makefile_kernel_version("8.0"), "8.0.0")
+
+    def test_patchlevel_release_keeps_exact_makefile_version(self) -> None:
+        self.assertEqual(resolver.makefile_kernel_version("7.2.1"), "7.2.1")
+
+    def test_release_candidate_is_not_a_final_makefile_identity(self) -> None:
+        with self.assertRaises(ValueError):
+            resolver.makefile_kernel_version("8.1-rc1")
 
     def test_stable_record_wins_during_transition(self) -> None:
         payload = {
