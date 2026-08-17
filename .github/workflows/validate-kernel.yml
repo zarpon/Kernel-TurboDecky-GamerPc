@@ -175,6 +175,27 @@ jobs:
           grep -Fq 'intel_pstate=passive' logs/final.config
           grep -Fq 'amd_pstate=passive' logs/final.config
 
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import re
+          from pathlib import Path
+
+          lock = json.loads(Path('.resolved-patches/patch-lock.json').read_text(encoding='utf-8'))
+          sched_ext = lock['components']['bore_sched_ext_coexistence']
+          assert re.fullmatch(r'[0-9a-f]{64}', sched_ext['sha256'])
+          source = Path('.resolved-patches') / sched_ext['output']
+          source_data = source.read_bytes()
+          assert hashlib.sha256(source_data).hexdigest() == sched_ext['sha256']
+          assert len(source_data) == sched_ext['size']
+          port = sched_ext['compatibility_port']
+          assert port['source_sha256'] == sched_ext['sha256']
+          port_file = Path('.resolved-patches') / port['output']
+          port_data = port_file.read_bytes()
+          assert hashlib.sha256(port_data).hexdigest() == port['sha256']
+          assert len(port_data) == port['size']
+          PY
+
       - name: Verify validation module coverage
         if: ${{ env.BUILD_MODE == 'validate' }}
         shell: bash
