@@ -8,9 +8,11 @@ on:
     branches: [main]
     paths:
       - config/patch-sources.json
+      - scripts/resolve-latest-stable.py
       - scripts/resolve-patch-sources.py
       - scripts/update-marie-fallback.py
       - scripts/validate-marie-fallback.py
+      - tests/test_latest_stable_identity.py
       - patches/fallback/lru_marie.json
       - .github/workflows/update-marie-fallback.yml
 
@@ -53,6 +55,7 @@ jobs:
             --patch patches/fallback/lru_marie.patch \
             --metadata patches/fallback/lru_marie.json
           python3 -m unittest -v \
+            tests.test_latest_stable_identity \
             tests.test_marie_local_fallback \
             tests.test_marie_fallback_updater \
             tests.test_marie_version_reporting
@@ -62,8 +65,10 @@ jobs:
           git diff --check -- \
             patches/fallback/lru_marie.json \
             scripts/build-kernelnote-core.sh \
+            scripts/resolve-latest-stable.py \
             scripts/update-marie-fallback.py \
             scripts/validate-marie-fallback.py \
+            tests/test_latest_stable_identity.py \
             .github/workflows/update-marie-fallback.yml
 
       - name: Publish fallback update
