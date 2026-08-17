@@ -111,14 +111,13 @@ assert_cmdline_token "kvm.enable_virt_at_load=0"
         "VirtualBox/KVM command-line assertion",
     )
 
-    # Do not convert the core script to Full LTO here: subsequent wrapper
-    # transformations still consume legacy ThinLTO text as stable anchors.
-    # Instead inject the conversion into the wrapper immediately before it
-    # writes and executes the final generated build script.
+    # Keep legacy ThinLTO text available while all rewriters consume their
+    # historical anchors. Convert only the wrapper's final generated script,
+    # immediately before that script is written and executed.
     source = replace_once(
         source,
         'output.write_text(source, encoding="utf-8")\n',
-        r'''# Full LTO is finalized only after every embedded transformation has
+        r"""# Full LTO is finalized only after every embedded transformation has
 # consumed its legacy ThinLTO anchors. The generated script is what actually
 # runs Kconfig and the compiler, so its post-olddefconfig assertions prove the
 # effective LTO mode instead of trusting the source fragment alone.
@@ -160,7 +159,7 @@ assert_config "CONFIG_LTO_CLANG_FULL=y"
 )
 source = source.replace("ThinLTO", "Full LTO")
 output.write_text(source, encoding="utf-8")
-''',
+""",
         "final generated Full LTO conversion",
     )
     path.write_text(source, encoding="utf-8")
