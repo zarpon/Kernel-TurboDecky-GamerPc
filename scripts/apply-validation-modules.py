@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Make PR validation compile every configured loadable kernel module."""
+"""Finalize generated validation/build integrations before kernel execution."""
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -63,10 +64,17 @@ fi
     path.write_text(source.replace(old, new, 1), encoding="utf-8")
 
 
+def patch_cpu_optimization_fallback(path: Path) -> None:
+    helper = Path(__file__).with_name("apply-cpu-optimizations-7.2-port.py")
+    subprocess.run([sys.executable, str(helper), str(path)], check=True)
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("usage: apply-validation-modules.py <generated-core>")
-    patch_validation(Path(sys.argv[1]))
+    path = Path(sys.argv[1])
+    patch_validation(path)
+    patch_cpu_optimization_fallback(path)
 
 
 if __name__ == "__main__":
