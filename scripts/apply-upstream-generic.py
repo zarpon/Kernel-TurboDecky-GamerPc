@@ -45,7 +45,7 @@ def main() -> None:
     )
     source = replace_once(
         source,
-        '''git clone --no-checkout --depth 1 --single-branch --no-tags --branch \
+        '''git clone --no-checkout --depth 1 --single-branch --no-tags --branch \\
 "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 ''',
@@ -103,6 +103,79 @@ scripts/config --disable X86_NATIVE_CPU
 '''
     source = replace_once(source, config_anchor, config_block, "generic amd64 profile")
 
+    full_lto_anchor = r'''# ThinLTO is mandatory for the final kernel. These symbols only survive
+# olddefconfig when Clang, LLD and the LLVM integrated assembler are active.
+scripts/config --disable LTO_NONE
+scripts/config --disable LTO_CLANG_FULL
+scripts/config --enable LTO_CLANG_THIN
+'''
+    full_lto_block = r'''# Clang Full LTO is mandatory for the final kernel. CONFIG_LTO_CLANG_FULL
+# selects CONFIG_LTO_CLANG and CONFIG_LTO; olddefconfig must preserve this
+# choice when Clang, LLD and the LLVM integrated assembler are active.
+scripts/config --disable LTO_NONE
+scripts/config --disable LTO_CLANG_THIN
+scripts/config --enable LTO_CLANG_FULL
+'''
+    source = replace_once(source, full_lto_anchor, full_lto_block, "Clang Full LTO selection")
+
+    full_lto_assert_anchor = r'''assert_disabled_or_absent LTO_NONE
+assert_disabled_or_absent LTO_CLANG_FULL
+assert_disabled_or_absent CMDLINE_OVERRIDE
+assert_config "CONFIG_CC_IS_CLANG=y"
+assert_config "CONFIG_LD_IS_LLD=y"
+assert_config "CONFIG_AS_IS_LLVM=y"
+assert_config "CONFIG_LTO=y"
+assert_config "CONFIG_LTO_CLANG=y"
+assert_config "CONFIG_LTO_CLANG_THIN=y"
+'''
+    full_lto_assert_block = r'''assert_disabled_or_absent LTO_NONE
+assert_disabled_or_absent LTO_CLANG_THIN
+assert_disabled_or_absent CMDLINE_OVERRIDE
+assert_config "CONFIG_CC_IS_CLANG=y"
+assert_config "CONFIG_LD_IS_LLD=y"
+assert_config "CONFIG_AS_IS_LLVM=y"
+assert_config "CONFIG_LTO=y"
+assert_config "CONFIG_LTO_CLANG=y"
+assert_config "CONFIG_LTO_CLANG_FULL=y"
+'''
+    source = replace_once(
+        source,
+        full_lto_assert_anchor,
+        full_lto_assert_block,
+        "Clang Full LTO post-olddefconfig assertions",
+    )
+
+    source = replace_once(
+        source,
+        'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"',
+        'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-fulllto"',
+        "Full LTO localversion marker",
+    )
+    source = replace_once(
+        source,
+        '# PR validation exercises the complete built-in kernel and ThinLTO link, but',
+        '# PR validation exercises the complete built-in kernel and Full LTO link, but',
+        "Full LTO validation description",
+    )
+    source = replace_once(
+        source,
+        'echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"',
+        'echo "==> Building complete Clang Full LTO Debian packages with $JOBS parallel jobs"',
+        "Full LTO package build description",
+    )
+    source = replace_once(
+        source,
+        'echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"',
+        'echo "==> Validating built-in kernel and Clang Full LTO link with $JOBS parallel jobs"',
+        "Full LTO validation build description",
+    )
+    source = replace_once(
+        source,
+        'echo "==> Kernelnote ThinLTO build completed successfully"',
+        'echo "==> Kernelnote Full LTO build completed successfully"',
+        "Full LTO completion marker",
+    )
+
     assertion_anchor = 'assert_config "CONFIG_CPU_MITIGATIONS=y"\n'
     assertion_block = r'''assert_config "CONFIG_64BIT=y"
 assert_config "CONFIG_X86_64=y"
@@ -138,8 +211,8 @@ cp .config "$LOGDIR/final.config"
         'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"',
     )
     source = source.replace(
-        'echo "==> Kernelnote ThinLTO build completed successfully"',
         'echo "==> Latest-stable TurboDecky ThinLTO build completed successfully"',
+        'echo "==> Latest-stable TurboDecky Full LTO build completed successfully"',
     )
 
     path.write_text(source, encoding="utf-8")
