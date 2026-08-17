@@ -47,8 +47,10 @@ def rewrite_shellcheck_clean_constructs(text: str) -> str:
     # Likewise, use a double-quoted sed expression with escaped literal quotes.
     # This preserves the end-of-line '$' regex while avoiding SC2016 on the
     # single-quoted expression nested inside a double-quoted substitution.
-    old = r'''sed 's/^CONFIG_CMDLINE="//; s/"$//' '''.rstrip()
+    old = '''sed 's/^CONFIG_CMDLINE="//; s/"$//' '''.rstrip()
     new = r'''sed "s/^CONFIG_CMDLINE=\"//; s/\"$//"'''
+    # The raw string above must not escape the shell's outer quotes.
+    new = new.replace('sed \\"', 'sed "').replace('$//\\"', '$//"')
     if old not in text:
         raise RewriteError("CONFIG_CMDLINE ShellCheck cleanup anchor is missing")
     return text.replace(old, new)
