@@ -59,6 +59,8 @@ def main() -> None:
     text = path.read_text(encoding="utf-8")
     if MARKER in text:
         return
+    if "report_requested_rejects()" not in text:
+        return
     count = text.count(OLD)
     if count != 1:
         raise SystemExit(
