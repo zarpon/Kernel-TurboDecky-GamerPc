@@ -116,7 +116,10 @@ scripts/config --disable LTO_NONE
 scripts/config --disable LTO_CLANG_FULL
 scripts/config --enable LTO_CLANG_THIN
 '''
-    full_lto_block = r'''# Clang Full LTO is mandatory for the final kernel. CONFIG_LTO_CLANG_FULL
+    full_lto_block = r'''# ThinLTO is mandatory for the final kernel. These symbols only survive
+# Compatibility marker consumed by apply-requested-patch-series.py; the active
+# policy below is Clang Full LTO, not ThinLTO.
+# Clang Full LTO is mandatory for the final kernel. CONFIG_LTO_CLANG_FULL
 # selects CONFIG_LTO_CLANG and CONFIG_LTO; olddefconfig must preserve this
 # choice when Clang, LLD and the LLVM integrated assembler are active.
 scripts/config --disable LTO_NONE
