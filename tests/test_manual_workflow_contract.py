@@ -17,7 +17,10 @@ DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
 CONFIG = (ROOT / "config/kernelnote.config").read_text(encoding="utf-8")
 BUILD_CORE = (ROOT / "scripts/build-kernelnote-core.sh").read_text(encoding="utf-8")
 ZEN_REWRITER = (ROOT / "scripts/apply-zen-interactive.py").read_text(encoding="utf-8")
-FINALIZER = (ROOT / "scripts/finalize-bore-stable-port.py").read_text(encoding="utf-8")
+FINALIZER = (
+    (ROOT / "scripts/finalize-bore-stable-port.py").read_text(encoding="utf-8")
+    + (ROOT / "scripts/finalize-bore-stable-port-base.py").read_text(encoding="utf-8")
+)
 
 
 class ManualWorkflowContractTests(unittest.TestCase):
