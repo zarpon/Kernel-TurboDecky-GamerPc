@@ -110,6 +110,59 @@ assert_cmdline_token "kvm.enable_virt_at_load=0"
 ''',
         "VirtualBox/KVM command-line assertion",
     )
+
+    # Do not convert the core script to Full LTO here: subsequent wrapper
+    # transformations still consume legacy ThinLTO text as stable anchors.
+    # Instead inject the conversion into the wrapper immediately before it
+    # writes and executes the final generated build script.
+    source = replace_once(
+        source,
+        'output.write_text(source, encoding="utf-8")\n',
+        r'''# Full LTO is finalized only after every embedded transformation has
+# consumed its legacy ThinLTO anchors. The generated script is what actually
+# runs Kconfig and the compiler, so its post-olddefconfig assertions prove the
+# effective LTO mode instead of trusting the source fragment alone.
+replace_once(
+    '''# ThinLTO is mandatory for the final kernel. These symbols only survive
+# olddefconfig when Clang, LLD and the LLVM integrated assembler are active.
+scripts/config --disable LTO_NONE
+scripts/config --disable LTO_CLANG_FULL
+scripts/config --enable LTO_CLANG_THIN
+''',
+    '''# Clang Full LTO is mandatory for the final kernel. These symbols only
+# survive olddefconfig when Clang, LLD and the LLVM integrated assembler are active.
+scripts/config --disable LTO_NONE
+scripts/config --disable LTO_CLANG_THIN
+scripts/config --enable LTO_CLANG_FULL
+'''
+)
+replace_once(
+    '''assert_disabled_or_absent LTO_NONE
+assert_disabled_or_absent LTO_CLANG_FULL
+assert_disabled_or_absent CMDLINE_OVERRIDE
+assert_config "CONFIG_CC_IS_CLANG=y"
+assert_config "CONFIG_LD_IS_LLD=y"
+assert_config "CONFIG_AS_IS_LLVM=y"
+assert_config "CONFIG_LTO=y"
+assert_config "CONFIG_LTO_CLANG=y"
+assert_config "CONFIG_LTO_CLANG_THIN=y"
+''',
+    '''assert_disabled_or_absent LTO_NONE
+assert_disabled_or_absent LTO_CLANG_THIN
+assert_disabled_or_absent CMDLINE_OVERRIDE
+assert_config "CONFIG_CC_IS_CLANG=y"
+assert_config "CONFIG_LD_IS_LLD=y"
+assert_config "CONFIG_AS_IS_LLVM=y"
+assert_config "CONFIG_LTO=y"
+assert_config "CONFIG_LTO_CLANG=y"
+assert_config "CONFIG_LTO_CLANG_FULL=y"
+'''
+)
+source = source.replace("ThinLTO", "Full LTO")
+output.write_text(source, encoding="utf-8")
+''',
+        "final generated Full LTO conversion",
+    )
     path.write_text(source, encoding="utf-8")
 
 
