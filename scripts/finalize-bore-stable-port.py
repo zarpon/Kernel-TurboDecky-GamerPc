@@ -2,13 +2,15 @@
 """Compatibility front-end for the BORE stable finalizer.
 
 The implementation is kept in finalize-bore-stable-port-base.py. This front-end
-only tightens subject validation so an exact same-series BORE source may retain
-its upstream -rcN subject qualifier while still being authenticated by the lock.
+tightens BORE subject validation and performs final generated-core compatibility
+rewrites after every earlier source rewriter has completed.
 """
 from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 _BASE_PATH = Path(__file__).with_name("finalize-bore-stable-port-base.py")
@@ -135,8 +137,20 @@ def _replace_regex_once_with_rc_subject(
 _base.replace_regex_once = _replace_regex_once_with_rc_subject
 
 
+def finalize_cpu_optimization_fallback() -> None:
+    if len(sys.argv) < 2:
+        raise _base.FinalizeError("generated core path is missing for final compatibility rewrite")
+    core = Path(sys.argv[1])
+    helper = Path(__file__).with_name("apply-cpu-optimizations-7.2-port.py")
+    try:
+        subprocess.run([sys.executable, str(helper), str(core)], check=True)
+    except subprocess.CalledProcessError as exc:
+        raise _base.FinalizeError("unable to finalize Linux 7.2 CPU optimization fallback") from exc
+
+
 def main() -> None:
     _base.main()
+    finalize_cpu_optimization_fallback()
 
 
 if __name__ == "__main__":
