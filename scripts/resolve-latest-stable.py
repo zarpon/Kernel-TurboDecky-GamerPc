@@ -10,7 +10,9 @@ import urllib.request
 from pathlib import Path
 
 RELEASES_URL = "https://www.kernel.org/releases.json"
-VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+# A final upstream Linux release can be X.Y (for example 7.2) or X.Y.Z.
+# Release candidates are deliberately excluded from latest_stable handling.
+VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+(?:\.[0-9]+)?$")
 DEBIAN_KERNEL_RELEASE_RE = re.compile(r"^[0-9][A-Za-z0-9.+~_-]*$")
 
 
@@ -22,6 +24,34 @@ def append_key_value(path: Path | None, values: dict[str, str]) -> None:
             handle.write(f"{key}={value}\n")
 
 
+def select_release(payload: dict, version: str) -> dict:
+    """Return the downloadable record referenced by kernel.org latest_stable.
+
+    kernel.org can expose a newly released X.Y kernel with moniker=mainline while
+    latest_stable already points at that final release.  Therefore latest_stable
+    is authoritative and moniker is used only as a preference when duplicate
+    records exist during a release transition.
+    """
+
+    matching = [
+        release
+        for release in payload.get("releases", [])
+        if str(release.get("version", "")) == version
+        and not release.get("iseol", False)
+        and release.get("source")
+    ]
+    if not matching:
+        raise SystemExit(
+            f"kernel.org latest_stable {version!r} has no downloadable non-EOL release record"
+        )
+
+    priority = {"stable": 0, "mainline": 1}
+    return min(
+        matching,
+        key=lambda release: priority.get(str(release.get("moniker", "")), 2),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--github-env", type=Path)
@@ -31,29 +61,17 @@ def main() -> None:
 
     request = urllib.request.Request(
         RELEASES_URL,
-        headers={"User-Agent": "TurboDecky-GamerPc-stable-resolver/1.0"},
+        headers={"User-Agent": "TurboDecky-GamerPc-stable-resolver/1.1"},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         raw = response.read()
 
     payload = json.loads(raw)
-    version = str(payload.get("latest_stable", {}).get("version", ""))
+    version = str(payload.get("latest_stable", {}).get("version", "")).strip()
     if not VERSION_RE.fullmatch(version):
         raise SystemExit(f"kernel.org returned an invalid latest_stable version: {version!r}")
 
-    matching = [
-        release
-        for release in payload.get("releases", [])
-        if release.get("moniker") == "stable"
-        and release.get("version") == version
-        and not release.get("iseol", False)
-    ]
-    if len(matching) != 1:
-        raise SystemExit(
-            f"expected exactly one non-EOL stable record for {version}, found {len(matching)}"
-        )
-
-    release = matching[0]
+    release = select_release(payload, version)
     series = ".".join(version.split(".")[:2])
     kernel_release = f"{version}.turbodecky"
     publish_name = f"linux.{kernel_release}"
