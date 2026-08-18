@@ -45,11 +45,11 @@ def main() -> None:
     )
     source = replace_once(
         source,
-        '''git clone --no-checkout --depth 1 --single-branch --no-tags --branch \
+        r'''git clone --no-checkout --depth 1 --single-branch --no-tags --branch \
 "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 ''',
-        '''git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
+        r'''git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 actual_kernel_version="$(make -s -C "$KERNELDIR" kernelversion)"
 expected_kernel_version="$KERNEL_VERSION"
 # Final kernel.org tags may use X.Y while the kernel Makefile reports X.Y.0.
