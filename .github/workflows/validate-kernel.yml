@@ -26,6 +26,13 @@ jobs:
     timeout-minutes: 360
     env:
       BUILD_MODE: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'validation/') && 'package' || github.event_name == 'pull_request' && 'validate' || 'package' }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 8G
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPILERCHECK: content
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_SLOPPINESS: include_file_ctime,include_file_mtime,time_macros
+      SEGMENT_DOWNLOAD_TIMEOUT_MINS: "5"
       KBUILD_BUILD_USER: turbodecky
       KBUILD_BUILD_HOST: github-actions
       KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
@@ -87,6 +94,17 @@ jobs:
         with:
           swap-size-gb: 16
 
+      - name: Restore compiler cache
+        id: ccache-restore
+        uses: actions/cache/restore@v5
+        with:
+          path: .ccache
+          key: turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'scripts/*.sh', 'config/*.json', 'config/kernelnote.config', 'patches/bore/*.patch') }}
+          restore-keys: |
+            turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-
+            turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.series }}-${{ runner.os }}-${{ runner.arch }}-
+            turbodecky-ccache-clang18-fulllto-
+
       - name: Install build dependencies and Polly
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -109,6 +127,22 @@ jobs:
           echo "LLVM_POLLY_SO=$(readlink -f "$POLLY_SO")" >> "$GITHUB_ENV"
           clang-18 --version | head -n 1
           ld.lld-18 --version | head -n 1
+          ccache --set-config=max_size="$CCACHE_MAXSIZE"
+          ccache --set-config=compression=true
+          ccache --set-config=compiler_check=content
+          ccache --set-config=base_dir="$CCACHE_BASEDIR"
+          ccache --set-config=hash_dir=false
+          ccache --set-config=depend_mode=true
+          ccache --zero-stats
+
+      - name: Configure cached Clang 18
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .ci-bin
+          printf '#!/usr/bin/env bash\nexec ccache /usr/bin/clang-18 "$@"\n' > .ci-bin/clang
+          chmod +x .ci-bin/clang
+          echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
 
       - name: Validate and build kernel
         shell: bash
@@ -135,6 +169,19 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           exit "$status"
+
+      - name: Show compiler cache statistics
+        if: always()
+        shell: bash
+        run: |
+          ccache --show-stats || true
+
+      - name: Save compiler cache
+        if: always() && steps.ccache-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .ccache
+          key: ${{ steps.ccache-restore.outputs.cache-primary-key }}
 
       - name: Verify BORE scheduler, POC and Full LTO
         shell: bash
