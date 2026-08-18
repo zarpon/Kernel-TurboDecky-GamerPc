@@ -26,10 +26,17 @@ USERCOPY_OLD = (
     "\tdepends on MPENTIUM4 || MPENTIUMM || MPENTIUMIII || MPENTIUMII || "
     "M586MMX || X86_GENERIC || MK7 || MEFFICEON"
 )
-CHECKSUM_OLD = (
+# The fallback patch reject still carries the older 6.16-era WinChip context,
+# while Linux 7.2 has already removed those two legacy symbols here.
+CHECKSUM_REJECT_OLD = (
     "\tdepends on MWINCHIP3D || MWINCHIPC6 || MCYRIXIII || MK7 || MK6 || "
     "MPENTIUM4 || MPENTIUMM || MPENTIUMIII || MPENTIUMII || M686 || "
     "MVIAC3_2 || MVIAC7 || MEFFICEON || MGEODE_LX || MATOM"
+)
+CHECKSUM_72_OLD = (
+    "\tdepends on MCYRIXIII || MK7 || MK6 || MPENTIUM4 || MPENTIUMM || "
+    "MPENTIUMIII || MPENTIUMII || M686 || MVIAC3_2 || MVIAC7 || "
+    "MEFFICEON || MGEODE_LX || MATOM"
 )
 PAE_OLD = (
     "\tdepends on MCRUSOE || MEFFICEON || MCYRIXIII || MPENTIUM4 || MPENTIUMM || "
@@ -58,7 +65,7 @@ config X86_INTEL_USERCOPY
 
 config X86_USE_PPRO_CHECKSUM
 \tdef_bool y
-{CHECKSUM_OLD}
+{CHECKSUM_72_OLD}
 
 config X86_TSC
 \tdef_bool y
@@ -77,7 +84,7 @@ def reject_fixture() -> str:
 -{USERCOPY_OLD}
 +\tdepends on expanded-usercopy
  config X86_USE_PPRO_CHECKSUM
--{CHECKSUM_OLD}
+-{CHECKSUM_REJECT_OLD}
 +\tdepends on expanded-checksum
  config X86_TSC
 -{TSC_OLD}
@@ -89,7 +96,7 @@ def reject_fixture() -> str:
 
 
 class CpuOptimization72PortTests(unittest.TestCase):
-    def test_known_linux_72_reject_is_ported_without_restoring_tsc_dependency(self) -> None:
+    def test_known_linux_72_reject_is_ported_without_restoring_tsc_or_winchip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             kconfig = root / "Kconfig.cpu"
@@ -105,6 +112,11 @@ class CpuOptimization72PortTests(unittest.TestCase):
             self.assertIn("M686 || MK8 || MVIAC7 || MCORE2", result)
             self.assertIn("config X86_TSC\n\tdef_bool y\n\nconfig X86_HAVE_PAE", result)
             self.assertNotIn(TSC_OLD, result)
+            checksum_block = result.split("config X86_USE_PPRO_CHECKSUM", 1)[1].split(
+                "config X86_TSC", 1
+            )[0]
+            self.assertNotIn("MWINCHIP3D", checksum_block)
+            self.assertNotIn("MWINCHIPC6", checksum_block)
 
     def test_unrelated_reject_is_refused(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
