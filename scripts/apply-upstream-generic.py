@@ -45,8 +45,7 @@ def main() -> None:
     )
     source = replace_once(
         source,
-        r'''git clone --no-checkout --depth 1 --single-branch --no-tags --branch \
-"$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
+        '''git clone --no-checkout --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 ''',
         r'''git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
