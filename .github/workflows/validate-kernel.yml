@@ -63,6 +63,18 @@ jobs:
           sudo docker system prune -af >/dev/null 2>&1 || true
           df -h /
 
+      - name: Configure zswap
+        run: |
+          echo zstd | sudo tee /sys/module/zswap/parameters/compressor
+          echo 90 | sudo tee /sys/module/zswap/parameters/max_pool_percent
+          echo 1 | sudo tee /sys/module/zswap/parameters/shrinker_enabled
+          echo 1 | sudo tee /sys/module/zswap/parameters/enabled
+
+      - name: Configure 16 GiB swap
+        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
+        with:
+          swap-size-gb: 16
+
       - name: Resolve latest stable Linux
         id: kernel
         shell: bash
@@ -81,18 +93,6 @@ jobs:
           JOBS="$(nproc --all)"
           echo "JOBS=$JOBS" >> "$GITHUB_ENV"
           echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
-          parameters=/sys/module/zswap/parameters
-          if [[ -d "$parameters" ]]; then
-            echo zstd | sudo tee "$parameters/compressor"
-            echo 90 | sudo tee "$parameters/max_pool_percent"
-            echo 1 | sudo tee "$parameters/shrinker_enabled"
-            echo 1 | sudo tee "$parameters/enabled"
-          fi
-
-      - name: Configure 16 GiB swap
-        uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
-        with:
-          swap-size-gb: 16
 
       - name: Restore compiler cache
         id: ccache-restore
