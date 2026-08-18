@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 MARKER = "Applying deterministic Linux 7.2 CPU optimization Kconfig adapter"
-SAFE_FUZZ_MARKER = 'if patch --batch --forward --fuzz=3 --strip=1 < "$file"; then'
+SAFE_FUZZ_MARKER = "A non-zero patch status is expected when a semantic port is required."
 
 FUZZ_OLD = r'''  echo "==> Clean application failed; attempting controlled port with fuzz <= 3"
   set +e
