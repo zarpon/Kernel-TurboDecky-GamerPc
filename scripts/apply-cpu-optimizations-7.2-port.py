@@ -7,6 +7,29 @@ from pathlib import Path
 
 
 MARKER = "Applying deterministic Linux 7.2 CPU optimization Kconfig adapter"
+SAFE_FUZZ_MARKER = 'if patch --batch --forward --fuzz=3 --strip=1 < "$file"; then'
+
+FUZZ_OLD = r'''  echo "==> Clean application failed; attempting controlled port with fuzz <= 3"
+  set +e
+  patch --batch --forward --fuzz=3 --strip=1 < "$file" \
+    > "$LOGDIR/${prefix}.fuzz-apply.log" 2>&1
+  status=$?
+  set -e
+  cat "$LOGDIR/${prefix}.fuzz-apply.log"
+'''
+
+FUZZ_NEW = r'''  echo "==> Clean application failed; attempting controlled port with fuzz <= 3"
+  # A non-zero patch status is expected when a semantic port is required.
+  # Keep the command in an if-condition so the global ERR trap cannot abort
+  # before the reject-aware adapter below gets a chance to inspect the result.
+  if patch --batch --forward --fuzz=3 --strip=1 < "$file" \
+      > "$LOGDIR/${prefix}.fuzz-apply.log" 2>&1; then
+    status=0
+  else
+    status=$?
+  fi
+  cat "$LOGDIR/${prefix}.fuzz-apply.log"
+'''
 
 OLD = r'''  if ((status != 0)) || find "$KERNELDIR" -name '*.rej' -print -quit | grep -q .; then
     report_requested_rejects "$label" "$prefix"
@@ -57,16 +80,34 @@ def main() -> None:
         raise SystemExit("usage: apply-cpu-optimizations-7.2-port.py <generated-core>")
     path = Path(sys.argv[1])
     text = path.read_text(encoding="utf-8")
-    if MARKER in text:
-        return
     if "report_requested_rejects()" not in text:
         return
-    count = text.count(OLD)
-    if count != 1:
+
+    changed = False
+    fuzz_count = text.count(FUZZ_OLD)
+    if fuzz_count == 1:
+        text = text.replace(FUZZ_OLD, FUZZ_NEW, 1)
+        changed = True
+    elif fuzz_count == 0 and SAFE_FUZZ_MARKER not in text:
         raise SystemExit(
-            f"CPU optimization fallback injection: expected exactly one anchor, found {count}"
+            "CPU optimization fallback injection: controlled-fuzz status anchor was not found"
         )
-    path.write_text(text.replace(OLD, NEW, 1), encoding="utf-8")
+    elif fuzz_count > 1:
+        raise SystemExit(
+            f"CPU optimization fallback injection: controlled-fuzz anchor found {fuzz_count} times"
+        )
+
+    if MARKER not in text:
+        count = text.count(OLD)
+        if count != 1:
+            raise SystemExit(
+                f"CPU optimization fallback injection: expected exactly one reject anchor, found {count}"
+            )
+        text = text.replace(OLD, NEW, 1)
+        changed = True
+
+    if changed:
+        path.write_text(text, encoding="utf-8")
 
 
 if __name__ == "__main__":
