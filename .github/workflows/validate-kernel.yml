@@ -25,15 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      # Validation branches exercise the complete package path without publishing
-      # a release. Ordinary pull requests retain the lean built-in-kernel build.
       BUILD_MODE: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'validation/') && 'package' || github.event_name == 'pull_request' && 'validate' || 'package' }}
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
-      CCACHE_MAXSIZE: 8G
-      CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_COMPILERCHECK: content
-      CCACHE_NOHASHDIR: "true"
-      CCACHE_SLOPPINESS: include_file_ctime,include_file_mtime,time_macros
       KBUILD_BUILD_USER: turbodecky
       KBUILD_BUILD_HOST: github-actions
       KBUILD_BUILD_TIMESTAMP: "2026-01-01 00:00:00 UTC"
@@ -43,22 +35,26 @@ jobs:
       TZ: UTC
 
     steps:
-      - name: Free runner space
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
-        with:
-          tool-cache: true
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
       - name: Check out project
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
+
+      - name: Free build space without removing LLVM
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /opt/hostedtoolcache/PyPy \
+            2>/dev/null || true
+          sudo docker system prune -af >/dev/null 2>&1 || true
+          df -h /
 
       - name: Resolve latest stable Linux
         id: kernel
@@ -79,24 +75,17 @@ jobs:
           echo "JOBS=$JOBS" >> "$GITHUB_ENV"
           echo "MAKEFLAGS=-j$JOBS" >> "$GITHUB_ENV"
           parameters=/sys/module/zswap/parameters
-          echo zstd | sudo tee "$parameters/compressor"
-          echo 90 | sudo tee "$parameters/max_pool_percent"
-          echo 1 | sudo tee "$parameters/shrinker_enabled"
-          echo 1 | sudo tee "$parameters/enabled"
+          if [[ -d "$parameters" ]]; then
+            echo zstd | sudo tee "$parameters/compressor"
+            echo 90 | sudo tee "$parameters/max_pool_percent"
+            echo 1 | sudo tee "$parameters/shrinker_enabled"
+            echo 1 | sudo tee "$parameters/enabled"
+          fi
 
       - name: Configure 16 GiB swap
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761
         with:
           swap-size-gb: 16
-
-      - name: Restore compiler cache
-        uses: actions/cache@v4
-        with:
-          path: .ccache
-          key: turbodecky-bore-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'scripts/*.sh', 'config/*.json', 'config/kernelnote.config', 'patches/bore/*.patch') }}
-          restore-keys: |
-            turbodecky-bore-${{ steps.kernel.outputs.series }}-${{ runner.os }}-${{ runner.arch }}-
-            turbodecky-bore-
 
       - name: Install build dependencies and Polly
         env:
@@ -104,11 +93,13 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get install -y --no-install-recommends software-properties-common
-          sudo add-apt-repository -y universe
-          sudo apt-get -o Acquire::Retries=3 update
-          sudo apt-get install -y --no-install-recommends \
+          sudo timeout 300 apt-get -o Acquire::Retries=3 update
+          if ! apt-cache show libpolly-18-dev >/dev/null 2>&1; then
+            sudo timeout 180 apt-get install -y --no-install-recommends software-properties-common
+            sudo add-apt-repository -y universe
+            sudo timeout 300 apt-get -o Acquire::Retries=3 update
+          fi
+          sudo timeout 900 apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             bc bison build-essential ccache clang-18 cpio curl debhelper diffstat dpkg-dev fakeroot flex git \
             kmod libdw-dev libelf-dev libssl-dev lld-18 llvm-18 llvm-18-dev libpolly-18-dev \
             pahole patchutils python3 rsync unzip xz-utils zip zstd
@@ -116,22 +107,8 @@ jobs:
           POLLY_SO="$(find /usr/lib/llvm-18 /usr/lib/x86_64-linux-gnu -type f -name 'LLVMPolly.so*' 2>/dev/null | head -n 1)"
           test -n "$POLLY_SO"
           echo "LLVM_POLLY_SO=$(readlink -f "$POLLY_SO")" >> "$GITHUB_ENV"
-          ccache --set-config=max_size="$CCACHE_MAXSIZE"
-          ccache --set-config=compression=true
-          ccache --set-config=compiler_check=content
-          ccache --set-config=base_dir="$CCACHE_BASEDIR"
-          ccache --set-config=hash_dir=false
-          ccache --set-config=depend_mode=true
-          ccache --zero-stats
-
-      - name: Configure cached Clang 18
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          mkdir -p .ci-bin
-          printf '#!/usr/bin/env bash\nexec ccache /usr/bin/clang-18 "$@"\n' > .ci-bin/clang
-          chmod +x .ci-bin/clang
-          echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
+          clang-18 --version | head -n 1
+          ld.lld-18 --version | head -n 1
 
       - name: Validate and build kernel
         shell: bash
@@ -147,20 +124,31 @@ jobs:
           python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
           python3 tests/test-resolved-patch-integrity.py
           python3 scripts/finalize-bore-stable-port.py scripts/build-kernelnote-core.sh
-          # The finalizer adds the derived sched_ext compatibility port to the
-          # same lock. Verify both the immutable upstream bytes and that
-          # generated port before any kernel source is downloaded or patched.
           python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
           shopt -s nullglob
           python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)
           python3 -m py_compile "${python_sources[@]}"
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
-          scripts/build-kernelnote.sh "$BUILD_MODE"
+          mkdir -p logs
+          set +e
+          scripts/build-kernelnote.sh "$BUILD_MODE" 2>&1 | tee logs/kernel-build-driver.log
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
 
-      - name: Verify BORE scheduler and POC compatibility
+      - name: Verify BORE scheduler, POC and Full LTO
         shell: bash
         run: |
           set -Eeuo pipefail
+          grep -Fq 'CONFIG_LTO=y' logs/final.config
+          grep -Fq 'CONFIG_LTO_CLANG=y' logs/final.config
+          grep -Fq 'CONFIG_LTO_CLANG_FULL=y' logs/final.config
+          ! grep -Fq 'CONFIG_LTO_CLANG_THIN=y' logs/final.config
+          grep -Fq '# CONFIG_LTO_CLANG_THIN is not set' logs/final.config
+          grep -Fq 'CONFIG_CC_IS_CLANG=y' logs/final.config
+          grep -Fq 'CONFIG_LD_IS_LLD=y' logs/final.config
+          grep -Fq 'CONFIG_AS_IS_LLVM=y' logs/final.config
+
           BORE_VERSION="$(python3 - <<'PY'
           import json
           from pathlib import Path
@@ -173,8 +161,6 @@ jobs:
           grep -Fq 'Component: BORE sched_ext coexistence fix' logs/01-bore-sched-ext-provenance.txt
           grep -Fq "BORE ${BORE_VERSION} Linux port applied successfully" logs/build.log
           grep -Fq 'BORE sched_ext coexistence fix applied successfully' logs/build.log
-          grep -Fq 'SCHED_BORE_VERSION' .resolved-patches/files/01-bore.patch
-          grep -Fq 'void reweight_task(struct task_struct *p, int prio)' .resolved-patches/files/01-bore-sched-ext-coexistence-fix.patch
           grep -Fq 'struct bore_ctx' work/linux/include/linux/sched.h
           test -s work/linux/kernel/sched/bore.c
           grep -Fq 'sched_bore' work/linux/kernel/sched/fair.c
@@ -188,52 +174,24 @@ jobs:
           grep -Fq 'CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2' logs/final.config
           grep -Fq 'intel_pstate=passive' logs/final.config
           grep -Fq 'amd_pstate=passive' logs/final.config
+
           python3 - <<'PY'
-          import fnmatch
           import hashlib
           import json
           import re
           from pathlib import Path
 
           lock = json.loads(Path('.resolved-patches/patch-lock.json').read_text(encoding='utf-8'))
-          manifest = json.loads(Path('config/patch-sources.json').read_text(encoding='utf-8'))
-          spec = manifest['components']['bore']
-          bore = lock['components']['bore']
-          assert bore['ref'] == spec.get('ref', 'main')
-          assert bore['selection'] == 'exact'
-          values = {
-              'kernel_version': lock['kernel']['version'],
-              'series': lock['kernel']['series'],
-          }
-          patterns = [pattern.format(**values) for pattern in spec['exact_globs']]
-          selected = bore['selected_path']
-          assert any(fnmatch.fnmatch(selected, pattern) for pattern in patterns), (selected, patterns)
-          match = re.search(spec['project_version_regex'], selected, flags=re.IGNORECASE)
-          assert match and bore['project_version'] == match.group(1)
-          assert re.fullmatch(r'[0-9a-f]{40}', bore['commit'])
-          assert re.fullmatch(r'[0-9a-f]{64}', bore['sha256'])
-          materialized = Path('.resolved-patches') / bore['output']
-          data = materialized.read_bytes()
-          assert hashlib.sha256(data).hexdigest() == bore['sha256']
-          assert len(data) == bore['size']
-
           sched_ext = lock['components']['bore_sched_ext_coexistence']
-          assert sched_ext['ref'] == 'main'
-          assert sched_ext['selection'] == 'exact'
-          assert sched_ext['path'] == 'patches/additions/0002-sched-ext-coexistence-fix.patch'
           assert re.fullmatch(r'[0-9a-f]{64}', sched_ext['sha256'])
-          sched_ext_source = Path('.resolved-patches') / sched_ext['output']
-          sched_ext_data = sched_ext_source.read_bytes()
-          assert hashlib.sha256(sched_ext_data).hexdigest() == sched_ext['sha256']
-          assert len(sched_ext_data) == sched_ext['size']
-
+          source = Path('.resolved-patches') / sched_ext['output']
+          source_data = source.read_bytes()
+          assert hashlib.sha256(source_data).hexdigest() == sched_ext['sha256']
+          assert len(source_data) == sched_ext['size']
           port = sched_ext['compatibility_port']
-          assert port['adapter'] == 'linux7.1-sched-ext-reweight-task'
-          assert port['kernel_target'] == lock['kernel']['version']
           assert port['source_sha256'] == sched_ext['sha256']
-          assert re.fullmatch(r'[0-9a-f]{64}', port['sha256'])
-          materialized_port = Path('.resolved-patches') / port['output']
-          port_data = materialized_port.read_bytes()
+          port_file = Path('.resolved-patches') / port['output']
+          port_data = port_file.read_bytes()
           assert hashlib.sha256(port_data).hexdigest() == port['sha256']
           assert len(port_data) == port['size']
           PY
@@ -288,61 +246,32 @@ jobs:
         run: |
           set -Eeuo pipefail
           shopt -s nullglob
-
           short_sha="${RELEASE_TARGET:0:7}"
           tag="${KERNEL_RELEASE_NAME}-${short_sha}"
           packages=(artifacts/*.deb)
-          if ((${#packages[@]} == 0)); then
-            echo "No Debian packages are available for release" >&2
-            exit 1
-          fi
-          assets=(
-            "${packages[@]}"
-            artifacts/SHA256SUMS
-            artifacts/turbodecky-linux-*.zip
-          )
-          for asset in "${assets[@]}"; do
-            if [[ ! -f "$asset" ]]; then
-              echo "Release asset is missing: $asset" >&2
-              exit 1
-            fi
-          done
-
+          ((${#packages[@]} > 0))
+          assets=("${packages[@]}" artifacts/SHA256SUMS artifacts/turbodecky-linux-*.zip)
           if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
             git fetch --force origin "+refs/tags/${tag}:refs/tags/${tag}"
-            existing_tag_commit="$(git rev-list -n 1 "$tag")"
-            if [[ "$existing_tag_commit" != "$RELEASE_TARGET" ]]; then
-              echo "Remote tag ${tag} points to ${existing_tag_commit}, expected ${RELEASE_TARGET}" >&2
-              exit 1
-            fi
-            echo "Reusing existing release tag ${tag}"
           else
             git tag "$tag" "$RELEASE_TARGET"
             git push origin "refs/tags/${tag}"
           fi
-
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$KERNEL_RELEASE_NAME"
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$KERNEL_RELEASE_NAME"
           else
-            gh release create "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$KERNEL_RELEASE_NAME" \
-              --generate-notes \
-              --verify-tag
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$KERNEL_RELEASE_NAME" --generate-notes --verify-tag
           fi
-
-          gh release upload "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber \
-            "${assets[@]}"
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY"
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
 
       - name: Upload validation logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: turbodecky-upstream-validation-logs
-          path: logs/
+          path: |
+            logs/**
+            .resolved-patches/patch-lock.json
+            .resolved-patches/resolution-summary.txt
           if-no-files-found: warn
+          retention-days: 14

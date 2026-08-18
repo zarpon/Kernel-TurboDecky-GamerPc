@@ -155,6 +155,16 @@ grep -Fq 'ifeq ($(KBUILD_EXTMOD),)' Makefile
 def patch_wrapper(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
 
+    # apply-upstream-generic.py converts the generated core's localversion to
+    # Full LTO before this integration wrapper runs. Keep the wrapper's input
+    # anchor synchronized with that generated state.
+    source = replace_once(
+        source,
+        '-kernelnote-lqx-marie-bore-adios-thinlto',
+        '-kernelnote-lqx-marie-bore-adios-fulllto',
+        "Full LTO integration-wrapper localversion anchor",
+    )
+
     old_local = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
     source = replace_once(source, old_local, "", "generic TurboDecky localversion")
 

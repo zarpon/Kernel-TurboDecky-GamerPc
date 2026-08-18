@@ -16,6 +16,7 @@ DISPATCHER = (ROOT / ".github/workflows/release-on-main.yml").read_text(
 )
 CONFIG = (ROOT / "config/kernelnote.config").read_text(encoding="utf-8")
 BUILD_CORE = (ROOT / "scripts/build-kernelnote-core.sh").read_text(encoding="utf-8")
+UPSTREAM_REWRITER = (ROOT / "scripts/apply-upstream-generic.py").read_text(encoding="utf-8")
 ZEN_REWRITER = (ROOT / "scripts/apply-zen-interactive.py").read_text(encoding="utf-8")
 FINALIZER = (
     (ROOT / "scripts/finalize-bore-stable-port.py").read_text(encoding="utf-8")
@@ -68,6 +69,22 @@ class ManualWorkflowContractTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn('python3 -m py_compile "${python_sources[@]}"', WORKFLOW)
+
+    def test_full_lto_is_mandatory_and_verified_after_olddefconfig(self) -> None:
+        self.assertIn("CONFIG_LTO_CLANG_FULL=y", CONFIG)
+        self.assertIn("# CONFIG_LTO_CLANG_THIN is not set", CONFIG)
+        self.assertNotIn("CONFIG_LTO_CLANG_THIN=y", CONFIG)
+        self.assertIn("scripts/config --disable LTO_CLANG_THIN", UPSTREAM_REWRITER)
+        self.assertIn("scripts/config --enable LTO_CLANG_FULL", UPSTREAM_REWRITER)
+        self.assertIn("assert_config", UPSTREAM_REWRITER)
+        self.assertIn("CONFIG_LTO_CLANG_FULL=y", UPSTREAM_REWRITER)
+        self.assertIn("assert_disabled_or_absent LTO_CLANG_THIN", UPSTREAM_REWRITER)
+        self.assertIn("Full LTO", UPSTREAM_REWRITER)
+
+    def test_two_component_stable_kernel_version_is_normalized(self) -> None:
+        self.assertIn('expected_kernel_version="$KERNEL_VERSION"', UPSTREAM_REWRITER)
+        self.assertIn('expected_kernel_version="${expected_kernel_version}.0"', UPSTREAM_REWRITER)
+        self.assertIn('actual_kernel_version" != "$expected_kernel_version', UPSTREAM_REWRITER)
 
     def test_zen_interactive_is_persistent_and_verified(self) -> None:
         self.assertIn("CONFIG_ZEN_INTERACTIVE=y", CONFIG)

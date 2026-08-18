@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """Compatibility front-end for the BORE stable finalizer.
 
-The implementation is kept in finalize-bore-stable-port-base.py.  This front-end
-only tightens subject validation so an exact same-series BORE source may retain
-its upstream -rcN subject qualifier while still being authenticated by the lock.
+The implementation is kept in finalize-bore-stable-port-base.py. This front-end
+tightens BORE subject validation and performs final generated-core compatibility
+rewrites after every earlier source rewriter has completed.
 """
 from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 _BASE_PATH = Path(__file__).with_name("finalize-bore-stable-port-base.py")
@@ -18,14 +20,12 @@ if _spec is None or _spec.loader is None:
 _base = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_base)
 
-# Preserve the original module API for tests and callers.
 for _name in dir(_base):
     if not _name.startswith("__"):
         globals()[_name] = getattr(_base, _name)
 
 
 def _bore_subject_match(text: str, source_target: str, version: str) -> re.Match[str] | None:
-    """Match exactly the locked BORE subject, allowing only an upstream -rcN qualifier."""
     pattern = re.compile(
         rf"^Subject: \[PATCH\] linux{re.escape(source_target)}(?:-rc\d+)?-bore-{re.escape(version)}$",
         re.MULTILINE,
@@ -116,14 +116,41 @@ def materialize_bore_patchlevel_port(lock_path, record, upstream_patch, kernel_v
     return port_record
 
 
-# Make the base main() use the corrected functions while retaining the rest of its
-# fail-closed implementation unchanged.
 _base.load_locked_bore = load_locked_bore
 _base.materialize_bore_patchlevel_port = materialize_bore_patchlevel_port
+
+_base_replace_regex_once = _base.replace_regex_once
+
+
+def _replace_regex_once_with_rc_subject(
+    text: str, pattern: str, replacement: str, label: str
+) -> str:
+    if label == "BORE subject assertion":
+        replacement = (
+            '  BORE_EXPECTED_SUBJECT="linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}"\n'
+            '  BORE_RC_SUBJECT="linux${KERNEL_VERSION}-rc[0-9]+-bore-${BORE_PORT_VERSION}"\n'
+            '  grep -Eq "^Subject: \\[PATCH\\] (${BORE_EXPECTED_SUBJECT}|${BORE_RC_SUBJECT})$" "$BORE_PATCH"'
+        )
+    return _base_replace_regex_once(text, pattern, replacement, label)
+
+
+_base.replace_regex_once = _replace_regex_once_with_rc_subject
+
+
+def finalize_cpu_optimization_fallback() -> None:
+    if len(sys.argv) < 2:
+        raise _base.FinalizeError("generated core path is missing for final compatibility rewrite")
+    core = Path(sys.argv[1])
+    helper = Path(__file__).with_name("apply-cpu-optimizations-7.2-port.py")
+    try:
+        subprocess.run([sys.executable, str(helper), str(core)], check=True)
+    except subprocess.CalledProcessError as exc:
+        raise _base.FinalizeError("unable to finalize Linux 7.2 CPU optimization fallback") from exc
 
 
 def main() -> None:
     _base.main()
+    finalize_cpu_optimization_fallback()
 
 
 if __name__ == "__main__":
