@@ -1,15 +1,15 @@
 {
-  "commit": "be5919e3efa671287bce9c093e71eedc5abac5fc",
+  "commit": "55d2c27f988c07b52ec4ba099208f3d97cdd39bb",
   "kernel_series": "7.2",
   "kernel_target": "7.2",
   "kernel_version": "7.2",
-  "path": "patches/testing/0001-linux7.2-rc1-lru_marie-0.10.1.patch",
-  "project_version": "0.10.1",
+  "path": "patches/testing/0001-linux7.2-rc1-lru_marie-0.10.5.patch",
+  "project_version": "0.10.5",
   "ref": "main",
   "repo": "https://github.com/firelzrd/lru_marie.git",
   "schema": 1,
-  "selected_path": "patches/testing/0001-linux7.2-rc1-lru_marie-0.10.1.patch",
+  "selected_path": "patches/testing/0001-linux7.2-rc1-lru_marie-0.10.5.patch",
   "selection": "exact",
-  "sha256": "fce0f594a37749bbf86c726885059f3bd1c16d976fe78076aa4ead5114c745c8",
-  "size": 546054
+  "sha256": "a8d023bcbdd322e316fec1bbecd6adb810f401b7cc9d4472a63b0606349b838b",
+  "size": 553121
 }
