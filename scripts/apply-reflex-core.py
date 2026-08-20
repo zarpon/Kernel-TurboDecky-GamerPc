@@ -83,7 +83,7 @@ normalize_changed_whitespace() {
         source,
         'apply_bore_patch() {\n',
         r'''apply_reflex_patch() {
-  local file="$1" status=0
+  local file="$1" status=0 runtime_version
 
   echo "==> Applying Linux 7.1 REFLEX CPUFreq $PATCH_REFLEX_VERSION patch"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
@@ -118,7 +118,7 @@ normalize_changed_whitespace() {
 
   # Upstream's README documents CPU_FREQ_DEFAULT_GOV_REFLEX, and the governor
   # source implements cpufreq_default_governor() behind that symbol. If the selected patch does not add the symbol to the default-governor
-   # choice, complete
+  # choice, complete
   # that integration here before olddefconfig.
   python3 - <<'PY'
 from pathlib import Path
@@ -155,7 +155,14 @@ PY
     | tee "$LOGDIR/07-reflex-diff-check.log"
 
   test -s drivers/cpufreq/cpufreq_reflex.c
-  [[ "$PATCH_REFLEX_VERSION" == "unknown" ]] || grep -Fq "$PATCH_REFLEX_VERSION" drivers/cpufreq/cpufreq_reflex.c
+  if [[ "$PATCH_REFLEX_VERSION" != "unknown" ]]; then
+    # Upstream may publish compatibility/repack revisions such as 0.3.3r2
+    # while the governor's runtime ABI/version remains 0.3.3. Validate both
+    # identities without incorrectly requiring the packaging revision suffix
+    # to be embedded in the source-level governor version macro.
+    runtime_version="$(printf '%s\n' "$PATCH_REFLEX_VERSION" | sed -E 's/r[0-9]+$//')"
+    grep -Fq "#define CPUFREQ_REFLEX_VERSION  \"$runtime_version\"" drivers/cpufreq/cpufreq_reflex.c
+  fi
   grep -Fq 'config CPU_FREQ_GOV_REFLEX' drivers/cpufreq/Kconfig
   grep -Fq 'config CPU_FREQ_DEFAULT_GOV_REFLEX' drivers/cpufreq/Kconfig
   grep -Fq 'cpufreq_default_governor(void)' drivers/cpufreq/cpufreq_reflex.c
