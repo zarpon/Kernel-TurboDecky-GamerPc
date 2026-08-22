@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
-TUNING_VERSION="1.3.2"
+TUNING_VERSION="1.3.3"
 
 rm -rf "$PKGROOT"
 install -d "$PKGROOT/DEBIAN" \

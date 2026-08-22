@@ -5,6 +5,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 helper="$root/packaging/configure-zram-ir"
 zram_generator_dropin="$root/packaging/90-turbodecky-zram.conf"
 zram_setup_dropin="$root/packaging/90-turbodecky-zram-ir.conf"
+runtime_policy="$root/packaging/99-kernelnote.conf"
 thp_policy="$root/packaging/99-kernelnote-thp.conf"
 sandbox="$(mktemp -d)"
 trap 'rm -rf "$sandbox"' EXIT
@@ -33,6 +34,7 @@ require_line "$zram_generator_dropin" "[zram0]"
 require_line "$zram_generator_dropin" "compression-algorithm = lz4 zstd"
 require_line "$zram_setup_dropin" "[Service]"
 require_line "$zram_setup_dropin" "ExecStartPre=/usr/lib/turbodecky/configure-zram-ir %I"
+require_line "$runtime_policy" "vm.vfs_cache_pressure = 85"
 
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise"
@@ -201,11 +203,12 @@ PY
 TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.3.2_all.deb"
+deb="$sandbox/artifacts/turbodecky-tuning_1.3.3_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.3.2" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "1.3.3" ]] || fail "unexpected tuning package version"
 
 for payload in \
+  './etc/sysctl.d/99-turbodecky.conf' \
   './usr/lib/turbodecky/configure-zram-ir' \
   './usr/lib/systemd/zram-generator.conf.d/90-turbodecky-zram.conf' \
   './usr/lib/systemd/system/systemd-zram-setup@.service.d/90-turbodecky-zram-ir.conf' \
@@ -224,6 +227,8 @@ grep -Fq 'systemd-tmpfiles --create /usr/lib/tmpfiles.d/99-turbodecky-thp.conf' 
 
 package_root="$sandbox/package-root"
 dpkg-deb -x "$deb" "$package_root"
+cmp -s "$runtime_policy" "$package_root/etc/sysctl.d/99-turbodecky.conf" \
+  || fail "package does not contain the expected sysctl policy"
 cmp -s "$thp_policy" "$package_root/usr/lib/tmpfiles.d/99-turbodecky-thp.conf" \
   || fail "package does not contain the expected THP policy"
 
