@@ -34,7 +34,7 @@ require_line "$zram_generator_dropin" "[zram0]"
 require_line "$zram_generator_dropin" "compression-algorithm = lz4 zstd"
 require_line "$zram_setup_dropin" "[Service]"
 require_line "$zram_setup_dropin" "ExecStartPre=/usr/lib/turbodecky/configure-zram-ir %I"
-require_line "$runtime_policy" "vm.vfs_cache_pressure = 85"
+require_line "$runtime_policy" "vm.vfs_cache_pressure = 150"
 
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise"
