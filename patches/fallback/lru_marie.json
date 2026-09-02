@@ -2,7 +2,7 @@
   "commit": "01116761ef2742e859087d5b92985b35de07282c",
   "kernel_series": "7.2",
   "kernel_target": "7.2",
-  "kernel_version": "7.2.2",
+  "kernel_version": "7.2.3",
   "path": "patches/testing/0001-linux7.2-rc1-lru_marie-0.11.0.patch",
   "project_version": "0.11.0",
   "ref": "main",
