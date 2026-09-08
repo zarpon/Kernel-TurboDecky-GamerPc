@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -208,6 +209,26 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
         raise SystemExit("KERNEL_VERSION and KERNEL_SERIES must be resolved before patch selection")
 
     manifest = root / "config/patch-sources.json"
+    effective_manifest = manifest
+    # ZRAM-IR 1.3 currently ships a Linux 7.3 patch whose first two hunks do
+    # not apply to Linux 7.2.4. Keep the last validated upstream 1.2 snapshot
+    # only while kernel.org latest stable remains on the 7.2 series. The pin
+    # automatically disappears when latest stable advances to another series.
+    if kernel_series == "7.2":
+        manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+        manifest_data["components"]["zram_ir"]["ref"] = (
+            "e348391dcf54bc42904f227f5ee83d2790f28f52"
+        )
+        effective_manifest = root / ".patch-sources-effective.json"
+        effective_manifest.write_text(
+            json.dumps(manifest_data, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(
+            "Compatibility policy: Linux 7.2 uses validated ZRAM-IR 1.2 "
+            "snapshot e348391dcf54 until a native/reviewed 1.3 port exists"
+        )
+
     resolver = root / "scripts/resolve-patch-sources.py"
     rewriter = root / "scripts/apply-dynamic-patch-sources.py"
     output = root / ".resolved-patches"
@@ -216,7 +237,7 @@ def resolve_and_lock_sources(core: Path, wrapper: Path) -> None:
         [
             sys.executable,
             str(resolver),
-            "--manifest", str(manifest),
+            "--manifest", str(effective_manifest),
             "--output-dir", str(output),
             "--kernel-version", kernel_version,
             "--kernel-series", kernel_series,
