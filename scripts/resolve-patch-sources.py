@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ spec = importlib.util.spec_from_file_location("turbodecky_patch_resolver_base", 
 if spec is None or spec.loader is None:
     raise SystemExit(f"unable to load resolver base: {BASE_PATH}")
 base = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = base
 spec.loader.exec_module(base)
 
 
