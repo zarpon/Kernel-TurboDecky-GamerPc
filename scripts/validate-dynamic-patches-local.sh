@@ -71,7 +71,7 @@ python3 "$ROOT/scripts/validate-marie-fallback.py" \
 grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 grep -Fq 'KERNEL_VERSION' "$ROOT/scripts/apply-zarpon-generic-name.py"
 grep -Fq 'patch-source-resolution.log' "$ROOT/scripts/apply-zarpon-generic-name.py"
-grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/resolve-patch-sources.py"
+grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 grep -Fq 'kvm.enable_virt_at_load=0' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_INTEL=m' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"
