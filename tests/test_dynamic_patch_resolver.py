@@ -60,7 +60,7 @@ class ResolverTests(unittest.TestCase):
             with self.assertRaisesRegex(resolver_module.ResolverError, "timed out after 7s"):
                 resolver_module.run(["git", "fetch"], timeout=7)
 
-    def test_latest_exact_version_and_nearest_fallback(self) -> None:
+    def test_latest_exact_version_and_latest_release_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             repo = tmp / "repo"
@@ -117,7 +117,8 @@ class ResolverTests(unittest.TestCase):
             )
             lock = json.loads((output / "patch-lock.json").read_text())
             self.assertIn("0.8.0", lock["components"]["marie"]["path"])
-            self.assertIn("6.19.3", lock["components"]["nap"]["path"])
+            self.assertIn("6.18.3", lock["components"]["nap"]["path"])
+            self.assertEqual(lock["components"]["nap"]["project_version"], "0.9.0")
             self.assertEqual(lock["components"]["nap"]["selection"], "fallback")
             self.assertEqual((output / "files/fixed.patch").read_text(), raw.read_text())
 
@@ -129,7 +130,7 @@ class ResolverTests(unittest.TestCase):
             shown = run("git", "-C", str(clone), "show", f"FETCH_HEAD:{record['path']}").stdout
             self.assertIn("lru_marie 0.8.0", shown)
 
-    def test_nearest_fallback_prefers_distance_over_newest_kernel(self) -> None:
+    def test_latest_release_outranks_kernel_distance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             repo = tmp / "repo"
@@ -165,10 +166,10 @@ class ResolverTests(unittest.TestCase):
                 "--kernel-series", "7.1",
             )
             record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
-            self.assertIn("linux7.2", record["selected_path"])
-            self.assertEqual(record["project_version"], "1.0")
+            self.assertIn("linux7.9", record["selected_path"])
+            self.assertEqual(record["project_version"], "9.0")
 
-    def test_fallback_ref_restores_exact_series(self) -> None:
+    def test_newer_current_release_outranks_older_exact_fallback_ref(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             repo = tmp / "repo"
@@ -180,6 +181,7 @@ class ResolverTests(unittest.TestCase):
             target.write_text(patch("demo 3.0"), encoding="utf-8")
             run("git", "add", "-A", cwd=repo)
             run("git", "commit", "-qm", "remove exact", cwd=repo)
+            current_commit = run("git", "rev-parse", "HEAD", cwd=repo).stdout.strip()
             manifest = {
                 "schema": 1,
                 "components": {
@@ -205,11 +207,10 @@ class ResolverTests(unittest.TestCase):
                 "--kernel-series", "7.1",
             )
             record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
-            self.assertEqual(record["commit"], exact_commit)
-            if "snapshot_commit" in record:
-                self.assertRegex(record["snapshot_commit"], r"^[0-9a-f]{40}$")
-            self.assertEqual(record["selection"], "exact-fallback-ref")
-            self.assertIn("7.1", record["path"])
+            self.assertEqual(record["commit"], current_commit)
+            self.assertEqual(record["selection"], "fallback")
+            self.assertIn("7.0", record["path"])
+            self.assertEqual(record["project_version"], "3.0")
 
     def test_git_symlink_patch_is_followed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -217,7 +218,7 @@ class ResolverTests(unittest.TestCase):
             repo = tmp / "repo"
             init_repo(repo, {"patches/7.0/clear.patch": patch("clear target")})
             link = repo / "patches/7.1/clear.patch"
-            link.parent.mkdir(parents=True, exist_ok=True)
+            link.parent.mkdir(parents=True)
             link.symlink_to("../7.0/clear.patch")
             run("git", "add", "-A", cwd=repo)
             run("git", "commit", "-qm", "series symlink", cwd=repo)
