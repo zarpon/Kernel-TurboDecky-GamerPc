@@ -24,6 +24,17 @@ base = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = base
 spec.loader.exec_module(base)
 
+_ORIGINAL_PROJECT_VERSION = base.project_version
+
+
+def semantic_project_version(path: str, pattern: str | None) -> str | None:
+    """Normalize permissive manifest captures without changing version ordering."""
+    version = _ORIGINAL_PROJECT_VERSION(path, pattern)
+    return version.rstrip(".") if version else version
+
+
+base.project_version = semantic_project_version
+
 
 def latest_first_candidate_score(
     path: str, kernel: Any, version_pattern: str | None
