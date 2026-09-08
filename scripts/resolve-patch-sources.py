@@ -172,5 +172,12 @@ def main() -> None:
         args.summary.write_text(summary, encoding="utf-8")
 
 
+# Preserve the original resolver module API for validation helpers and callers.
+# Wrapper-owned names win, while base helpers remain available at top level.
+for name in dir(base):
+    if not name.startswith("__"):
+        globals().setdefault(name, getattr(base, name))
+
+
 if __name__ == "__main__":
     main()
