@@ -45,6 +45,7 @@ def rewrite(path: Path) -> None:
 
     function = r'''fix_known_build_warnings() {
   local futex_source="kernel/futex/syscalls.c"
+  local gud_source="drivers/gpu/drm/gud/gud_connector.c"
 
   echo "==> Fixing known source and configuration warnings"
   python3 - "$futex_source" <<'PYFIX'
@@ -66,8 +67,39 @@ PYFIX
     ! grep -Eq '^int futex_opcode_31\(' "$futex_source"
   fi
 
-  echo "futex_opcode_31 linkage: translation-unit local" \
-    | tee "$LOGDIR/known-warning-fixes.txt"
+  # Linux 7.2.5 can expose a Full-LTO/FORTIFY __read_overflow failure while
+  # linking gud.o. The USB helper cannot legally return more bytes than the
+  # supplied buffer, but state that invariant explicitly before deriving the
+  # fixed-slot pointers so Clang Full LTO can prove every memchr() read stays
+  # within the allocation. This preserves GUD and FORTIFY functionality.
+  python3 - "$gud_source" <<'PYGUD'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = "if (!ret || ret % GUD_CONNECTOR_TV_MODE_NAME_LEN) {"
+new = "if (!ret || ret > buf_len || ret % GUD_CONNECTOR_TV_MODE_NAME_LEN) {"
+if new in text:
+    replacements = 0
+elif old in text:
+    text = text.replace(old, new, 1)
+    replacements = 1
+else:
+    raise SystemExit("GUD TV-mode bounds anchor changed; refusing an unreviewed source rewrite")
+if text.count(new) != 1:
+    raise SystemExit("unexpected GUD TV-mode bounds validation count")
+path.write_text(text, encoding="utf-8")
+print(f"GUD TV-mode explicit upper-bound fix applied={bool(replacements)}")
+PYGUD
+
+  grep -Fq 'ret > buf_len' "$gud_source"
+  git diff --check -- "$futex_source" "$gud_source"
+
+  {
+    echo "futex_opcode_31 linkage: translation-unit local"
+    echo "GUD TV-mode response: explicit ret <= buf_len invariant for Full LTO/FORTIFY"
+  } | tee "$LOGDIR/known-warning-fixes.txt"
 }
 
 '''
