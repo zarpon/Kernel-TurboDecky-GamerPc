@@ -2,7 +2,7 @@
 """Follow the resolved stable series for non-scheduler build rewrites.
 
 BORE is finalized from the build's dynamic patch lock after every source
-resolver run.  Keeping a second, version-specific BORE port here used to make
+resolver run. Keeping a second, version-specific BORE port here used to make
 the preliminary rewrite fail as soon as Linux advanced beyond the small list
 of hand-maintained versions, before the dynamic finalizer had a chance to run.
 """
@@ -45,6 +45,57 @@ def patch_core(path: Path) -> None:
         if old not in source:
             raise SystemExit(f"latest-stable patch-series anchor missing: {old!r}")
         source = source.replace(old, new)
+
+    gud_fix = r'''fix_gud_full_lto_bounds() {
+  local gud_source="drivers/gpu/drm/gud/gud_connector.c"
+
+  # Linux 7.2.5 adds fixed-slot TV-mode validation. Under Clang Full LTO with
+  # FORTIFY, make the USB transfer upper bound explicit before deriving slot
+  # pointers; otherwise gud.o can terminate the link through __read_overflow.
+  # This keeps GUD, FORTIFY and Full LTO enabled and only strengthens protocol
+  # validation for an impossible/invalid oversized response.
+  python3 - "$gud_source" <<'PYGUD'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+old = "if (!ret || ret % GUD_CONNECTOR_TV_MODE_NAME_LEN) {"
+new = "if (!ret || ret > buf_len || ret % GUD_CONNECTOR_TV_MODE_NAME_LEN) {"
+if new in text:
+    changed = False
+elif old in text:
+    text = text.replace(old, new, 1)
+    changed = True
+else:
+    # A future stable kernel may already express the upper bound differently.
+    # Never guess across source drift: require an explicit review instead.
+    raise SystemExit("GUD TV-mode bounds anchor changed; refusing unreviewed rewrite")
+if text.count(new) != 1:
+    raise SystemExit("unexpected GUD TV-mode bounds validation count")
+path.write_text(text, encoding="utf-8")
+print(f"GUD Full-LTO bounds fix changed={changed}")
+PYGUD
+
+  grep -Fq 'ret > buf_len' "$gud_source"
+  git diff --check -- "$gud_source"
+  echo "GUD TV-mode response: explicit ret <= buf_len invariant" \
+    | tee -a "$LOGDIR/known-warning-fixes.txt"
+}
+
+'''
+    source = replace_once(
+        source,
+        "normalize_changed_whitespace() {\n",
+        gud_fix + "normalize_changed_whitespace() {\n",
+        "GUD Full-LTO source-fix function",
+    )
+    source = replace_once(
+        source,
+        "apply_requested_patch_series\n",
+        "apply_requested_patch_series\nfix_gud_full_lto_bounds\n",
+        "GUD Full-LTO source-fix call",
+    )
 
     path.write_text(source, encoding="utf-8")
 
