@@ -92,8 +92,8 @@ PYGUD
     )
     source = replace_once(
         source,
-        "apply_requested_patch_series\n",
-        "apply_requested_patch_series\nfix_gud_full_lto_bounds\n",
+        "# choices instead of pruning the build for one computer model.\n",
+        "# choices instead of pruning the build for one computer model.\nfix_gud_full_lto_bounds\n\n",
         "GUD Full-LTO source-fix call",
     )
 
