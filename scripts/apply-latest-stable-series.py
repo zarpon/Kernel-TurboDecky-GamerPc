@@ -39,8 +39,8 @@ def patch_core(path: Path) -> None:
             "already integrated in Linux $KERNEL_VERSION or an earlier patch",
         "if curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \\\n":
             "if curl --user-agent 'TurboDecky-GamerPc-CI/1.0 (+https://github.com/zarpon/Kernel-TurboDecky-GamerPc)' --fail --location \\\n        --retry 3 --retry-all-errors --retry-delay 2 \\\n",
-        '[[ "$PATCH_MARIE_VERSION" == "unknown" ]] || grep -Fq "$PATCH_MARIE_VERSION" mm/lru_marie/version.h':
-            '[[ "$PATCH_MARIE_VERSION" == "unknown" ]] || { marie_source_version="${PATCH_MARIE_VERSION%%r[0-9]*}"; grep -Fq "$marie_source_version" mm/lru_marie/version.h; }',
+        'grep -Fq "$PATCH_MARIE_VERSION" mm/lru_marie/version.h':
+            'marie_source_version="${PATCH_MARIE_VERSION%%r[0-9]*}"; grep -Fq "$marie_source_version" mm/lru_marie/version.h',
     }
 
     for old, new in replacements.items():
