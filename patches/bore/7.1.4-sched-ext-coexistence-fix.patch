@@ -3,7 +3,10 @@ From: Codex Validation <noreply@localhost>
 Date: Thu, 23 Jul 2026 13:26:45 -0500
 Subject: [PATCH] sched: port 0002 sched-ext coexistence fix to Linux 7.1.4
 
-Keep the upstream reweight_task() helper separate from the BORE port.
+Keep the upstream reweight_task() compatibility entry point separate from the
+BORE port.  On Linux 7.3, preserve the upstream helper's complete load-weight
+update semantics through reweight_task_fair(), which updates both the raw
+entity/PELT state and the split EEVDF hierarchical load state.
 
 Upstream-sha256: cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c
 ---
@@ -12,14 +15,15 @@ Upstream-sha256: cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5
  2 files changed, 14 insertions(+)
 
 diff --git a/include/linux/sched/bore.h b/include/linux/sched/bore.h
-index 76afe1d25..071e56aaf 100644
+index 92bebc114e..a5b8e6f1d2 100644
 --- a/include/linux/sched/bore.h
 +++ b/include/linux/sched/bore.h
-@@ -42,5 +42,6 @@ extern int  sched_burst_protect_slice_lv_update_handler(const struct ctl_table *
- 
- extern void reweight_entity(
- 	struct cfs_rq *cfs_rq, struct sched_entity *se, unsigned long weight);
+@@ -45,6 +45,7 @@ extern int  sched_burst_protect_slice_lv_update_handler(const struct ctl_table *
+  * both halves consistent, so BORE drives that instead.
+  */
 +extern void reweight_task(struct task_struct *p, int prio);
+ extern void reweight_task_fair(struct rq *rq, struct task_struct *p,
+ 			       const struct load_weight *lw);
  
  #endif /* _KERNEL_SCHED_BORE_H */
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
@@ -34,13 +38,12 @@ index ed51ce22d..63d2a6cd8 100644
 +#ifdef CONFIG_SCHED_BORE
 +void reweight_task(struct task_struct *p, int prio)
 +{
-+	struct sched_entity *se = &p->se;
-+	struct cfs_rq *cfs_rq = cfs_rq_of(se);
-+	struct load_weight *load = &se->load;
-+	unsigned long weight = scale_load(sched_prio_to_weight[prio]);
++	struct load_weight lw = {
++		.weight = scale_load(sched_prio_to_weight[prio]),
++		.inv_weight = sched_prio_to_wmult[prio],
++	};
 +
-+	reweight_entity(cfs_rq, se, weight);
-+	load->inv_weight = sched_prio_to_wmult[prio];
++	reweight_task_fair(task_rq(p), p, &lw);
 +}
 +#endif /* CONFIG_SCHED_BORE */
 -- 
