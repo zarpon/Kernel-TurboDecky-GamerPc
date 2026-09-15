@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 from pathlib import Path
 
 PROJECT_OWNED_PATHS = {"block/elevator.c"}
-SEMANTIC_PORT_PATHS = {"mm/swap.c"}
+SEMANTIC_PORT_PATHS = {"mm/swap.c", "mm/swap_state.c"}
 BASE_SLICE_TOKEN = "sysctl_sched_base_slice"
 MIGRATION_SECTION = """diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
 --- a/kernel/sched/fair.c
@@ -22,7 +23,7 @@ MIGRATION_SECTION = """diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
  
  static int __init setup_sched_thermal_decay_shift(char *str)
 """
-SWAP_SETUP_SECTION = """diff --git a/mm/swap.c b/mm/swap.c
+SWAP_SETUP_SECTION_LEGACY = """diff --git a/mm/swap.c b/mm/swap.c
 --- a/mm/swap.c
 +++ b/mm/swap.c
 @@ -1098,15 +1098,20 @@ void __init swap_setup(void)
@@ -47,6 +48,31 @@ SWAP_SETUP_SECTION = """diff --git a/mm/swap.c b/mm/swap.c
  \tregister_sysctl_init("vm", swap_sysctl_table);
  }
 """
+SWAP_SETUP_SECTION_73 = """diff --git a/mm/swap_state.c b/mm/swap_state.c
+--- a/mm/swap_state.c
++++ b/mm/swap_state.c
+@@ -1014,15 +1014,20 @@ static void __init swap_readahead_setup(void)
+ {
++#ifdef CONFIG_ZEN_INTERACTIVE
++\t/* Only swap-in pages requested, avoid readahead */
++\tpage_cluster = 0;
++#else
+ \tunsigned long megs = PAGES_TO_MB(totalram_pages());
+ 
+ \t/* Use a smaller cluster for small-memory machines */
+ \tif (megs < 16)
+ \t\tpage_cluster = 2;
+ \telse
+ \t\tpage_cluster = 3;
+ \t/*
+ \t * Right now other parts of the system means that we
+ \t * _really_ don't want to cluster much more
+ \t */
++#endif
+ 
+ \tregister_sysctl_init("vm", swap_readahead_sysctl_table);
+ }
+"""
 
 
 class PortError(RuntimeError):
@@ -54,11 +80,7 @@ class PortError(RuntimeError):
 
 
 def split_sections(diff: str) -> list[str]:
-    return [
-        part
-        for part in re.split(r"(?=^diff --git )", diff, flags=re.MULTILINE)
-        if part
-    ]
+    return [part for part in re.split(r"(?=^diff --git )", diff, flags=re.MULTILINE) if part]
 
 
 def split_hunks(section: str) -> tuple[str, list[str]]:
@@ -66,13 +88,7 @@ def split_hunks(section: str) -> tuple[str, list[str]]:
     if first is None:
         return section, []
     header = section[: first.start()]
-    hunks = [
-        hunk
-        for hunk in re.split(
-            r"(?=^@@ )", section[first.start() :], flags=re.MULTILINE
-        )
-        if hunk
-    ]
+    hunks = [hunk for hunk in re.split(r"(?=^@@ )", section[first.start() :], flags=re.MULTILINE) if hunk]
     return header, hunks
 
 
@@ -83,24 +99,29 @@ def section_path(header: str) -> str:
     return match.group(1)
 
 
+def kernel_series_key() -> tuple[int, int]:
+    raw = os.environ.get("KERNEL_SERIES", "0.0")
+    match = re.fullmatch(r"(\d+)\.(\d+)", raw)
+    if match is None:
+        raise PortError(f"invalid KERNEL_SERIES for Zen semantic port: {raw!r}")
+    return int(match.group(1)), int(match.group(2))
+
+
+def swap_setup_section() -> tuple[str, str]:
+    if kernel_series_key() >= (7, 3):
+        return SWAP_SETUP_SECTION_73, "mm/swap_state.c"
+    return SWAP_SETUP_SECTION_LEGACY, "mm/swap.c"
+
+
 def sanitize_kconfig_help(hunk: str) -> str:
     replacements = {
-        "Default scheduler for SQ": (
-            "\t    Default scheduler for SQ..: project policy unchanged"
-        ),
-        "Default scheduler for MQ": (
-            "\t    Default scheduler for MQ..: project policy unchanged"
-        ),
-        "Minimal granularity": (
-            "\t    Minimal granularity............: project policy unchanged"
-        ),
+        "Default scheduler for SQ": "\t    Default scheduler for SQ..: project policy unchanged",
+        "Default scheduler for MQ": "\t    Default scheduler for MQ..: project policy unchanged",
+        "Minimal granularity": "\t    Minimal granularity............: project policy unchanged",
     }
     lines: list[str] = []
     for line in hunk.splitlines(keepends=True):
-        replacement = next(
-            (value for token, value in replacements.items() if token in line),
-            None,
-        )
+        replacement = next((value for token, value in replacements.items() if token in line), None)
         if replacement is None:
             lines.append(line)
             continue
@@ -110,20 +131,9 @@ def sanitize_kconfig_help(hunk: str) -> str:
     return "".join(lines)
 
 
-def assert_added_conditionals_balanced(
-    text: str, *, paths: set[str] | None = None
-) -> None:
-    """Reject generated hunks that produce incomplete preprocessor groups.
-
-    Evaluate added and unchanged context lines, because a selected upstream hunk
-    can add an opening directive while retaining its matching ``#endif`` as
-    context. Removed lines are ignored because they are absent after applying
-    the patch. This catches genuinely malformed generated sections without
-    rejecting valid context-paired conditionals.
-    """
+def assert_added_conditionals_balanced(text: str, *, paths: set[str] | None = None) -> None:
     opening = re.compile(r"^\s*#\s*(?:if|ifdef|ifndef)\b")
     closing = re.compile(r"^\s*#\s*endif\b")
-
     for section in split_sections(text):
         header, _ = split_hunks(section)
         path = section_path(header)
@@ -141,13 +151,9 @@ def assert_added_conditionals_balanced(
             elif closing.match(line):
                 depth -= 1
                 if depth < 0:
-                    raise PortError(
-                        f"{path}: preprocessor group closes without an opener"
-                    )
+                    raise PortError(f"{path}: preprocessor group closes without an opener")
         if depth:
-            raise PortError(
-                f"{path}: preprocessor group is unterminated ({depth} open)"
-            )
+            raise PortError(f"{path}: preprocessor group is unterminated ({depth} open)")
 
 
 def prepare_patch(text: str) -> tuple[str, list[str]]:
@@ -165,33 +171,30 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
         if path in PROJECT_OWNED_PATHS:
             exclusions.append(f"{path}: ADIOS project policy preserved")
             continue
-        if path in SEMANTIC_PORT_PATHS:
+        if path == "mm/swap.c":
             swap_setup_needed = True
-            exclusions.append(
-                "mm/swap.c: page-cluster tuning ported as a balanced semantic hunk"
-            )
+            exclusions.append("mm/swap.c: page-cluster tuning ported semantically to the target kernel layout")
             continue
 
         selected: list[str] = []
         for hunk in hunks:
             if path == "kernel/sched/fair.c" and BASE_SLICE_TOKEN in hunk:
                 migration_needed = "sysctl_sched_migration_cost" in hunk
-                exclusions.append(
-                    "kernel/sched/fair.c: BORE base slice preserved; "
-                    "migration cost ported separately"
-                )
+                exclusions.append("kernel/sched/fair.c: BORE base slice preserved; migration cost ported separately")
                 continue
             if path == "init/Kconfig":
                 hunk = sanitize_kconfig_help(hunk)
             selected.append(hunk)
-
         if selected:
             output.append(header + "".join(selected))
 
     if migration_needed:
         output.append(MIGRATION_SECTION)
+    semantic_swap_path = ""
     if swap_setup_needed:
-        output.append(SWAP_SETUP_SECTION)
+        section, semantic_swap_path = swap_setup_section()
+        output.append(section)
+        exclusions.append(f"Zen swap readahead policy applied at {semantic_swap_path}")
 
     result = "".join(output)
     if "diff --git a/block/elevator.c b/block/elevator.c" in result:
@@ -203,7 +206,8 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
     if migration_needed and result.count("sysctl_sched_migration_cost") != 3:
         raise PortError("migration-cost semantic port is malformed")
     if swap_setup_needed:
-        if result.count("diff --git a/mm/swap.c b/mm/swap.c") != 1:
+        marker = f"diff --git a/{semantic_swap_path} b/{semantic_swap_path}"
+        if result.count(marker) != 1:
             raise PortError("swap page-cluster semantic port is duplicated")
         if result.count("page_cluster = 0;") != 1:
             raise PortError("swap page-cluster semantic port is malformed")
@@ -212,12 +216,7 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
 
 
 def patch_files(text: str) -> list[str]:
-    return sorted(
-        {
-            section_path(split_hunks(section)[0])
-            for section in split_sections(text)
-        }
-    )
+    return sorted({section_path(split_hunks(section)[0]) for section in split_sections(text)})
 
 
 def patch_hunk_count(text: str) -> int:
@@ -230,19 +229,13 @@ def main() -> None:
     parser.add_argument("--log", type=Path, required=True)
     args = parser.parse_args()
     try:
-        adapted, exclusions = prepare_patch(
-            args.patch.read_text(encoding="utf-8")
-        )
+        adapted, exclusions = prepare_patch(args.patch.read_text(encoding="utf-8"))
     except PortError as exc:
         raise SystemExit(f"Zen project-policy port failed: {exc}") from exc
     args.patch.write_text(adapted, encoding="utf-8")
     args.log.parent.mkdir(parents=True, exist_ok=True)
     args.log.write_text("\n".join(exclusions) + "\n", encoding="utf-8")
-    print(
-        "Adapted Zen profile to preserve ADIOS and BORE policies: "
-        + "; ".join(exclusions),
-        flush=True,
-    )
+    print("Adapted Zen profile to preserve ADIOS and BORE policies: " + "; ".join(exclusions), flush=True)
 
 
 if __name__ == "__main__":
