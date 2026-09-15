@@ -25,6 +25,27 @@ for _name in dir(_base):
         globals()[_name] = getattr(_base, _name)
 
 
+_RC_VERSION_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?(?:-rc(\d+))?$")
+
+
+def _version_tuple_with_rc(value: str, label: str) -> tuple[int, int, int, int]:
+    """Order RCs before the final release while preserving patchlevel ordering."""
+    match = _RC_VERSION_RE.fullmatch(value)
+    if not match:
+        raise _base.FinalizeError(f"invalid {label}: {value!r}")
+    major, minor, patch, rc = match.groups()
+    if rc is not None:
+        return int(major), int(minor), 0, int(rc)
+    return int(major), int(minor), 1, int(patch or 0)
+
+
+# The base finalizer predates RC targets. Keep every finalizer behavior intact,
+# replacing only version parsing/comparison so e.g. 7.3-rc2 can be safely
+# metadata-ported forward to 7.3-rc3 without selecting an older BORE release.
+_base.version_tuple = _version_tuple_with_rc
+version_tuple = _version_tuple_with_rc
+
+
 def _bore_subject_match(text: str, source_target: str, version: str) -> re.Match[str] | None:
     pattern = re.compile(
         rf"^Subject: \[PATCH\] linux{re.escape(source_target)}(?:-rc\d+)?-bore-{re.escape(version)}$",
@@ -47,7 +68,7 @@ def load_locked_bore(lock_path: Path, kernel_version: str):
         )
     if record.get("selection") != "exact":
         raise _base.FinalizeError(
-            "the latest stable kernel has no exact BORE source; refuse to reuse an older reviewed port"
+            "the latest upstream kernel has no exact-series BORE source; refuse to reuse an older reviewed port"
         )
     source_target = str(record.get("kernel_target", ""))
     source_version = _base.version_tuple(source_target, "locked BORE kernel target")
