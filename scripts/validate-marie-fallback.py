@@ -49,8 +49,28 @@ def validate(
     selected_path = str(metadata.get("selected_path", ""))
     if not version or not selected_path:
         raise FallbackError("Marie fallback version or path is missing")
-    if version not in selected_path or version not in text:
-        raise FallbackError("Marie fallback version is inconsistent with patch content")
+    if version not in selected_path:
+        raise FallbackError("Marie fallback version is inconsistent with selected upstream path")
+
+    # Upstream can publish a packaging/revision release such as 0.11.1r2
+    # while the patch Subject and compiled version remain 0.11.1. The exact
+    # upstream release identity is still authenticated by selected_path,
+    # commit, SHA-256 and byte size above. Require the patch Subject to carry
+    # either the full release version or its revision-free semantic base.
+    subject_match = re.search(
+        r"^Subject: \[PATCH\] .*lru_marie-([0-9]+(?:\.[0-9]+)+(?:r[0-9]+)?)$",
+        text,
+        flags=re.MULTILINE,
+    )
+    if subject_match is None:
+        raise FallbackError("Marie fallback patch Subject version is missing")
+    subject_version = subject_match.group(1)
+    semantic_base = re.sub(r"r[0-9]+$", "", version)
+    if subject_version not in {version, semantic_base}:
+        raise FallbackError(
+            "Marie fallback patch Subject version is inconsistent with upstream release: "
+            f"{subject_version} not in {{{version}, {semantic_base}}}"
+        )
 
     if expected_version and version != expected_version:
         raise FallbackError(f"Marie fallback version {version} != {expected_version}")
