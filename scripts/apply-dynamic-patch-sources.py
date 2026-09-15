@@ -243,14 +243,11 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
 
 
 def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
-    if "PATCH_ZRAM_IR_VERSION=" in text and "$RESOLVED_PATCH_ROOT/" in text:
-        return text
-
     for prefix, name in (("ZRAM_IR", "zram_ir"), ("POC", "poc"), ("NAP", "nap"), ("VRAM_PATCH", "vram")):
         record = component(lock, name)
         repo_var = f"{prefix}_REPO"
         commit_var = f"{prefix}_COMMIT"
-        path_var = f"{prefix}_PATCH_PATH"
+        path_var = "VRAM_PATCH_PATH" if prefix == "VRAM_PATCH" else f"{prefix}_PATCH_PATH"
         if repo_var in text:
             text = replace_assignment(text, repo_var, repo_value(record))
         if commit_var in text:
@@ -290,6 +287,16 @@ def validate_lock(lock: dict[str, Any]) -> None:
         raise RewriteError(f"patch lock is incomplete: {', '.join(missing)}")
 
 
+def reject_unresolved_sentinels(label: str, text: str) -> None:
+    unresolved = sorted(set(re.findall(
+        r"__DYNAMIC_PATCH_LOCK_REQUIRED__(?::[A-Za-z0-9_.-]+)?", text
+    )))
+    if unresolved:
+        raise RewriteError(
+            f"{label} still contains unresolved dynamic patch sentinels: {', '.join(unresolved)}"
+        )
+
+
 def main() -> None:
     if len(sys.argv) != 4:
         raise SystemExit(
@@ -302,6 +309,8 @@ def main() -> None:
         lock = materialize_locked_repositories(lock_path, lock)
         core = patch_core(core_path.read_text(encoding="utf-8"), lock)
         wrapper = patch_wrapper(wrapper_path.read_text(encoding="utf-8"), lock)
+        reject_unresolved_sentinels("generated core", core)
+        reject_unresolved_sentinels("build wrapper", wrapper)
     except RewriteError as exc:
         raise SystemExit(f"dynamic patch source rewrite failed: {exc}") from exc
     core_path.write_text(core, encoding="utf-8")
