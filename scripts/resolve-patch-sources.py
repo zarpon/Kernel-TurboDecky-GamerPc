@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve latest upstream patch releases first and port ZRAM-IR to Linux 7.2."""
+"""Resolve latest upstream patch releases first for stable and RC Linux kernels."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,45 @@ if spec is None or spec.loader is None:
 base = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = base
 spec.loader.exec_module(base)
+
+
+def _parse_kernel_version(cls: type[Any], value: str) -> Any:
+    """Parse final and release-candidate Linux versions without losing RC identity."""
+    text = value.strip()
+    match = re.fullmatch(r"(\d+)\.(\d+)(?:\.(\d+))?(?:-rc(\d+))?", text)
+    if not match:
+        raise base.ResolverError(f"invalid kernel version: {value!r}")
+    major, minor, patch, rc = match.groups()
+    parts: tuple[int, ...]
+    if rc is not None:
+        # Keep RC identity in the tuple while retaining the first three numeric
+        # components used by the base distance calculation. This distinguishes
+        # 7.3-rc1 from 7.3-rc3 without changing stable-version semantics.
+        parts = (int(major), int(minor), int(patch or 0), int(rc))
+    elif patch is not None:
+        parts = (int(major), int(minor), int(patch))
+    else:
+        parts = (int(major), int(minor))
+    return cls(text, parts)
+
+
+base.KernelVersion.parse = classmethod(_parse_kernel_version)
+
+
+def extract_kernel_target_rc(path: str) -> Any | None:
+    """Extract a target kernel including an optional -rcN suffix from a path."""
+    candidates: list[Any] = []
+    pattern = r"(?<!\d)(\d+\.\d+(?:\.\d+)?(?:-rc\d+)?)"
+    for match in re.finditer(pattern, path):
+        text = match.group(1)
+        major = int(text.split(".", 1)[0])
+        if major < 5:
+            continue
+        candidates.append(base.KernelVersion.parse(text))
+    return candidates[0] if candidates else None
+
+
+base.extract_kernel_target = extract_kernel_target_rc
 
 _ORIGINAL_PROJECT_VERSION = base.project_version
 
