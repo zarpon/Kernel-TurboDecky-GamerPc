@@ -58,137 +58,123 @@ jobs:
 
           base_path = Path("scripts/resolve-patch-sources-base.py")
           base = base_path.read_text(encoding="utf-8")
-          fn_start = base.index("\ndef load_local_fallback(")
-          fn_end = base.index("\ndef resolve(", fn_start)
-          base = base[:fn_start] + "\n" + base[fn_end:]
+          base, count = re.subn(r"\ndef load_local_fallback\(.*?(?=\ndef resolve\()", "\n", base, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit(f"local fallback function removal count={count}")
 
           old_refs = '                refs = [spec.get("ref", "main"), *spec.get("fallback_refs", [])]\n'
           if base.count(old_refs) != 1:
-              raise SystemExit(f"fallback_refs resolver assignment count={base.count(old_refs)}")
+              raise SystemExit(f"fallback_refs assignment count={base.count(old_refs)}")
           base = base.replace(old_refs, '                refs = [spec.get("ref", "main")]\n', 1)
 
-          no_options_start = base.index('                if not options:\n                    fallback = load_local_fallback(')
-          no_options_end = base.index('                else:\n                    _, repo_path, commit, ref, mode, selected, resolved_path = max(', no_options_start)
-          no_options = '''                if not options:
-                    detail = " | ".join(ref_errors) if ref_errors else "no matching paths"
-                    expectation = "exact " if spec.get("require_exact_series", False) else ""
-                    raise ResolverError(
-                        f"no {expectation}compatible current-upstream path found for {component} and Linux "
-                        f"{series_text}: {detail}; port the newest upstream release"
-                    )
-'''
-          base = base[:no_options_start] + no_options + base[no_options_end:]
+          no_options_lines = [
+              "                if not options:",
+              '                    detail = " | ".join(ref_errors) if ref_errors else "no matching paths"',
+              '                    expectation = "exact " if spec.get("require_exact_series", False) else ""',
+              "                    raise ResolverError(",
+              '                        f"no {expectation}compatible current-upstream path found for {component} and Linux "',
+              '                        f"{series_text}: {detail}; port the newest upstream release"',
+              "                    )",
+          ]
+          no_options = "\n".join(no_options_lines) + "\n"
+          no_options_pattern = r"                if not options:\n                    fallback = load_local_fallback\(.*?(?=                else:\n                    _, repo_path, commit, ref, mode, selected, resolved_path = max\()"
+          base, count = re.subn(no_options_pattern, lambda match: no_options, base, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit(f"local fallback call removal count={count}")
+
           base = base.replace('                            "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",\n', '                            "selection": mode,\n')
-          base = base.replace(
-              '                        # Integrity is recorded from the downloaded bytes in the\n'
-              '                        # generated lock; fixed fallback metadata remains independently\n'
-              '                        # checked by load_local_fallback().\n',
-              '                        # Integrity is recorded from the downloaded bytes in the generated lock.\n',
-          )
+          base = base.replace("fixed fallback metadata remains independently\n                        # checked by load_local_fallback().", "integrity is captured in patch-lock.json.")
 
-          resolve_anchor = ''') -> dict[str, Any]:
-    temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))
-'''
-          resolve_replacement = ''') -> dict[str, Any]:
-    forbidden_source_keys = {"fallback_refs", "local_fallback_patch", "local_fallback_metadata"}
-    for component_name, component_record in manifest.get("components", {}).items():
-        stale_keys = sorted(forbidden_source_keys.intersection(component_record))
-        if stale_keys:
-            raise ResolverError(
-                f"historical patch fallback is forbidden for {component_name}: "
-                + ", ".join(stale_keys)
-            )
-
-    temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))
-'''
-          if base.count(resolve_anchor) != 1:
-              raise SystemExit(f"resolve policy anchor count={base.count(resolve_anchor)}")
-          base_path.write_text(base.replace(resolve_anchor, resolve_replacement, 1), encoding="utf-8")
+          resolve_start = base.index("def resolve(")
+          policy_anchor = ') -> dict[str, Any]:\n    temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))\n'
+          policy_pos = base.index(policy_anchor, resolve_start)
+          policy_lines = [
+              ') -> dict[str, Any]:',
+              '    forbidden_source_keys = {"fallback_refs", "local_fallback_patch", "local_fallback_metadata"}',
+              '    for component_name, component_record in manifest.get("components", {}).items():',
+              '        stale_keys = sorted(forbidden_source_keys.intersection(component_record))',
+              '        if stale_keys:',
+              '            raise ResolverError(',
+              '                f"historical patch fallback is forbidden for {component_name}: "',
+              '                + ", ".join(stale_keys)',
+              '            )',
+              '',
+              '    temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))',
+          ]
+          policy = "\n".join(policy_lines) + "\n"
+          base = base[:policy_pos] + policy + base[policy_pos + len(policy_anchor):]
+          base_path.write_text(base, encoding="utf-8")
 
           tests_path = Path("tests/test_dynamic_patch_resolver.py")
           tests = tests_path.read_text(encoding="utf-8")
-          pattern = re.compile(
-              r"    def test_newer_current_release_outranks_older_exact_fallback_ref\(self\) -> None:\n.*?(?=\n    def test_git_symlink_patch_is_followed)",
-              re.S,
-          )
+          pattern = re.compile(r"    def test_newer_current_release_outranks_older_exact_fallback_ref\(self\) -> None:\n.*?(?=\n    def test_git_symlink_patch_is_followed)", re.S)
           match = pattern.search(tests)
           if not match:
               raise SystemExit("historical fallback-ref test block not found")
-          new_test = '''    def test_historical_fallback_refs_are_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp = Path(tmp)
-            repo = tmp / "repo"
-            init_repo(repo, {"patches/7.1/demo-v2.0.patch": patch("demo 2.0")})
-            manifest = {
-                "schema": 1,
-                "components": {
-                    "demo": {
-                        "kind": "git_patch",
-                        "repo": str(repo),
-                        "ref": "main",
-                        "fallback_refs": ["a" * 40],
-                        "exact_globs": ["patches/{series}/demo-*.patch"],
-                        "fallback_globs": ["patches/*/demo-*.patch"],
-                        "require_exact_series": False,
-                        "output": "demo.patch",
-                        "project_version_regex": r"demo-v([0-9.]+)",
-                    }
-                },
-            }
-            manifest_path = tmp / "manifest.json"
-            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            result = subprocess.run(
-                [
-                    "python3", str(RESOLVER), "--manifest", str(manifest_path),
-                    "--output-dir", str(tmp / "resolved"), "--kernel-version", "7.1.3",
-                    "--kernel-series", "7.1",
-                ],
-                text=True,
-                capture_output=True,
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("historical patch fallback is forbidden", result.stderr)
-'''
+          test_lines = [
+              "    def test_historical_fallback_refs_are_rejected(self) -> None:",
+              "        with tempfile.TemporaryDirectory() as tmp:",
+              "            tmp = Path(tmp)",
+              '            repo = tmp / "repo"',
+              '            init_repo(repo, {"patches/7.1/demo-v2.0.patch": patch("demo 2.0")})',
+              "            manifest = {",
+              '                "schema": 1,',
+              '                "components": {',
+              '                    "demo": {',
+              '                        "kind": "git_patch",',
+              '                        "repo": str(repo),',
+              '                        "ref": "main",',
+              '                        "fallback_refs": ["a" * 40],',
+              '                        "exact_globs": ["patches/{series}/demo-*.patch"],',
+              '                        "fallback_globs": ["patches/*/demo-*.patch"],',
+              '                        "require_exact_series": False,',
+              '                        "output": "demo.patch",',
+              '                        "project_version_regex": r"demo-v([0-9.]+)",',
+              "                    }",
+              "                },",
+              "            }",
+              '            manifest_path = tmp / "manifest.json"',
+              '            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")',
+              "            result = subprocess.run(",
+              "                [",
+              '                    "python3", str(RESOLVER), "--manifest", str(manifest_path),',
+              '                    "--output-dir", str(tmp / "resolved"), "--kernel-version", "7.1.3",',
+              '                    "--kernel-series", "7.1",',
+              "                ],",
+              "                text=True,",
+              "                capture_output=True,",
+              "            )",
+              "            self.assertNotEqual(result.returncode, 0)",
+              '            self.assertIn("historical patch fallback is forbidden", result.stderr)',
+          ]
+          new_test = "\n".join(test_lines) + "\n"
           tests_path.write_text(tests[:match.start()] + new_test + tests[match.end():], encoding="utf-8")
 
           validation_path = Path("scripts/validate-dynamic-patches-local.sh")
-          validation = validation_path.read_text(encoding="utf-8")
-          obsolete_names = {
+          lines = validation_path.read_text(encoding="utf-8").splitlines()
+          drop_markers = (
               "update-marie-fallback.py",
               "validate-marie-fallback.py",
               "test_marie_local_fallback.py",
               "test_marie_fallback_updater.py",
-          }
-          lines = validation.splitlines()
-          lines = [line for line in lines if not any(name in line for name in obsolete_names)]
-          validation = "\n".join(lines) + "\n"
-
-          validator_start = validation.find('  --patch "$ROOT/patches/fallback/lru_marie.patch"')
-          if validator_start != -1:
-              validator_end = validation.find("\n", validation.find("--metadata", validator_start)) + 1
-              validation = validation[:validator_start] + validation[validator_end:]
-
-          for old_line in (
-              'grep -Fq \'fallback_refs\' "$ROOT/config/patch-sources.json"\n',
-              'grep -Fq \'local_fallback_patch\' "$ROOT/config/patch-sources.json"\n',
-              'test -s "$ROOT/patches/fallback/lru_marie.patch"\n',
-          ):
-              if old_line not in validation:
-                  raise SystemExit(f"old fallback validation line missing: {old_line!r}")
-              validation = validation.replace(old_line, "", 1)
-
-          lock_anchor = 'grep -Fq \'patch-lock.json\' "$ROOT/scripts/apply-dynamic-patch-sources.py"\n'
-          if validation.count(lock_anchor) != 1:
-              raise SystemExit(f"patch-lock validation anchor count={validation.count(lock_anchor)}")
-          absence_contract = '''! grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
-! grep -Fq 'local_fallback_patch' "$ROOT/config/patch-sources.json"
-! grep -Fq 'local_fallback_metadata' "$ROOT/config/patch-sources.json"
-test ! -e "$ROOT/patches/fallback/lru_marie.patch"
-test ! -e "$ROOT/patches/fallback/lru_marie.json"
-grep -Fq 'historical patch fallback is forbidden' "$ROOT/scripts/resolve-patch-sources-base.py"
-'''
-          validation = validation.replace(lock_anchor, absence_contract + lock_anchor, 1)
-          validation_path.write_text(validation, encoding="utf-8")
+              "grep -Fq 'fallback_refs'",
+              "grep -Fq 'local_fallback_patch'",
+              'test -s "$ROOT/patches/fallback/lru_marie.patch"',
+              '--patch "$ROOT/patches/fallback/lru_marie.patch"',
+              '--metadata "$ROOT/patches/fallback/lru_marie.json"',
+          )
+          lines = [line for line in lines if not any(marker in line for marker in drop_markers)]
+          lock_index = next(i for i, line in enumerate(lines) if "grep -Fq 'patch-lock.json'" in line)
+          absence_lines = [
+              "! grep -Fq 'fallback_refs' \"$ROOT/config/patch-sources.json\"",
+              "! grep -Fq 'local_fallback_patch' \"$ROOT/config/patch-sources.json\"",
+              "! grep -Fq 'local_fallback_metadata' \"$ROOT/config/patch-sources.json\"",
+              'test ! -e "$ROOT/patches/fallback/lru_marie.patch"',
+              'test ! -e "$ROOT/patches/fallback/lru_marie.json"',
+              "grep -Fq 'historical patch fallback is forbidden' \"$ROOT/scripts/resolve-patch-sources-base.py\"",
+          ]
+          lines[lock_index:lock_index] = absence_lines
+          validation_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
           Path(".github/workflows/remove-historical-fallbacks-once.yml").unlink()
           PY
