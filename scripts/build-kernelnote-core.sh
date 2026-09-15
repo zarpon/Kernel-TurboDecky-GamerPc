@@ -357,6 +357,16 @@ apply_adios_patch() {
   mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort)
   expected=("block/elevator.c.rej")
 
+  # If setlocalversion was the only rejected hunk and it was proven equivalent
+  # above, ADIOS itself applied cleanly and no elevator compatibility port is needed.
+  if ((${#rejects[@]} == 0)); then
+    find "$KERNELDIR" -name '*.orig' -delete
+    grep -Fq 'CONFIG_MQ_IOSCHED_DEFAULT_ADIOS' block/elevator.c
+    grep -Fq 'ctx.name = "adios"' block/elevator.c
+    echo "==> ADIOS applied successfully; equivalent setlocalversion hunk preserved"
+    return 0
+  fi
+
   if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
     echo "Unexpected ADIOS rejects: ${rejects[*]:-none}" >&2
     return 1
