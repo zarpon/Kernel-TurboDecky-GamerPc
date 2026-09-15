@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Finish the graysky CPU-optimization Kconfig hunk on Linux 7.2.
+"""Finish the current graysky CPU-optimization Kconfig hunk on newer Linux.
 
-The 6.16+ patch still carries dependency context that Linux 7.2 changed
-upstream. GNU patch therefore rejects the combined Kconfig hunk after the other
-CPU-selection hunks have applied. This adapter is deliberately narrow: it
-accepts only that known reject, updates the still-relevant dependency lists,
-and preserves Linux 7.2's unconditional X86_TSC semantics and removed legacy
-WinChip checksum dependencies.
+The upstream 6.16+ patch can carry dependency context that newer target kernels
+have already changed. GNU patch may therefore reject the combined Kconfig hunk
+after the other CPU-selection hunks have applied. This adapter is deliberately
+narrow: it accepts only the known dependency reject, updates the still-relevant
+dependency lists, and preserves the target kernel's unconditional X86_TSC
+semantics and removed legacy WinChip checksum dependencies.
+
+Kernel versions are not pinned here. Compatibility is decided by the exact
+reject markers and target-tree anchors below, so a newer kernel with the same
+semantics is ported automatically while any structural drift fails closed.
 """
 from __future__ import annotations
 
@@ -45,8 +49,8 @@ def validate_reject(reject: str) -> None:
 
 
 def port_kconfig(path: Path, reject_path: Path, kernel_version: str) -> None:
-    if not re.fullmatch(r"7\.2(?:\.\d+)?", kernel_version):
-        raise PortError(f"unsupported kernel for CPU optimization adapter: {kernel_version}")
+    if not re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-rc[0-9]+)?", kernel_version):
+        raise PortError(f"invalid target kernel version: {kernel_version}")
     if not path.is_file() or not reject_path.is_file():
         raise PortError("Kconfig or reject file is missing")
 
@@ -81,9 +85,10 @@ def port_kconfig(path: Path, reject_path: Path, kernel_version: str) -> None:
     )
     text = replace_once(text, usercopy_old, usercopy_new, "X86_INTEL_USERCOPY")
 
-    # Linux 7.2 removed the legacy MWINCHIP3D/MWINCHIPC6 entries from this
-    # dependency before this fallback patch was authored. Preserve that upstream
-    # cleanup while adding all CPU profiles introduced by the optimization patch.
+    # Current target kernels removed the legacy MWINCHIP3D/MWINCHIPC6 entries
+    # from this dependency before the 6.16+ optimization patch's base context.
+    # Preserve that upstream cleanup while adding every CPU profile introduced
+    # by the current optimization patch.
     checksum_old = (
         "\tdepends on MCYRIXIII || MK7 || MK6 || MPENTIUM4 || MPENTIUMM || "
         "MPENTIUMIII || MPENTIUMII || M686 || MVIAC3_2 || MVIAC7 || "
@@ -114,11 +119,12 @@ def port_kconfig(path: Path, reject_path: Path, kernel_version: str) -> None:
     )
     text = replace_once(text, pae_old, pae_new, "X86_HAVE_PAE")
 
-    # Linux 7.2 intentionally has no CPU-model dependency on X86_TSC. The old
-    # patch's dependency line is stale context and must not be restored.
+    # The current target tree intentionally has no CPU-model dependency on
+    # X86_TSC. The optimization patch's old dependency line is stale context
+    # and must not be restored.
     tsc_block = "config X86_TSC\n\tdef_bool y\n\nconfig X86_HAVE_PAE\n"
     if tsc_block not in text:
-        raise PortError("Linux 7.2 unconditional X86_TSC block was not preserved")
+        raise PortError("target kernel unconditional X86_TSC block was not preserved")
 
     path.write_text(text, encoding="utf-8")
 
@@ -133,4 +139,4 @@ if __name__ == "__main__":
         port_kconfig(Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3])
     except PortError as exc:
         raise SystemExit(f"CPU optimization port failed: {exc}") from exc
-    print("Applied deterministic Linux 7.2 CPU optimization Kconfig adapter")
+    print(f"Applied deterministic CPU optimization Kconfig adapter for {sys.argv[3]}")
