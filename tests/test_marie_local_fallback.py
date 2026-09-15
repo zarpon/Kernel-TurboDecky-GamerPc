@@ -18,10 +18,11 @@ sys.modules[SPEC.name] = resolver
 SPEC.loader.exec_module(resolver)
 
 
-def sample_patch(version: str = "9.9.9") -> bytes:
+def sample_patch(version: str = "9.9.9", target: str = "7.1-rc5") -> bytes:
+    semantic_version = version.rsplit("r", 1)[0] if version.rsplit("r", 1)[-1].isdigit() and "r" in version else version
     return (
         f"From {'1' * 40} Mon Sep 17 00:00:00 2001\n"
-        f"Subject: [PATCH] linux7.1-rc5-lru_marie-{version}\n\n"
+        f"Subject: [PATCH] linux{target}-lru_marie-{semantic_version}\n\n"
         "diff --git a/mm/Kconfig b/mm/Kconfig\n"
         "--- a/mm/Kconfig\n"
         "+++ b/mm/Kconfig\n"
@@ -33,14 +34,20 @@ def sample_patch(version: str = "9.9.9") -> bytes:
 
 
 class MarieLocalFallbackTest(unittest.TestCase):
-    def fixture(self, root: Path, version: str = "9.9.9") -> tuple[dict, Path]:
+    def fixture(
+        self,
+        root: Path,
+        version: str = "9.9.9",
+        target: str = "7.1-rc5",
+    ) -> tuple[dict, Path]:
         config = root / "config"
         fallback = root / "patches/fallback"
         config.mkdir(parents=True)
         fallback.mkdir(parents=True)
-        data = sample_patch(version)
+        data = sample_patch(version, target)
         (fallback / "lru_marie.patch").write_bytes(data)
-        selected = f"patches/testing/0001-linux7.1-rc5-lru_marie-{version}.patch"
+        selected = f"patches/testing/0001-linux{target}-lru_marie-{version}.patch"
+        target_series = ".".join(target.split("-")[0].split(".")[:2])
         metadata = {
             "schema": 1,
             "repo": "https://example.invalid/lru_marie.git",
@@ -49,7 +56,7 @@ class MarieLocalFallbackTest(unittest.TestCase):
             "selected_path": selected,
             "path": selected,
             "selection": "exact",
-            "kernel_target": "7.1",
+            "kernel_target": target,
             "project_version": version,
             "sha256": hashlib.sha256(data).hexdigest(),
             "size": len(data),
@@ -71,7 +78,7 @@ class MarieLocalFallbackTest(unittest.TestCase):
                     "require_exact_series": False,
                     "output": "02-lru-marie.patch",
                     "project_version_regex": (
-                        r"lru[_-]marie[-_]?v?([0-9]+(?:\.[0-9]+)+)"
+                        r"lru[_-]marie[-_]?v?([0-9]+(?:\.[0-9]+)+(?:r[0-9]+)?)"
                     ),
                     "required_markers": ["LRU_MARIE", "lru_marie"],
                     "local_fallback_patch": "../patches/fallback/lru_marie.patch",
@@ -79,6 +86,7 @@ class MarieLocalFallbackTest(unittest.TestCase):
                 }
             },
         }
+        self.assertEqual(target_series, f"{resolver.KernelVersion.parse(target).series[0]}.{resolver.KernelVersion.parse(target).series[1]}")
         return manifest, config
 
     def test_uses_valid_local_fallback_when_upstream_is_unavailable(self) -> None:
@@ -98,6 +106,29 @@ class MarieLocalFallbackTest(unittest.TestCase):
             self.assertEqual(record["project_version"], "9.9.9")
             self.assertEqual(
                 (output / record["output"]).read_bytes(), sample_patch()
+            )
+
+    def test_preserves_revision_release_fallback_for_rc_kernel(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manifest, config = self.fixture(
+                root, version="0.11.1r2", target="7.3-rc1"
+            )
+            output = root / "resolved"
+            lock = resolver.resolve(
+                manifest,
+                output,
+                resolver.KernelVersion.parse("7.3-rc3"),
+                "7.3",
+                manifest_root=config,
+            )
+            record = lock["components"]["marie"]
+            self.assertEqual(record["selection"], "local-fallback")
+            self.assertEqual(record["project_version"], "0.11.1r2")
+            self.assertEqual(record["kernel_target"], "7.3-rc1")
+            self.assertEqual(
+                (output / record["output"]).read_bytes(),
+                sample_patch("0.11.1r2", "7.3-rc1"),
             )
 
     def test_rejects_corrupted_fallback(self) -> None:
