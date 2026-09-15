@@ -105,6 +105,50 @@ jobs:
           base = base[:policy_pos] + policy + base[policy_pos + len(policy_anchor):]
           base_path.write_text(base, encoding="utf-8")
 
+          core_path = Path("scripts/build-kernelnote-core.sh")
+          core = core_path.read_text(encoding="utf-8")
+          core_lines = [
+              line for line in core.splitlines()
+              if not line.startswith("MARIE_FALLBACK_PATCH=")
+              and not line.startswith("MARIE_FALLBACK_METADATA=")
+          ]
+          core = "\n".join(core_lines) + "\n"
+          marie_start = core.index("fetch_marie_testing_patch() {")
+          marie_end = core.index("\nfetch_bore_source() {", marie_start)
+          marie_lines = [
+              "fetch_marie_testing_patch() {",
+              '  echo "==> Fetching pinned Marie LRU $PATCH_MARIE_VERSION testing source locally"',
+              '  rm -rf "$MARIEDIR"',
+              '  git init --quiet "$MARIEDIR"',
+              '  git -C "$MARIEDIR" remote add origin "$MARIE_REPO"',
+              '  git -C "$MARIEDIR" config remote.origin.promisor true',
+              '  git -C "$MARIEDIR" config remote.origin.partialclonefilter blob:none',
+              '  git -C "$MARIEDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$MARIE_COMMIT" 2>&1 | tee "$LOGDIR/02-lru-marie-fetch.log"',
+              '  git -C "$MARIEDIR" show "FETCH_HEAD:$MARIE_PATCH_PATH" > "$MARIE_PATCH"',
+              '  test -s "$MARIE_PATCH"',
+              "  grep -Fq 'lru_marie' \"$MARIE_PATCH\"",
+              "  grep -Fq 'LRU_MARIE' \"$MARIE_PATCH\"",
+              '',
+              '  {',
+              '    echo "Marie source policy: current upstream testing release only"',
+              '    echo "Repository: firelzrd/lru_marie"',
+              '    echo "Commit: $MARIE_COMMIT"',
+              '    echo "Version: $PATCH_MARIE_VERSION"',
+              '    echo "Path: $MARIE_PATCH_PATH"',
+              '    echo "SHA256: $(sha256sum \"$MARIE_PATCH\" | awk \'{print $1}\')"',
+              '    echo "Acquisition: pinned current-upstream partial Git checkout; no local fallback"',
+              '  } | tee "$LOGDIR/02-lru-marie-provenance.txt"',
+              '}',
+          ]
+          marie_function = "\n".join(marie_lines) + "\n"
+          core = core[:marie_start] + marie_function + core[marie_end + 1:]
+          old_apply = '  echo "==> Applying local Marie LRU $PATCH_MARIE_VERSION testing patch for Linux 7.1"'
+          new_apply = '  echo "==> Applying Marie LRU $PATCH_MARIE_VERSION upstream testing patch"'
+          if core.count(old_apply) != 1:
+              raise SystemExit(f"Marie apply message anchor count={core.count(old_apply)}")
+          core = core.replace(old_apply, new_apply, 1)
+          core_path.write_text(core, encoding="utf-8")
+
           tests_path = Path("tests/test_dynamic_patch_resolver.py")
           tests = tests_path.read_text(encoding="utf-8")
           pattern = re.compile(r"    def test_newer_current_release_outranks_older_exact_fallback_ref\(self\) -> None:\n.*?(?=\n    def test_git_symlink_patch_is_followed)", re.S)
@@ -148,7 +192,60 @@ jobs:
               '            self.assertIn("historical patch fallback is forbidden", result.stderr)',
           ]
           new_test = "\n".join(test_lines) + "\n"
-          tests_path.write_text(tests[:match.start()] + new_test + tests[match.end():], encoding="utf-8")
+          tests = tests[:match.start()] + new_test + tests[match.end():]
+          old_expectation = 'self.assertIn("no exact compatible path", result.stderr)'
+          new_expectation = 'self.assertIn("no exact compatible current-upstream path", result.stderr)'
+          if tests.count(old_expectation) != 1:
+              raise SystemExit(f"exact-required expectation count={tests.count(old_expectation)}")
+          tests_path.write_text(tests.replace(old_expectation, new_expectation, 1), encoding="utf-8")
+
+          marie_test_path = Path("tests/test_marie_version_reporting.py")
+          marie_test_lines = [
+              "#!/usr/bin/env python3",
+              "from __future__ import annotations",
+              "",
+              "import unittest",
+              "from pathlib import Path",
+              "",
+              "ROOT = Path(__file__).resolve().parents[1]",
+              "",
+              "",
+              "class MarieVersionReportingTest(unittest.TestCase):",
+              "    def test_build_uses_current_upstream_without_local_fallback(self) -> None:",
+              '        core = (ROOT / "scripts/build-kernelnote-core.sh").read_text(encoding="utf-8")',
+              '        self.assertIn("Fetching pinned Marie LRU $PATCH_MARIE_VERSION testing source locally", core)',
+              '        self.assertIn("Marie source policy: current upstream testing release only", core)',
+              '        self.assertIn("Applying Marie LRU $PATCH_MARIE_VERSION upstream testing patch", core)',
+              '        self.assertNotIn("MARIE_FALLBACK_PATCH", core)',
+              '        self.assertNotIn("MARIE_FALLBACK_METADATA", core)',
+              '        self.assertNotIn("using maintained local fallback", core)',
+              '        self.assertNotIn("validate-marie-fallback.py", core)',
+              "",
+              "    def test_dynamic_rewriter_sets_locked_marie_version(self) -> None:",
+              '        rewriter = (ROOT / "scripts/apply-dynamic-patch-sources.py").read_text(encoding="utf-8")',
+              '        self.assertIn(\'replace_assignment(text, "PATCH_MARIE_VERSION", versions["MARIE"])\', rewriter)',
+              "",
+              "    def test_audit_requires_upstream_only_marie(self) -> None:",
+              '        audit = (ROOT / "PATCH-AUDIT.md").read_text(encoding="utf-8")',
+              '        self.assertIn("sem fallback local", audit)',
+              '        self.assertNotIn("fallback local é sincronizado automaticamente", audit)',
+              "",
+              "",
+              'if __name__ == "__main__":',
+              "    unittest.main()",
+          ]
+          marie_test_path.write_text("\n".join(marie_test_lines) + "\n", encoding="utf-8")
+
+          audit_path = Path("PATCH-AUDIT.md")
+          audit = audit_path.read_text(encoding="utf-8")
+          old_marie = "| Marie LRU 0.6.7 | `marie` | Coberto por resolução dinâmica; o fallback local é sincronizado automaticamente com a versão upstream compatível mais recente |"
+          new_marie = "| Marie LRU | `marie` | Coberto por resolução dinâmica da versão upstream mais nova; ausência da fonte upstream aborta o build, sem fallback local |"
+          if audit.count(old_marie) != 1:
+              raise SystemExit(f"Marie audit row count={audit.count(old_marie)}")
+          audit = audit.replace(old_marie, new_marie, 1)
+          audit = audit.replace("| POC Selector 2.6.1r2 | `poc` | Coberto por versão mais nova compatível, atualmente 2.6.2r2 |", "| POC Selector | `poc` | Coberto por resolução dinâmica da versão upstream mais nova e port controlado quando necessário |")
+          audit = audit.replace("| ADIOS 3.2.0 e patch de default | `adios` | Coberto; default ADIOS continua explícito |", "| ADIOS e patch de default | `adios` | Coberto por resolução dinâmica da versão upstream mais nova; default ADIOS continua explícito |")
+          audit_path.write_text(audit, encoding="utf-8")
 
           validation_path = Path("scripts/validate-dynamic-patches-local.sh")
           lines = validation_path.read_text(encoding="utf-8").splitlines()
@@ -171,6 +268,8 @@ jobs:
               "! grep -Fq 'local_fallback_metadata' \"$ROOT/config/patch-sources.json\"",
               'test ! -e "$ROOT/patches/fallback/lru_marie.patch"',
               'test ! -e "$ROOT/patches/fallback/lru_marie.json"',
+              "! grep -Fq 'MARIE_FALLBACK_' \"$ROOT/scripts/build-kernelnote-core.sh\"",
+              "! grep -Fq 'using maintained local fallback' \"$ROOT/scripts/build-kernelnote-core.sh\"",
               "grep -Fq 'historical patch fallback is forbidden' \"$ROOT/scripts/resolve-patch-sources-base.py\"",
           ]
           lines[lock_index:lock_index] = absence_lines
@@ -183,10 +282,14 @@ jobs:
           python3 -m py_compile scripts/*.py tests/*.py
           bash -n scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh scripts/validate-dynamic-patches-local.sh
           scripts/validate-dynamic-patches-local.sh
-          if grep -RniE 'fallback_refs|local_fallback_(patch|metadata)|load_local_fallback|update-marie-fallback|validate-marie-fallback' \
+          if grep -RniE 'local_fallback_(patch|metadata)|load_local_fallback|update-marie-fallback|validate-marie-fallback|MARIE_FALLBACK_' \
               --exclude-dir=.git --exclude-dir=work --exclude-dir=logs --exclude-dir=__pycache__ \
               config scripts patches; then
             echo 'Historical patch fallback mechanism remains in production sources' >&2
+            exit 1
+          fi
+          if grep -Fq 'fallback local é sincronizado automaticamente' PATCH-AUDIT.md; then
+            echo 'Stale Marie fallback documentation remains' >&2
             exit 1
           fi
           git diff --check
