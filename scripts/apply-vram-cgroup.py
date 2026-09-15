@@ -28,23 +28,23 @@ def main() -> None:
     injection = r"""
 # TurboDecky VRAM/DMEM integration
 replace_once(
-    'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"\n',
-    '''NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"
+    'NAP_PATCH="$PATCHDIR/0006-nap-current-port.patch"\n',
+    '''NAP_PATCH="$PATCHDIR/0006-nap-current-port.patch"
 
 # VRAM cgroup-aware TTM eviction and allocation policy. The source file is the
-# CachyOS aggregation of pixelcluster's six upstream commits, pinned exactly.
-VRAM_PATCH_REPO="https://github.com/CachyOS/kernel-patches.git"
-VRAM_PATCH_COMMIT="ea739d734ec179864b21446856315bc49f7c52fa"
-VRAM_PATCH_PATH="7.0/misc/0001-cgroup-vram.patch"
+# Current aggregation selected and authenticated by the dynamic patch lock.
+VRAM_PATCH_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+VRAM_PATCH_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+VRAM_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 VRAM_PATCH_DIR="$WORKDIR/cachyos-vram-patches"
-VRAM_PATCH="$PATCHDIR/0007-cgroup-vram-linux7.1-port.patch"
+VRAM_PATCH="$PATCHDIR/0007-cgroup-vram-current.patch"
 '''
 )
 
 replace_once(
     'normalize_changed_whitespace() {\n',
     r'''fetch_vram_patch() {
-  echo "==> Fetching pinned VRAM cgroup/TTM patch source"
+  echo "==> Fetching current locked VRAM cgroup/TTM patch source"
   rm -rf "$VRAM_PATCH_DIR"
   git init --quiet "$VRAM_PATCH_DIR"
   git -C "$VRAM_PATCH_DIR" remote add origin "$VRAM_PATCH_REPO"

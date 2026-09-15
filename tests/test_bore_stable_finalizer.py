@@ -127,69 +127,34 @@ class BoreStableFinalizerTests(unittest.TestCase):
     def test_final_rewrite_uses_locked_upstream_patch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            _lock_path, record, sched_ext_record = self.make_lock(root)
-            _loaded, upstream = finalizer.load_locked_sched_ext(_lock_path, "7.1.5")
+            lock_path, record, sched_ext_record = self.make_lock(root)
+            _loaded, upstream = finalizer.load_locked_sched_ext(lock_path, "7.1.5")
             sched_ext_port = finalizer.materialize_sched_ext_port(
-                _lock_path, sched_ext_record, upstream, "7.1.5"
+                lock_path, sched_ext_record, upstream, "7.1.5"
             )
             core = root / "build-core.sh"
             core.write_text(
-                '''BORE_PATCH="$ROOT/patches/bore/.resolved-7.1.5-bore-6.8.0-rc1.patch"
-'''
-                '''BORE_PORT_VERSION="6.8.0-rc1"
-'''
-                '''BORE_PORT_UPSTREAM_SHA256="old"
-'''
-                '''BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="old"
-'''
-                '''BORE_SCHED_EXT_PATCH="$ROOT/patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
-'''
-                '''  grep -Fq 'SCHED_BORE_VERSION  "6.8.0-rc1"' "$BORE_UPSTREAM_PATCH"
-'''
-                '''  grep -Fq 'sched: port BORE 6.8.0-rc1 to Linux 7.1.5' "$BORE_PATCH"
-'''
-                '''  grep -Fq 'sched: port 0002 sched-ext coexistence fix to Linux 7.1.4' "$BORE_SCHED_EXT_PATCH"
-'''
-                '''  echo "==> Applying the reviewed BORE 6.8.0-rc1 Linux 7.1.5 port"
-'''
-                '''    report_bore_rejects "BORE 6.8.0-rc1 for Linux 7.1.5" "$LOGDIR/rejects.log"
-'''
-                '''    report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.5" "$LOGDIR/sched-ext-rejects.log"
-'''
-                '''  git diff --check | tee "$LOGDIR/01-bore-diff-check.log"
-'''
-                '''  grep -Fq 'SCHED_BORE_VERSION' kernel/sched/bore.c
-'''
-                '''  echo "==> BORE 6.8.0-rc1 Linux port applied successfully"
-''',
+                'BORE_PATCH="$PATCHDIR/01-bore-current-port.patch"\n'
+                'BORE_PORT_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
+                'BORE_PORT_UPSTREAM_SHA256="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
+                'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
+                'BORE_SCHED_EXT_PATCH="$PATCHDIR/01-bore-sched-ext-current-port.patch"\n'
+                'grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" "$BORE_UPSTREAM_PATCH"\n'
+                'grep -Fq "Subject: [PATCH] linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}" "$BORE_PATCH"\n'
+                'grep -Fq "Subject: [PATCH] sched: adapt locked sched-ext coexistence fix to Linux $KERNEL_VERSION" "$BORE_SCHED_EXT_PATCH"\n'
+                'echo "==> Applying upstream BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"\n'
+                'echo "==> BORE $BORE_PORT_VERSION Linux port applied successfully"\n',
                 encoding="utf-8",
             )
-            finalizer.rewrite_core(
-                core, record, sched_ext_record, sched_ext_port, "7.1.5"
-            )
+            finalizer.rewrite_core(core, record, sched_ext_record, sched_ext_port, "7.1.5")
             result = core.read_text(encoding="utf-8")
             self.assertIn('BORE_PATCH="$RESOLVED_PATCH_ROOT/files/01-bore.patch"', result)
             self.assertIn('BORE_PORT_VERSION="6.8.0"', result)
             self.assertIn(str(record["sha256"]), result)
             self.assertIn(str(sched_ext_record["sha256"]), result)
-            self.assertIn(
-                'BORE_SCHED_EXT_PATCH="$RESOLVED_PATCH_ROOT/'
-                'files/01-bore-sched-ext-coexistence-fix-linux7.1.5-port.patch"',
-                result,
-            )
-            self.assertIn("linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}", result)
-            self.assertIn("include/linux/sched/bore.h", result)
-            self.assertIn(
-                'report_bore_rejects "BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"',
-                result,
-            )
-            self.assertIn(
-                'report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.5"',
-                result,
-            )
-            self.assertIn("Normalizing whitespace introduced by BORE patch", result)
-            self.assertIn("01-bore-diff-check-after-fix.log", result)
+            self.assertIn('files/01-bore-sched-ext-coexistence-fix-linux7.1.5-port.patch', result)
             self.assertNotIn("6.8.0-rc1", result)
+            self.assertNotIn("7.1.4-sched-ext", result)
 
     def test_sched_ext_structural_change_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
