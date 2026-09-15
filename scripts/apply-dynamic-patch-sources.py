@@ -302,12 +302,15 @@ def reject_unresolved_sentinels(
             rf'^{re.escape(variable)}="__DYNAMIC_PATCH_LOCK_REQUIRED__"$', re.MULTILINE
         )
         matches = list(pattern.finditer(checked))
-        if len(matches) != 1:
+        if len(matches) > 1:
             raise RewriteError(
-                f"{label}: expected one finalizer-owned sentinel assignment for {variable}, "
+                f"{label}: duplicate finalizer-owned sentinel assignment for {variable}: "
                 f"found {len(matches)}"
             )
-        checked = pattern.sub(f'{variable}="__BORE_FINALIZER_OWNED__"', checked, count=1)
+        if matches:
+            checked = pattern.sub(
+                f'{variable}="__BORE_FINALIZER_OWNED__"', checked, count=1
+            )
 
     unresolved = sorted(set(re.findall(
         r"__DYNAMIC_PATCH_LOCK_REQUIRED__(?::[A-Za-z0-9_.-]+)?", checked
