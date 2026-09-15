@@ -22,6 +22,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 tools/upstream-only-phase2.py
+          python3 tools/upstream-only-phase2-fixes.py
 
       - name: Validate source tree
         shell: bash
@@ -34,8 +35,8 @@ jobs:
           test ! -e patches/bore/7.1.4-sched-ext-coexistence-fix.patch
           test -s patches/bore/sched-ext-coexistence-template.patch
           test ! -e .github/workflows/update-marie-fallback.yml
-          ! grep -R -E '6\.8\.0-rc1|7\.1\.4-sched-ext|linux7\.1-reflex-v0\.3\.2|cgroup-vram-linux7\.1-port' \
-            scripts config patches/bore tests --exclude='test_latest_stable_identity.py'
+          ! grep -R -E '6\.8\.0-rc1|7\.1\.4-1turbodecky1|7\.1\.4-sched-ext|linux7\.1-reflex-v0\.3\.2|cgroup-vram-linux7\.1-port' \
+            scripts config patches/bore
           scripts/validate-dynamic-patches-local.sh
           git diff --check
 
@@ -48,6 +49,8 @@ jobs:
             scripts/apply-vram-cgroup.py \
             scripts/finalize-bore-stable-port-base.py \
             tests/test_bore_stable_finalizer.py \
+            tests/test_marie_version_reporting.py \
+            tests/test_reflex_dynamic_bootstrap.py \
             patches/bore/sched-ext-coexistence-template.patch
           git add -u patches/bore
           if git diff --cached --quiet; then
