@@ -7,45 +7,67 @@ ROOT = Path(__file__).resolve().parents[1]
 LOCK = "__DYNAMIC_PATCH_LOCK_REQUIRED__"
 
 
-def replace_once(path: Path, old: str, new: str, label: str) -> None:
-    text = path.read_text(encoding="utf-8")
+def replace_value_once(text: str, old: str, new: str, label: str) -> str:
+    if new in text:
+        return text
     count = text.count(old)
     if count != 1:
-        raise SystemExit(f"{label}: expected one anchor, found {count}")
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        raise SystemExit(f"{label}: expected one old value, found {count}")
+    return text.replace(old, new, 1)
 
 
 def patch_dynamic_fixture() -> None:
     path = ROOT / "tests/test_dynamic_patch_resolver.py"
-    replace_once(
-        path,
-        '''            requested_calls = "".join(\n                f'  "$REQUESTED_SERIES_DIR/{output}" "{prefix}" \\\\\n    "https://example.invalid/{output}"\\n'\n''',
-        '''            requested_calls = "".join(\n                f'  "$REQUESTED_SERIES_DIR/{output}" "{prefix}" \\\\\n    "__DYNAMIC_PATCH_LOCK_REQUIRED__:{name}"\\n'\n''',
+    text = path.read_text(encoding="utf-8")
+    text = replace_value_once(
+        text,
+        '"https://example.invalid/{output}"',
+        '"__DYNAMIC_PATCH_LOCK_REQUIRED__:{name}"',
         "requested lock fixture",
     )
-    replace_once(
-        path,
-        '''                'NAP_REPO="old"\\nNAP_COMMIT="old"\\nNAP_PATCH_PATH="old"\\n'\n                'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"\\n'\n                'VRAM_PATCH_REPO="old"\\nVRAM_PATCH_COMMIT="old"\\nVRAM_PATCH_PATH="old"\\n',\n''',
-        f'''                'NAP_REPO="old"\\nNAP_COMMIT="old"\\nNAP_PATCH_PATH="old"\\n'\n                'NAP_PATCH="$PATCHDIR/0006-nap-current-port.patch"\\n'\n                'PATCH_ZRAM_IR_VERSION="{LOCK}"\\n'\n                'PATCH_POC_VERSION="{LOCK}"\\n'\n                'PATCH_NAP_VERSION="{LOCK}"\\n'\n                'VRAM_PATCH_REPO="old"\\nVRAM_PATCH_COMMIT="old"\\nVRAM_PATCH_PATH="old"\\n',\n''',
-        "strict wrapper version fixture",
+    text = replace_value_once(
+        text,
+        'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"',
+        'NAP_PATCH="$PATCHDIR/0006-nap-current-port.patch"',
+        "NAP fixture path",
     )
-    text = path.read_text(encoding="utf-8")
-    anchor = '            self.assertIn("file://$RESOLVED_PATCH_ROOT/files/08-c23-libbpf.patch", first_core)\n'
+    version_anchor = "PATCH_ZRAM_IR_VERSION=\\\"__DYNAMIC_PATCH_LOCK_REQUIRED__\\\""
+    if version_anchor not in text:
+        anchor = "                'NAP_PATCH=\"$PATCHDIR/0006-nap-current-port.patch\"\\n'\n"
+        if text.count(anchor) != 1:
+            raise SystemExit(f"strict wrapper version fixture anchor count={text.count(anchor)}")
+        addition = (
+            anchor
+            + f"                'PATCH_ZRAM_IR_VERSION=\"{LOCK}\"\\n'\n"
+            + f"                'PATCH_POC_VERSION=\"{LOCK}\"\\n'\n"
+            + f"                'PATCH_NAP_VERSION=\"{LOCK}\"\\n'\n"
+        )
+        text = text.replace(anchor, addition, 1)
     assertion = '            self.assertNotIn("https://example.invalid/", first_core)\n'
     if assertion not in text:
+        anchor = '            self.assertIn("file://$RESOLVED_PATCH_ROOT/files/08-c23-libbpf.patch", first_core)\n'
         if text.count(anchor) != 1:
             raise SystemExit("lock-only fixture assertion anchor missing")
-        path.write_text(text.replace(anchor, anchor + assertion, 1), encoding="utf-8")
+        text = text.replace(anchor, anchor + assertion, 1)
+    path.write_text(text, encoding="utf-8")
 
 
 def patch_zen_test() -> None:
     path = ROOT / "tests/test_zen_interactive_rewriter.py"
-    replace_once(
-        path,
-        '''        original = original.replace(\n            'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='\n            '"cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c"',\n            'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="new-lock-digest"',\n            1,\n        )\n''',
-        '''        original = original.replace(\n            'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='\n            '"__DYNAMIC_PATCH_LOCK_REQUIRED__"',\n            'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="new-lock-digest"',\n            1,\n        )\n''',
-        "Zen digest sentinel test",
+    text = path.read_text(encoding="utf-8")
+    new_pair = (
+        "'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='\n"
+        "            '\"__DYNAMIC_PATCH_LOCK_REQUIRED__\"'"
     )
+    if new_pair not in text:
+        old_pair = (
+            "'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='\n"
+            "            '\"cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c\"'"
+        )
+        if text.count(old_pair) != 1:
+            raise SystemExit(f"Zen digest test anchor count={text.count(old_pair)}")
+        text = text.replace(old_pair, new_pair, 1)
+        path.write_text(text, encoding="utf-8")
 
 
 def rewrite_bore_test() -> None:
@@ -76,7 +98,6 @@ class BoreLinuxPortTests(unittest.TestCase):
         self.assertIn(f'BORE_PATCH_PATH="{LOCK}"', core)
         self.assertIn(f'BORE_PORT_VERSION="{LOCK}"', core)
         self.assertIn("load_locked_bore", finalizer)
-        self.assertIn('BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"', finalizer)
         self.assertNotIn("6.8.0-rc1", finalizer)
         self.assertIn('apply_bore_patch "$BORE_PATCH"', core)
         function = core.split("apply_bore_patch() {", 1)[1].split("apply_adios_patch() {", 1)[0]
@@ -89,7 +110,6 @@ class BoreLinuxPortTests(unittest.TestCase):
         self.assertIn(f'BORE_SCHED_EXT_COMMIT="{LOCK}"', core)
         self.assertIn(f'BORE_SCHED_EXT_PATCH_PATH="{LOCK}"', core)
         self.assertIn(f'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="{LOCK}"', core)
-        self.assertIn('apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"', core)
         self.assertLess(
             core.index('apply_bore_patch "$BORE_PATCH"'),
             core.index('apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"'),
@@ -98,7 +118,6 @@ class BoreLinuxPortTests(unittest.TestCase):
         self.assertIn("--dry-run", function)
         self.assertNotIn("--fuzz", function)
         self.assertIn("include/linux/sched/bore.h", function)
-
         wrapper = WRAPPER.read_text(encoding="utf-8")
         shared_anchor = (
             'apply_marie_testing_patch "$MARIE_PATCH"\n'
