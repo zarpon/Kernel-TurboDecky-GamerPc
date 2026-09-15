@@ -1,0 +1,55 @@
+name: Validate upstream-only cleanup
+
+on:
+  push:
+    branches:
+      - maintenance/upstream-only-bootstrap
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: maintenance/upstream-only-bootstrap
+          fetch-depth: 1
+
+      - name: Apply upstream-only source cleanup
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 tools/upstream-only-cleanup.py
+
+      - name: Validate source tree
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m py_compile scripts/*.py tools/upstream-only-cleanup.py
+          bash -n scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh scripts/validate-dynamic-patches-local.sh
+          python3 -m json.tool config/patch-sources.json >/dev/null
+          scripts/validate-dynamic-patches-local.sh
+          git diff --check
+
+      - name: Commit validated cleanup on maintenance branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git add config/kernelnote.config \
+            scripts/build-kernelnote-core.sh \
+            scripts/build-kernelnote.sh \
+            scripts/apply-upstream-generic.py \
+            scripts/apply-requested-patch-series.py \
+            scripts/apply-dynamic-patch-sources.py \
+            scripts/apply-zarpon-generic-name.py \
+            scripts/validate-dynamic-patches-local.sh
+          if git diff --cached --quiet; then
+            echo "No cleanup changes remain"
+            exit 0
+          fi
+          git config user.name "TurboDecky Maintenance"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "Require current upstream patch locks"
+          git push origin HEAD:maintenance/upstream-only-bootstrap
