@@ -21,6 +21,20 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/build-kernelnote.sh")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              "grep -Fq '#define ZRAM_IR_VERSION \"1.2\"' drivers/block/zram/zram_drv.c",
+              'grep -Fq "$PATCH_ZRAM_IR_VERSION" drivers/block/zram/zram_drv.c',
+          )
+          text = text.replace(
+              "grep -Fq '#define CPUIDLE_NAP_VERSION  \"0.5.0\"' \\\n              drivers/cpuidle/governors/nap/nap.c",
+              'grep -Fq "$PATCH_NAP_VERSION" \\\n              drivers/cpuidle/governors/nap/nap.c',
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
           python3 tools/upstream-only-cleanup.py
 
       - name: Validate source tree
