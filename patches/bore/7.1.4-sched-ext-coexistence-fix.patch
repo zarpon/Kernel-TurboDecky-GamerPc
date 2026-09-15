@@ -11,8 +11,8 @@ entity/PELT state and the split EEVDF hierarchical load state.
 Upstream-sha256: cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c
 ---
  include/linux/sched/bore.h |  1 +
- kernel/sched/fair.c        | 13 +++++++++++++
- 2 files changed, 14 insertions(+)
+ kernel/sched/fair.c        | 12 ++++++++++++
+ 2 files changed, 13 insertions(+)
 
 diff --git a/include/linux/sched/bore.h b/include/linux/sched/bore.h
 index 92bebc114e..a5b8e6f1d2 100644
@@ -30,7 +30,7 @@ diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
 index ed51ce22d..63d2a6cd8 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
-@@ -14439,3 +14439,16 @@ __init void init_sched_fair_class(void)
+@@ -14439,3 +14439,15 @@ __init void init_sched_fair_class(void)
  	zalloc_cpumask_var(&nohz.idle_cpus_mask, GFP_NOWAIT);
  #endif
  }
