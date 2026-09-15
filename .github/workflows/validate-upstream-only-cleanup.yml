@@ -23,21 +23,14 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           path = Path("scripts/build-kernelnote.sh")
           text = path.read_text(encoding="utf-8")
           text = text.replace(
               "grep -Fq '#define ZRAM_IR_VERSION \"1.2\"' drivers/block/zram/zram_drv.c",
               'grep -Fq "$PATCH_ZRAM_IR_VERSION" drivers/block/zram/zram_drv.c',
           )
-          nap_old = (
-              "grep -Fq '#define CPUIDLE_NAP_VERSION  \"0.5.0\"' "
-              + "\\\n    drivers/cpuidle/governors/nap/nap.c"
-          )
-          nap_new = (
-              'grep -Fq "$PATCH_NAP_VERSION" '
-              + "\\\n    drivers/cpuidle/governors/nap/nap.c"
-          )
+          nap_old = "grep -Fq '#define CPUIDLE_NAP_VERSION  \"0.5.0\"' " + "\\\n    drivers/cpuidle/governors/nap/nap.c"
+          nap_new = 'grep -Fq "$PATCH_NAP_VERSION" ' + "\\\n    drivers/cpuidle/governors/nap/nap.c"
           text = text.replace(nap_old, nap_new)
           path.write_text(text, encoding="utf-8")
 
@@ -52,14 +45,21 @@ jobs:
           PY
           python3 tools/upstream-only-cleanup.py
           python3 tools/modernize-upstream-only-tests.py
+          python3 tools/upstream-only-phase2.py
 
       - name: Validate source tree
         shell: bash
         run: |
           set -Eeuo pipefail
-          python3 -m py_compile scripts/*.py tools/upstream-only-cleanup.py tools/modernize-upstream-only-tests.py tests/*.py
+          python3 -m py_compile scripts/*.py tools/*.py tests/*.py
           bash -n scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh scripts/validate-dynamic-patches-local.sh
           python3 -m json.tool config/patch-sources.json >/dev/null
+          test ! -e patches/bore/7.1.4-bore-6.8.0-rc1.patch
+          test ! -e patches/bore/7.1.4-sched-ext-coexistence-fix.patch
+          test -s patches/bore/sched-ext-coexistence-template.patch
+          test ! -e .github/workflows/update-marie-fallback.yml
+          ! grep -R -E '6\.8\.0-rc1|7\.1\.4-sched-ext|linux7\.1-reflex-v0\.3\.2|cgroup-vram-linux7\.1-port' \
+            scripts config patches/bore tests --exclude='test_latest_stable_identity.py'
           scripts/validate-dynamic-patches-local.sh
           git diff --check
 
@@ -74,15 +74,21 @@ jobs:
             scripts/apply-requested-patch-series.py \
             scripts/apply-dynamic-patch-sources.py \
             scripts/apply-zarpon-generic-name.py \
+            scripts/apply-reflex-core.py \
+            scripts/apply-vram-cgroup.py \
+            scripts/finalize-bore-stable-port-base.py \
             scripts/validate-dynamic-patches-local.sh \
             tests/test_dynamic_patch_resolver.py \
             tests/test_bore_port.py \
-            tests/test_zen_interactive_rewriter.py
+            tests/test_bore_stable_finalizer.py \
+            tests/test_zen_interactive_rewriter.py \
+            patches/bore/sched-ext-coexistence-template.patch
+          git add -u patches/bore
           if git diff --cached --quiet; then
             echo "No cleanup changes remain"
             exit 0
           fi
           git config user.name "TurboDecky Maintenance"
           git config user.email "actions@users.noreply.github.com"
-          git commit -m "Require current upstream patch locks"
+          git commit -m "Remove historical patch bootstrap identities"
           git push origin HEAD:maintenance/upstream-only-bootstrap
