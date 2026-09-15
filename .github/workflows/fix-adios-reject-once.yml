@@ -1,0 +1,83 @@
+name: Fix ADIOS equivalent reject handling once
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Apply minimal ADIOS reject handling fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/build-kernelnote-core.sh')
+          s = p.read_text(encoding='utf-8')
+          old = '''  mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\\n' | sort)
+            expected=("block/elevator.c.rej")
+
+            if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
+              echo "Unexpected ADIOS rejects: ${rejects[*]:-none}" >&2
+              return 1
+            fi
+
+            python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"
+          '''
+          new = '''  mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\\n' | sort)
+            expected=("block/elevator.c.rej")
+
+            # If setlocalversion was the only rejected hunk and it was proven equivalent
+            # above, ADIOS itself applied cleanly and no elevator compatibility port is needed.
+            if ((${#rejects[@]} == 0)); then
+              find "$KERNELDIR" -name '*.orig' -delete
+              grep -Fq 'CONFIG_MQ_IOSCHED_DEFAULT_ADIOS' block/elevator.c
+              grep -Fq 'ctx.name = "adios"' block/elevator.c
+              echo "==> ADIOS applied successfully; equivalent setlocalversion hunk preserved"
+              return 0
+            fi
+
+            if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
+              echo "Unexpected ADIOS rejects: ${rejects[*]:-none}" >&2
+              return 1
+            fi
+
+            python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"
+          '''
+          if old not in s:
+              raise SystemExit('expected ADIOS reject block not found exactly')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          rm .github/workflows/fix-adios-reject-once.yml
+          bash -n scripts/build-kernelnote-core.sh
+          git diff --check
+
+      - name: Commit minimal fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "TurboDecky Maintenance"
+          git config user.email "actions@users.noreply.github.com"
+          git add scripts/build-kernelnote-core.sh .github/workflows/fix-adios-reject-once.yml
+          git commit -m "Handle equivalent ADIOS setlocalversion reject"
+          git push origin HEAD:main
+
+      - name: Start corrective full package build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          sleep 3
+          gh workflow run validate-kernel.yml --repo "$GITHUB_REPOSITORY" --ref main --field publish_release=true
