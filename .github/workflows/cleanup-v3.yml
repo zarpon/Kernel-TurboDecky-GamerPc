@@ -45,6 +45,11 @@ jobs:
           ) + '\n'
           migration = Path('/tmp/legacy-base-migration.py')
           migration.write_text(script, encoding='utf-8')
+
+          # Remove this transient workflow from the working tree before the
+          # migration's repository-wide forbidden-reference scan runs.
+          self_path = Path('.github/workflows/cleanup-v3.yml')
+          self_path.unlink()
           subprocess.run(['python3', str(migration)], check=True)
 
           test_path = Path('tests/test_zen_interactive_rewriter.py')
@@ -61,9 +66,6 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit(f'expected one Zen ordering assertion, found {text.count(old)}')
           test_path.write_text(text.replace(old, new, 1), encoding='utf-8')
-
-          self_path = Path('.github/workflows/cleanup-v3.yml')
-          self_path.unlink()
           PY
 
           python3 -m json.tool config/patch-sources.json >/dev/null
