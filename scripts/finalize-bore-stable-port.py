@@ -205,11 +205,22 @@ def _reweight_task_implementation_semantic(text: str, label: str) -> str:
 def materialize_sched_ext_port(lock_path, record, upstream_patch, kernel_version):
     global _semantic_sched_ext_target
     previous = _semantic_sched_ext_target
-    _semantic_sched_ext_target = _is_linux_73_target(kernel_version)
+    semantic_target = _is_linux_73_target(kernel_version)
+    _semantic_sched_ext_target = semantic_target
     try:
-        return _base_materialize_sched_ext_port(
+        port_record = _base_materialize_sched_ext_port(
             lock_path, record, upstream_patch, kernel_version
         )
+        if semantic_target:
+            source_sha256 = str(record["sha256"])
+            port_record["adapter"] = "linux7.3-sched-ext-reweight-task-fair"
+            _base.update_compatibility_lock(
+                lock_path,
+                "bore_sched_ext_coexistence",
+                source_sha256,
+                port_record,
+            )
+        return port_record
     finally:
         _semantic_sched_ext_target = previous
 
