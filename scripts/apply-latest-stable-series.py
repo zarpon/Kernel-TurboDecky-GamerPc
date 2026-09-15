@@ -44,9 +44,12 @@ def patch_core(path: Path) -> None:
     }
 
     for old, new in replacements.items():
-        if old not in source:
+        if old in source:
+            source = source.replace(old, new)
+        elif new in source:
+            continue
+        else:
             raise SystemExit(f"latest-stable patch-series anchor missing: {old!r}")
-        source = source.replace(old, new)
 
     gud_fix = r'''fix_gud_full_lto_bounds() {
   local gud_source="drivers/gpu/drm/gud/gud_connector.c"
@@ -70,8 +73,6 @@ elif old in text:
     text = text.replace(old, new, 1)
     changed = True
 else:
-    # A future stable kernel may already express the upper bound differently.
-    # Never guess across source drift: require an explicit review instead.
     raise SystemExit("GUD TV-mode bounds anchor changed; refusing unreviewed rewrite")
 if text.count(new) != 1:
     raise SystemExit("unexpected GUD TV-mode bounds validation count")
@@ -86,92 +87,32 @@ PYGUD
 }
 
 '''
-    source = replace_once(
-        source,
-        "normalize_changed_whitespace() {\n",
-        gud_fix + "normalize_changed_whitespace() {\n",
-        "GUD Full-LTO source-fix function",
-    )
-    source = replace_once(
-        source,
-        "# choices instead of pruning the build for one computer model.\n",
-        "# choices instead of pruning the build for one computer model.\nfix_gud_full_lto_bounds\n\n",
-        "GUD Full-LTO source-fix call",
-    )
+    if "fix_gud_full_lto_bounds() {" not in source:
+        source = replace_once(source, "normalize_changed_whitespace() {\n", gud_fix + "normalize_changed_whitespace() {\n", "GUD Full-LTO source-fix function")
+    if "\nfix_gud_full_lto_bounds\n\n" not in source:
+        source = replace_once(source, "# choices instead of pruning the build for one computer model.\n", "# choices instead of pruning the build for one computer model.\nfix_gud_full_lto_bounds\n\n", "GUD Full-LTO source-fix call")
 
     path.write_text(source, encoding="utf-8")
 
 
 def patch_wrapper(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    source = replace_once(
-        source,
-        '''  "cpuidle.governor=nap"
-)
-''',
-        '''  "cpuidle.governor=nap"
-  "kvm.enable_virt_at_load=0"
-)
-''',
-        "VirtualBox/KVM command line",
-    )
-    source = replace_once(
-        source,
-        'scripts/config --enable CPU_IDLE_GOV_NAP\n',
-        '''scripts/config --enable CPU_IDLE_GOV_NAP
-# VirtualBox host drivers are external modules. Preserve the module loader,
-# symbol metadata and host-network devices they require.
-scripts/config --enable MODULES
-scripts/config --enable MODULE_UNLOAD
-scripts/config --enable MODULE_FORCE_UNLOAD
-scripts/config --enable KALLSYMS
-scripts/config --enable KALLSYMS_ALL
-scripts/config --enable VIRTUALIZATION
-scripts/config --module KVM
-scripts/config --module KVM_INTEL
-scripts/config --module KVM_AMD
-scripts/config --module TUN
-scripts/config --module BRIDGE
-scripts/config --enable NETFILTER
-''',
-        "VirtualBox host Kconfig",
-    )
-    source = replace_once(
-        source,
-        'assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"\n',
-        '''assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"
-assert_config "CONFIG_MODULES=y"
-assert_config "CONFIG_MODULE_UNLOAD=y"
-assert_config "CONFIG_MODULE_FORCE_UNLOAD=y"
-assert_config "CONFIG_KALLSYMS=y"
-assert_config "CONFIG_KALLSYMS_ALL=y"
-assert_config "CONFIG_VIRTUALIZATION=y"
-assert_config "CONFIG_KVM=m"
-assert_config "CONFIG_KVM_INTEL=m"
-assert_config "CONFIG_KVM_AMD=m"
-assert_config "CONFIG_TUN=m"
-assert_config "CONFIG_BRIDGE=m"
-assert_config "CONFIG_NETFILTER=y"
-''',
-        "VirtualBox host Kconfig assertions",
-    )
-    source = replace_once(
-        source,
-        'assert_cmdline_token "cpuidle.governor=nap"\n',
-        '''assert_cmdline_token "cpuidle.governor=nap"
-assert_cmdline_token "kvm.enable_virt_at_load=0"
-''',
-        "VirtualBox/KVM command-line assertion",
-    )
+    pairs = [
+        ('  "cpuidle.governor=nap"\n)\n', '  "cpuidle.governor=nap"\n  "kvm.enable_virt_at_load=0"\n)\n', "VirtualBox/KVM command line"),
+        ('scripts/config --enable CPU_IDLE_GOV_NAP\n', 'scripts/config --enable CPU_IDLE_GOV_NAP\n# VirtualBox host drivers are external modules. Preserve the module loader,\n# symbol metadata and host-network devices they require.\nscripts/config --enable MODULES\nscripts/config --enable MODULE_UNLOAD\nscripts/config --enable MODULE_FORCE_UNLOAD\nscripts/config --enable KALLSYMS\nscripts/config --enable KALLSYMS_ALL\nscripts/config --enable VIRTUALIZATION\nscripts/config --module KVM\nscripts/config --module KVM_INTEL\nscripts/config --module KVM_AMD\nscripts/config --module TUN\nscripts/config --module BRIDGE\nscripts/config --enable NETFILTER\n', "VirtualBox host Kconfig"),
+        ('assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"\n', 'assert_config "CONFIG_CPU_IDLE_GOV_NAP=y"\nassert_config "CONFIG_MODULES=y"\nassert_config "CONFIG_MODULE_UNLOAD=y"\nassert_config "CONFIG_MODULE_FORCE_UNLOAD=y"\nassert_config "CONFIG_KALLSYMS=y"\nassert_config "CONFIG_KALLSYMS_ALL=y"\nassert_config "CONFIG_VIRTUALIZATION=y"\nassert_config "CONFIG_KVM=m"\nassert_config "CONFIG_KVM_INTEL=m"\nassert_config "CONFIG_KVM_AMD=m"\nassert_config "CONFIG_TUN=m"\nassert_config "CONFIG_BRIDGE=m"\nassert_config "CONFIG_NETFILTER=y"\n', "VirtualBox host Kconfig assertions"),
+        ('assert_cmdline_token "cpuidle.governor=nap"\n', 'assert_cmdline_token "cpuidle.governor=nap"\nassert_cmdline_token "kvm.enable_virt_at_load=0"\n', "VirtualBox/KVM command-line assertion"),
+    ]
+    for old, new, label in pairs:
+        if new in source:
+            continue
+        source = replace_once(source, old, new, label)
     path.write_text(source, encoding="utf-8")
 
 
 def main() -> None:
     if len(sys.argv) != 2:
-        raise SystemExit(
-            "usage: apply-latest-stable-series.py <generated-core-script>"
-        )
-
+        raise SystemExit("usage: apply-latest-stable-series.py <generated-core-script>")
     core = Path(sys.argv[1])
     patch_core(core)
     patch_wrapper(core.with_name("build-kernelnote.sh"))
