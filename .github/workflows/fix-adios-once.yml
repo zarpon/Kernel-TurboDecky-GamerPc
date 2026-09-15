@@ -26,65 +26,54 @@ jobs:
 
           path = Path('scripts/build-kernelnote-core.sh')
           text = path.read_text(encoding='utf-8')
+          fn = text.index('apply_adios_patch() {')
+          start_anchor = '  mapfile -t rejects < <(find "$KERNELDIR" -name \'*.rej\' -printf \'%P\\n\' | sort)\n'
+          end_anchor = '  python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"\n'
+          start = text.index(start_anchor, fn)
+          end = text.index(end_anchor, start) + len(end_anchor)
+          replacement = '''  # ADIOS and Marie both carry the same setlocalversion identity hunk in
+            # current upstream releases. Accept that reject only when the ADIOS hunk is
+            # provably already present; any real content mismatch still fails closed.
+            if [[ -f "$KERNELDIR/scripts/setlocalversion.rej" ]]; then
+              if filterdiff -i '*/scripts/setlocalversion' "$file" | \\
+                  patch --batch --reverse --dry-run --strip=1 \\
+                    > "$LOGDIR/03-adios-setlocalversion-already-applied.log" 2>&1; then
+                echo "==> ADIOS setlocalversion hunk already present; preserving equivalent upstream change"
+                rm -f "$KERNELDIR/scripts/setlocalversion.rej" "$KERNELDIR/scripts/setlocalversion.orig"
+              else
+                cat "$LOGDIR/03-adios-setlocalversion-already-applied.log" >&2 || true
+                echo "ADIOS setlocalversion reject is not an already-applied equivalent hunk" >&2
+                return 1
+              fi
+            fi
 
-          old = '''  mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\\n' | sort)
-          expected=("block/elevator.c.rej")
+            mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\\n' | sort)
+            expected=("block/elevator.c.rej")
 
-          if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
-            echo "Unexpected ADIOS rejects: ${rejects[*]:-none}" >&2
-            return 1
-          fi
-
-          python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"
-          '''
-          new = '''  # ADIOS and Marie both carry the same setlocalversion identity hunk in
-          # current upstream releases. Accept that reject only when the ADIOS hunk is
-          # provably already present; any real content mismatch still fails closed.
-          if [[ -f "$KERNELDIR/scripts/setlocalversion.rej" ]]; then
-            if filterdiff -i '*/scripts/setlocalversion' "$file" | \\
-                patch --batch --reverse --dry-run --strip=1 \\
-                  > "$LOGDIR/03-adios-setlocalversion-already-applied.log" 2>&1; then
-              echo "==> ADIOS setlocalversion hunk already present; preserving equivalent upstream change"
-              rm -f "$KERNELDIR/scripts/setlocalversion.rej" "$KERNELDIR/scripts/setlocalversion.orig"
-            else
-              cat "$LOGDIR/03-adios-setlocalversion-already-applied.log" >&2 || true
-              echo "ADIOS setlocalversion reject is not an already-applied equivalent hunk" >&2
+            if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
+              echo "Unexpected ADIOS rejects: ${rejects[*]:-none}" >&2
               return 1
             fi
-          fi
 
-          mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\\n' | sort)
-          expected=("block/elevator.c.rej")
-
-          if [[ "${rejects[*]}" != "${expected[*]}" ]]; then
-            echo "Unexpected ADIOS rejects: ${rejects[*]:-none}" >&2
-            return 1
-          fi
-
-          python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"
+            python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"
           '''
-          if text.count(old) != 1:
-              raise SystemExit(f'ADIOS reject anchor count was {text.count(old)}, expected 1')
-          text = text.replace(old, new, 1)
+          # YAML/Python nesting adds indentation to the literal above; normalize it to shell function indentation.
+          replacement = '\n'.join(line[10:] if line.startswith('          ') else line for line in replacement.splitlines()) + '\n'
+          text = text[:start] + replacement + text[end:]
 
-          if text.count('ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"') != 1:
-              raise SystemExit('stale ADIOS bootstrap assignment anchor missing')
-          text = text.replace(
-              'ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"',
-              'ADIOS_URL="__DYNAMIC_PATCH_LOCK_REQUIRED__"',
-              1,
-          )
+          stale = 'ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"'
+          if text.count(stale) != 1:
+              raise SystemExit(f'stale ADIOS bootstrap assignment count was {text.count(stale)}, expected 1')
+          text = text.replace(stale, 'ADIOS_URL="__DYNAMIC_PATCH_LOCK_REQUIRED__"', 1)
           text = text.replace('0003-adios-3.2.0.patch', '0003-adios-current.patch')
           path.write_text(text, encoding='utf-8')
 
-          # Keep tests synchronized with the version-neutral workspace filename only.
           for test in Path('tests').glob('*.py'):
               src = test.read_text(encoding='utf-8')
               if '0003-adios-3.2.0.patch' in src:
                   test.write_text(src.replace('0003-adios-3.2.0.patch', '0003-adios-current.patch'), encoding='utf-8')
 
-          self_path = Path('.github/workflows/fix-adios-once.yml')
-          self_path.unlink()
+          Path('.github/workflows/fix-adios-once.yml').unlink()
           PY
 
           bash -n scripts/build-kernelnote-core.sh
