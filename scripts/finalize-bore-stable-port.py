@@ -140,22 +140,84 @@ def materialize_bore_patchlevel_port(lock_path, record, upstream_patch, kernel_v
 _base.load_locked_bore = load_locked_bore
 _base.materialize_bore_patchlevel_port = materialize_bore_patchlevel_port
 
-# The latest upstream coexistence patch still expresses the pre-7.3 helper in
-# terms of reweight_entity(). Linux 7.3 split that operation, and BORE 6.8.0
-# exposes reweight_task_fair() specifically to preserve both halves. Validate
-# the locked upstream helper, but keep the reviewed semantic adapter from the
-# maintained template instead of copying the now-incomplete old implementation.
+
+# Linux 7.3 split the load reweight operation used by the locked upstream
+# sched_ext coexistence helper. Keep exact upstream helper copying for older
+# kernels, and use the reviewed reweight_task_fair() adapter only for 7.3.
 _base_replace_port_function = _base.replace_port_function
+_base_reweight_task_implementation = _base.reweight_task_implementation
+_base_materialize_sched_ext_port = _base.materialize_sched_ext_port
+_semantic_sched_ext_target = False
+
+
+def _is_linux_73_target(kernel_version: str) -> bool:
+    match = _RC_VERSION_RE.fullmatch(kernel_version)
+    return bool(match and match.group(1) == "7" and match.group(2) == "3")
 
 
 def _replace_port_function_semantic(template: str, upstream: str) -> str:
     _base.reweight_task_patch_lines(upstream, "locked BORE sched_ext source")
-    if "reweight_task_fair(task_rq(p), p, &lw);" in template:
-        return template
-    return _base_replace_port_function(template, upstream)
+    if not _semantic_sched_ext_target:
+        return _base_replace_port_function(template, upstream)
+
+    implementation = _base_reweight_task_implementation(
+        template, "maintained Linux 7.3 BORE sched_ext adapter"
+    )
+    required = (
+        "structload_weightlw={",
+        ".weight=scale_load(sched_prio_to_weight[prio]),",
+        ".inv_weight=sched_prio_to_wmult[prio],",
+        "reweight_task_fair(task_rq(p),p,&lw);",
+    )
+    missing = [marker for marker in required if marker not in implementation]
+    if missing:
+        raise _base.FinalizeError(
+            f"maintained Linux 7.3 BORE sched_ext adapter lost semantic markers: {missing}"
+        )
+    return template
+
+
+def _reweight_task_implementation_semantic(text: str, label: str) -> str:
+    implementation = _base_reweight_task_implementation(text, label)
+    if not _semantic_sched_ext_target:
+        return implementation
+
+    upstream_markers = (
+        "unsignedlongweight=scale_load(sched_prio_to_weight[prio]);",
+        "reweight_entity(cfs_rq,se,weight);",
+        "load->inv_weight=sched_prio_to_wmult[prio];",
+    )
+    adapter_markers = (
+        "structload_weightlw={",
+        ".weight=scale_load(sched_prio_to_weight[prio]),",
+        ".inv_weight=sched_prio_to_wmult[prio],",
+        "reweight_task_fair(task_rq(p),p,&lw);",
+    )
+    if all(marker in implementation for marker in upstream_markers):
+        return "__bore_linux_7_3_reweight_semantics__"
+    if all(marker in implementation for marker in adapter_markers):
+        return "__bore_linux_7_3_reweight_semantics__"
+    raise _base.FinalizeError(
+        f"{label} no longer matches the reviewed Linux 7.3 reweight semantics"
+    )
+
+
+def materialize_sched_ext_port(lock_path, record, upstream_patch, kernel_version):
+    global _semantic_sched_ext_target
+    previous = _semantic_sched_ext_target
+    _semantic_sched_ext_target = _is_linux_73_target(kernel_version)
+    try:
+        return _base_materialize_sched_ext_port(
+            lock_path, record, upstream_patch, kernel_version
+        )
+    finally:
+        _semantic_sched_ext_target = previous
 
 
 _base.replace_port_function = _replace_port_function_semantic
+_base.reweight_task_implementation = _reweight_task_implementation_semantic
+_base.materialize_sched_ext_port = materialize_sched_ext_port
+
 
 _base_replace_regex_once = _base.replace_regex_once
 
