@@ -1,14 +1,11 @@
-From 75b25599458bfc072d9f0ae54c9436363dd5201c Mon Sep 17 00:00:00 2001
-From: Codex Validation <noreply@localhost>
-Date: Thu, 23 Jul 2026 13:26:45 -0500
-Subject: [PATCH] sched: port 0002 sched-ext coexistence fix to Linux 7.1.4
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: TurboDecky Compatibility <noreply@localhost>
+Date: Thu, 1 Jan 1970 00:00:00 +0000
+Subject: [PATCH] sched: compatibility template for locked sched-ext coexistence fix
 
-Keep the upstream reweight_task() compatibility entry point separate from the
-BORE port.  On Linux 7.3, preserve the upstream helper's complete load-weight
-update semantics through reweight_task_fair(), which updates both the raw
-entity/PELT state and the split EEVDF hierarchical load state.
+Structural target adapter. The current authenticated upstream helper body and digest are injected by the BORE finalizer before use.
 
-Upstream-sha256: cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c
+Upstream-sha256: 0000000000000000000000000000000000000000000000000000000000000000
 ---
  include/linux/sched/bore.h |  1 +
  kernel/sched/fair.c        | 12 ++++++++++++

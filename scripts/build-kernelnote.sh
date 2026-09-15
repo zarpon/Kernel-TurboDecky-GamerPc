@@ -46,26 +46,29 @@ def insert_after_marie_variables(block: str) -> None:
 insert_after_marie_variables(
     '''
 # ZRAM Immediate Recompression: native Linux 7.1 patch.
-ZRAM_IR_REPO="https://github.com/firelzrd/zram-ir.git"
-ZRAM_IR_COMMIT="e348391dcf54bc42904f227f5ee83d2790f28f52"
-ZRAM_IR_PATCH_PATH="patches/0001-linux7.1-rc1-zram-ir-1.2.patch"
+ZRAM_IR_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+ZRAM_IR_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+ZRAM_IR_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 ZRAM_IR_DIR="$WORKDIR/zram-ir"
-ZRAM_IR_PATCH="$PATCHDIR/0004-zram-ir-1.2-linux7.1.patch"
+ZRAM_IR_PATCH="$PATCHDIR/0004-zram-ir-current.patch"
 
 # POC Selector: use the native Linux 7.1 stable patch rather than an older port.
-POC_REPO="https://github.com/firelzrd/poc-selector.git"
-POC_COMMIT="f2e9d6027ec8a9167365acd828016da9c8bd28e1"
-POC_PATCH_PATH="patches/stable/0001-7.1-rc1-poc-selector-v2.6.2r2.patch"
+POC_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+POC_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+POC_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 POC_DIR="$WORKDIR/poc-selector"
-POC_PATCH="$PATCHDIR/0005-poc-selector-v2.6.2r2-linux7.1.patch"
+POC_PATCH="$PATCHDIR/0005-poc-selector-current.patch"
 
 # NAP 0.5.0 has no native Linux 7.1 patch. Pin the stable 6.18.3 source and
 # apply it as a controlled port; the build reports every reject if APIs moved.
-NAP_REPO="https://github.com/firelzrd/nap.git"
-NAP_COMMIT="b4ca3378854a067bb639c60d9d8175ecc0a804bf"
-NAP_PATCH_PATH="patches/stable/0001-6.18.3-nap-v0.5.0.patch"
+NAP_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+NAP_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+NAP_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 NAP_DIR="$WORKDIR/nap"
-NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"
+NAP_PATCH="$PATCHDIR/0006-nap-current-port.patch"
+PATCH_ZRAM_IR_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+PATCH_POC_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+PATCH_NAP_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 '''
 )
 
@@ -118,28 +121,28 @@ replace_once(
 
 fetch_zram_ir_patch() {
   fetch_pinned_patch \
-    "ZRAM-IR 1.2 for Linux 7.1" \
+    "ZRAM-IR $PATCH_ZRAM_IR_VERSION current upstream source" \
     "$ZRAM_IR_REPO" "$ZRAM_IR_COMMIT" "$ZRAM_IR_PATCH_PATH" \
     "$ZRAM_IR_DIR" "$ZRAM_IR_PATCH" \
-    'Subject: [PATCH] linux7.1-rc1-zram-ir-1.2' \
+    'zram-ir' \
     "04-zram-ir"
 }
 
 fetch_poc_patch() {
   fetch_pinned_patch \
-    "POC Selector 2.6.2r2 for Linux 7.1" \
+    "POC Selector $PATCH_POC_VERSION current upstream source" \
     "$POC_REPO" "$POC_COMMIT" "$POC_PATCH_PATH" \
     "$POC_DIR" "$POC_PATCH" \
-    'Subject: [PATCH] 7.1-rc1-poc-selector-v2.6.2r2' \
+    'poc-selector' \
     "05-poc-selector"
 }
 
 fetch_nap_patch() {
   fetch_pinned_patch \
-    "NAP 0.5.0 stable port source" \
+    "NAP $PATCH_NAP_VERSION current upstream port source" \
     "$NAP_REPO" "$NAP_COMMIT" "$NAP_PATCH_PATH" \
     "$NAP_DIR" "$NAP_PATCH" \
-    'Subject: [PATCH] 6.18.3-nap-v0.5.0' \
+    'nap' \
     "06-nap"
 }
 
@@ -165,7 +168,7 @@ replace_once(
     r'''apply_zram_ir_patch() {
   local file="$1" status=0
 
-  echo "==> Applying ZRAM Immediate Recompression 1.2 for Linux 7.1"
+  echo "==> Applying ZRAM Immediate Recompression $PATCH_ZRAM_IR_VERSION for Linux $KERNEL_VERSION"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/04-zram-ir.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -189,16 +192,16 @@ replace_once(
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
   git diff --check -- drivers/block/zram/zram_drv.c \
     | tee "$LOGDIR/04-zram-ir-diff-check.log"
-  grep -Fq '#define ZRAM_IR_VERSION "1.2"' drivers/block/zram/zram_drv.c
+  grep -Fq "$PATCH_ZRAM_IR_VERSION" drivers/block/zram/zram_drv.c
   grep -Fq 'zram_recomp_immediate' drivers/block/zram/zram_drv.c
   grep -Fq 'register_sysctl("vm", zram_sysctl_table)' drivers/block/zram/zram_drv.c
-  echo "==> ZRAM-IR 1.2 patch applied successfully"
+  echo "==> ZRAM-IR $PATCH_ZRAM_IR_VERSION patch applied successfully"
 }
 
 apply_poc_patch() {
   local file="$1" status=0
 
-  echo "==> Applying native Linux 7.1 POC Selector 2.6.2r2"
+  echo "==> Applying POC Selector $PATCH_POC_VERSION to Linux $KERNEL_VERSION"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/05-poc-selector.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -225,13 +228,13 @@ apply_poc_patch() {
   test -s kernel/sched/poc_selector.c
   grep -Fq 'config SCHED_POC_SELECTOR' init/Kconfig
   grep -Fq 'poc_selector_active' kernel/sched/poc_selector.c
-  echo "==> POC Selector 2.6.2r2 applied successfully"
+  echo "==> POC Selector $PATCH_POC_VERSION applied successfully"
 }
 
 apply_nap_patch() {
   local file="$1" status=0
 
-  echo "==> Porting NAP 0.5.0 from Linux 6.18.3 to the target Linux series"
+  echo "==> Porting current upstream NAP $PATCH_NAP_VERSION to Linux $KERNEL_VERSION"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/06-nap.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -257,9 +260,9 @@ apply_nap_patch() {
     | tee "$LOGDIR/06-nap-diff-check.log"
   test -s drivers/cpuidle/governors/nap/nap.c
   grep -Fq 'config CPU_IDLE_GOV_NAP' drivers/cpuidle/Kconfig
-  grep -Fq '#define CPUIDLE_NAP_VERSION  "0.5.0"' \
+  grep -Fq "$PATCH_NAP_VERSION" \
     drivers/cpuidle/governors/nap/nap.c
-  echo "==> NAP 0.5.0 Linux 7.1 port applied successfully"
+  echo "==> NAP $PATCH_NAP_VERSION port applied successfully"
 }
 
 apply_bore_patch() {

@@ -12,7 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 LOCK_PATH = ROOT / ".resolved-patches/patch-lock.json"
-SCHED_EXT_PORT_TEMPLATE = ROOT / "patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
+SCHED_EXT_PORT_TEMPLATE = ROOT / "patches/bore/sched-ext-coexistence-template.patch"
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?$")
 
 
@@ -305,8 +305,8 @@ def materialize_sched_ext_port(
     upstream = upstream_patch.read_text(encoding="utf-8")
     template = SCHED_EXT_PORT_TEMPLATE.read_text(encoding="utf-8")
     upstream_fair = patch_section(upstream, "kernel/sched/fair.c", "locked BORE sched_ext source")
-    patch_section(template, "kernel/sched/fair.c", "Linux 7.1 sched_ext port template")
-    patch_section(template, "include/linux/sched/bore.h", "Linux 7.1 sched_ext port template")
+    patch_section(template, "kernel/sched/fair.c", "maintained sched_ext compatibility template")
+    patch_section(template, "include/linux/sched/bore.h", "maintained sched_ext compatibility template")
     declaration = "extern void reweight_task(struct task_struct *p, int prio);"
     if declaration not in template:
         raise FinalizeError("Linux 7.1 sched_ext port template lacks the required declaration")
@@ -320,7 +320,7 @@ def materialize_sched_ext_port(
     )
     port = replace_regex_once(
         port,
-        r"^Subject: \[PATCH\] sched: port 0002 sched-ext coexistence fix to Linux [0-9.]+$",
+        r"^Subject: \[PATCH\] sched: compatibility template for locked sched-ext coexistence fix$",
         f"Subject: [PATCH] sched: adapt locked sched-ext coexistence fix to Linux {kernel_version}",
         "generated sched_ext port subject",
     )
@@ -339,7 +339,7 @@ def materialize_sched_ext_port(
     data = port.encode("utf-8")
     write_port(lock_path, output, data)
     port_record = {
-        "adapter": "linux7.1-sched-ext-reweight-task",
+        "adapter": "locked-sched-ext-reweight-task-template",
         "kernel_target": kernel_version,
         "output": output,
         "sha256": hashlib.sha256(data).hexdigest(),
@@ -366,23 +366,26 @@ def rewrite_core(
     output = str((bore_port or record)["output"])
     sched_ext_sha256 = str(sched_ext_record["sha256"])
     sched_ext_output = str(sched_ext_port["output"])
-    replacements = (
+    assignments = (
         (r'^BORE_PATCH=.*$', f'BORE_PATCH="$RESOLVED_PATCH_ROOT/{output}"', "BORE patch assignment"),
         (r'^BORE_PORT_VERSION=.*$', f'BORE_PORT_VERSION="{version}"', "BORE version assignment"),
         (r'^BORE_PORT_UPSTREAM_SHA256=.*$', f'BORE_PORT_UPSTREAM_SHA256="{sha256}"', "BORE SHA assignment"),
         (r'^BORE_SCHED_EXT_PORT_UPSTREAM_SHA256=.*$', f'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="{sched_ext_sha256}"', "BORE sched_ext SHA assignment"),
         (r'^BORE_SCHED_EXT_PATCH=.*$', f'BORE_SCHED_EXT_PATCH="$RESOLVED_PATCH_ROOT/{sched_ext_output}"', "BORE sched_ext port assignment"),
-        (r'^\s*grep -Fq \'SCHED_BORE_VERSION  "[^"]+"\' "\$BORE_UPSTREAM_PATCH"$', '  grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" "$BORE_UPSTREAM_PATCH"', "BORE upstream version assertion"),
-        (r'^\s*grep -Fq \'sched: port BORE [^\']+ to Linux [^\']+\' "\$BORE_PATCH"$', '  grep -Fq "Subject: [PATCH] linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}" "$BORE_PATCH"', "BORE subject assertion"),
-        (r'^\s*grep -Fq \'sched: port 0002 sched-ext coexistence fix to Linux [^\']+\' "\$BORE_SCHED_EXT_PATCH"$', '  grep -Fq "Subject: [PATCH] sched: adapt locked sched-ext coexistence fix to Linux $KERNEL_VERSION" "$BORE_SCHED_EXT_PATCH"', "BORE sched_ext port subject assertion"),
-        (r'Applying the reviewed BORE [^"\n]+ Linux [0-9.]+ port', 'Applying upstream BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION', "BORE apply label"),
-        (r'report_bore_rejects "BORE [0-9][^"]* for Linux [0-9.]+"', 'report_bore_rejects "BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"', "BORE reject label"),
-        (r'^\s*git diff --check \| tee "\$LOGDIR/01-bore-diff-check\.log"$', '  if ! git diff --check > "$LOGDIR/01-bore-diff-check.log" 2>&1; then\n    cat "$LOGDIR/01-bore-diff-check.log"\n    echo "==> Normalizing whitespace introduced by BORE patch"\n    normalize_changed_whitespace\n    git diff --check | tee "$LOGDIR/01-bore-diff-check-after-fix.log"\n  fi', "BORE whitespace validation"),
-        (r'^\s*grep -Fq \'SCHED_BORE_VERSION\' kernel/sched/bore\.c$', '  grep -Fq "SCHED_BORE_VERSION  \\\"$BORE_PORT_VERSION\\\"" include/linux/sched/bore.h', "BORE installed version assertion"),
-        (r'BORE [^"\n]+ Linux port applied successfully', 'BORE $BORE_PORT_VERSION Linux port applied successfully', "BORE success label"),
     )
-    for pattern, replacement, label in replacements:
+    for pattern, replacement, label in assignments:
         text = replace_regex_once(text, pattern, replacement, label)
+    required = (
+        'SCHED_BORE_VERSION',
+        '$BORE_PORT_VERSION',
+        'linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}',
+        'sched: adapt locked sched-ext coexistence fix to Linux $KERNEL_VERSION',
+        'Applying upstream BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION',
+        'BORE $BORE_PORT_VERSION Linux port applied successfully',
+    )
+    missing = [marker for marker in required if marker not in text]
+    if missing:
+        raise FinalizeError(f"generated core lost dynamic BORE contract markers: {missing}")
     path.write_text(text, encoding="utf-8")
 
 

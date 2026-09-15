@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class MarieVersionReportingTest(unittest.TestCase):
     def test_build_uses_current_upstream_without_local_fallback(self) -> None:
         core = (ROOT / "scripts/build-kernelnote-core.sh").read_text(encoding="utf-8")
-        self.assertIn("Fetching pinned Marie LRU $PATCH_MARIE_VERSION testing source locally", core)
+        self.assertIn("Fetching current locked Marie LRU $PATCH_MARIE_VERSION testing source locally", core)
         self.assertIn("Marie source policy: current upstream testing release only", core)
         self.assertIn("Applying Marie LRU $PATCH_MARIE_VERSION upstream testing patch", core)
         self.assertNotIn("MARIE_FALLBACK_PATCH", core)

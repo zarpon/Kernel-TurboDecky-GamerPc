@@ -23,7 +23,7 @@ def main() -> None:
 
     source = replace_once(
         source,
-        'KERNEL_TAG="v7.1.4"\n',
+        'KERNEL_TAG="__LATEST_UPSTREAM_LINUX_REQUIRED__"\n',
         ''': "${KERNEL_VERSION:?latest upstream version was not resolved}"
 : "${KERNEL_SERIES:?latest upstream series was not resolved}"
 : "${KERNEL_TAG:?latest upstream tag was not resolved}"

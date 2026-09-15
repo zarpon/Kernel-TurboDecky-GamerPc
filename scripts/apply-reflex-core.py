@@ -37,13 +37,13 @@ def patch_core(path: Path) -> None:
     source = insert_after_marie_variables(
         source,
         '''
-# REFLEX CPUFreq dynamic bootstrap. The patch lock replaces these current defaults.
-REFLEX_REPO="https://github.com/firelzrd/reflex.git"
-REFLEX_COMMIT="a7205405c20a499fc1490e073fab03dc9a28e818"
-REFLEX_PATCH_PATH="patches/0001-linux7.1-reflex-v0.3.2.patch"
+# REFLEX CPUFreq dynamic bootstrap. Every source identity is supplied by the authenticated patch lock.
+REFLEX_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+REFLEX_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+REFLEX_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 REFLEXDIR="$WORKDIR/reflex"
-REFLEX_PATCH="$PATCHDIR/0007-reflex-linux7.1.patch"
-PATCH_REFLEX_VERSION="${PATCH_REFLEX_VERSION:-0.3.2}"
+REFLEX_PATCH="$PATCHDIR/0007-reflex-current.patch"
+PATCH_REFLEX_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 ''',
     )
 
@@ -85,7 +85,7 @@ normalize_changed_whitespace() {
         r'''apply_reflex_patch() {
   local file="$1" status=0 runtime_version
 
-  echo "==> Applying Linux 7.1 REFLEX CPUFreq $PATCH_REFLEX_VERSION patch"
+  echo "==> Applying current upstream REFLEX CPUFreq $PATCH_REFLEX_VERSION to Linux $KERNEL_VERSION"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/07-reflex.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -155,7 +155,7 @@ PY
     | tee "$LOGDIR/07-reflex-diff-check.log"
 
   test -s drivers/cpufreq/cpufreq_reflex.c
-  if [[ "$PATCH_REFLEX_VERSION" != "unknown" ]]; then
+  if [[ "$PATCH_REFLEX_VERSION" != "__DYNAMIC_PATCH_LOCK_REQUIRED__" ]]; then
     # Upstream may publish compatibility/repack revisions such as 0.3.3r2
     # while the governor's runtime ABI/version remains 0.3.3. Validate both
     # identities without incorrectly requiring the packaging revision suffix

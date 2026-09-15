@@ -94,77 +94,67 @@ fetch_requested_patch_series() {
 
   fetch_candidate_patch "C23 libbpf fix" \
     "$REQUESTED_SERIES_DIR/08-c23-libbpf.patch" "08-c23-libbpf" \
-    "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=d70f79fef65810faf64dbae1f3a1b5623cdb2345" \
-    "https://github.com/torvalds/linux/commit/d70f79fef65810faf64dbae1f3a1b5623cdb2345.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:c23_libbpf"
 
   fetch_candidate_patch "Clear Linux performance patches" \
     "$REQUESTED_SERIES_DIR/09-clear.patch" "09-clear" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/489513b1a3b9339d40d9e4718c7eb4e90c2e2723/linux-tkg-patches/7.1/0002-clear-patches.patch" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/d837d80398a62ea884caabad36530093f9711d49/linux-tkg-patches/6.16/0002-clear-patches.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:clear"
 
   fetch_candidate_patch "fsync FUTEX_WAIT_MULTIPLE compatibility" \
     "$REQUESTED_SERIES_DIR/10-fsync-futex-waitv.patch" "10-fsync" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/489513b1a3b9339d40d9e4718c7eb4e90c2e2723/linux-tkg-patches/7.1/0007-v7.1-fsync1_via_futex_waitv.patch" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/d837d80398a62ea884caabad36530093f9711d49/linux-tkg-patches/6.11/0007-v6.11-fsync1_via_futex_waitv.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:fsync"
 
   fetch_candidate_patch "Optimize harder O3" \
     "$REQUESTED_SERIES_DIR/11-o3.patch" "11-o3" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/489513b1a3b9339d40d9e4718c7eb4e90c2e2723/linux-tkg-patches/7.1/0013-optimize_harder_O3.patch" \
-    "https://raw.githubusercontent.com/Frogging-Family/linux-tkg/d837d80398a62ea884caabad36530093f9711d49/linux-tkg-patches/6.16/0013-optimize_harder_O3.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:o3"
 
   fetch_candidate_patch "Bluetooth SSP key-size check" \
     "$REQUESTED_SERIES_DIR/12-bt-ssp-key-size.patch" "12-bt-ssp" \
-    "https://dev.gentoo.org/~alicef/genpatches/trunk/7.1/2000_BT-Check-key-sizes-only-if-Secure-Simple-Pairing-enabled.patch" \
-    "https://dev.gentoo.org/~alicef/genpatches/trunk/6.16/2000_BT-Check-key-sizes-only-if-Secure-Simple-Pairing-enabled.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:bt_ssp"
 
   fetch_candidate_patch "libbpf Wmaybe-uninitialized workaround" \
     "$REQUESTED_SERIES_DIR/13-libbpf-uninitialized.patch" "13-libbpf-uninitialized" \
-    "https://dev.gentoo.org/~alicef/genpatches/trunk/7.1/2990_libbpf-v2-workaround-Wmaybe-uninitialized-false-pos.patch" \
-    "https://dev.gentoo.org/~alicef/genpatches/trunk/6.16/2990_libbpf-v2-workaround-Wmaybe-uninitialized-false-pos.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:libbpf_uninitialized"
 
   fetch_candidate_patch "Universal x86 CPU optimizations" \
     "$REQUESTED_SERIES_DIR/14-cpu-optimizations.patch" "14-cpu-optimizations" \
-    "https://dev.gentoo.org/~alicef/genpatches/trunk/7.1/5010_enable-cpu-optimizations-universal.patch" \
-    "https://dev.gentoo.org/~alicef/genpatches/trunk/6.16/5010_enable-cpu-optimizations-universal.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:cpu_optimizations"
 
   fetch_candidate_patch "Clang DKMS compatibility" \
     "$REQUESTED_SERIES_DIR/15-dkms-clang.patch" "15-dkms-clang" \
-    "https://raw.githubusercontent.com/CachyOS/kernel-patches/refs/heads/master/7.1/misc/dkms-clang.patch" \
-    "https://raw.githubusercontent.com/CachyOS/kernel-patches/refs/heads/master/6.16/misc/dkms-clang.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:dkms_clang"
 
   fetch_candidate_patch "Clang Polly support" \
     "$REQUESTED_SERIES_DIR/16-clang-polly.patch" "16-clang-polly" \
-    "https://raw.githubusercontent.com/CachyOS/kernel-patches/refs/heads/master/7.1/misc/0001-clang-polly.patch" \
-    "https://raw.githubusercontent.com/CachyOS/kernel-patches/refs/heads/master/6.16/misc/0001-clang-polly.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:clang_polly"
 
   fetch_candidate_patch "Always print firmware file name" \
     "$REQUESTED_SERIES_DIR/17-firmware-name.patch" "17-firmware-name" \
-    "https://732852.bugs.gentoo.org/attachment.cgi?id=649432"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:firmware_name"
 
   fetch_candidate_patch "mac80211 minstrel fraction fix" \
     "$REQUESTED_SERIES_DIR/18-minstrel-frac.patch" "18-minstrel-frac" \
-    "https://git.openwrt.org/openwrt/openwrt/plain/package/kernel/mac80211/patches/subsys/302-mac80211-minstrel_ht-fix-MINSTREL_FRAC-macro.patch?id=0ff1553bd731c0db28043fc9caab90bdc32587f3"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:minstrel_frac"
 
   fetch_candidate_patch "mac80211 minstrel fluctuation reduction" \
     "$REQUESTED_SERIES_DIR/19-minstrel-fluctuation.patch" "19-minstrel-fluctuation" \
-    "https://git.openwrt.org/openwrt/openwrt/plain/package/kernel/mac80211/patches/subsys/303-mac80211-minstrel_ht-reduce-fluctuations-in-rate-pro.patch?id=0ff1553bd731c0db28043fc9caab90bdc32587f3"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:minstrel_fluctuation"
 
   fetch_candidate_patch "mac80211 minstrel rate downgrade rework" \
     "$REQUESTED_SERIES_DIR/20-minstrel-downgrade.patch" "20-minstrel-downgrade" \
-    "https://git.openwrt.org/openwrt/openwrt/plain/package/kernel/mac80211/patches/subsys/304-mac80211-minstrel_ht-rework-rate-downgrade-code-and-.patch?id=0ff1553bd731c0db28043fc9caab90bdc32587f3"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:minstrel_downgrade"
 
   fetch_candidate_patch "ath11k remapped CE 64-bit fix" \
     "$REQUESTED_SERIES_DIR/21-ath11k-remapped-ce.patch" "21-ath11k-remapped-ce" \
-    "https://git.openwrt.org/openwrt/openwrt/plain/package/kernel/mac80211/patches/ath11k/910-ath11k-fix-remapped-ce-accessing-issue-on-64bit-OS.patch?id=0ff1553bd731c0db28043fc9caab90bdc32587f3"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_remapped_ce"
 
   fetch_candidate_patch "ath11k DISABLE_KEY revert" \
     "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key" \
-    "https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch" \
-    "https://git.infobricfleet.com/gtu/openwrt/-/raw/95341cc9c560ff371c06db2a8221d19bb62d0c30/package/kernel/mac80211/patches/ath11k/940-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_disable_key"
 
   fetch_candidate_patch "ath11k Qualcomm upstream series" \
     "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream" \
-    "https://lore.kernel.org/all/20260319065608.2408179-1-reshma.rajkumar@oss.qualcomm.com/raw"
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_upstream"
 }
 
 report_requested_rejects() {

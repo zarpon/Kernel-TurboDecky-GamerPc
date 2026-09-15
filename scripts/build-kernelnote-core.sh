@@ -12,7 +12,7 @@ MARIEDIR="$WORKDIR/lru_marie"
 JOBS="${JOBS:-$(nproc --all)}"
 MAKE=(make LLVM=1 LLVM_IAS=1)
 
-KERNEL_TAG="v7.1.4"
+KERNEL_TAG="__LATEST_UPSTREAM_LINUX_REQUIRED__"
 KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
 ADIOS_URL="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 
@@ -20,30 +20,29 @@ ADIOS_URL="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 # upstream BORE and sched_ext bytes, then finalize-bore-stable-port.py replaces
 # every version, digest and port path from that exact lock before this script is
 # executed. These template values must never be treated as an active pin.
-BORE_REPO="https://github.com/firelzrd/bore-scheduler.git"
+BORE_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 BORE_BRANCH="main"
-BORE_COMMIT="16bf5baebbb42cdba393c501ba9c2af5f84e4749"
-BORE_PATCH_PATH="patches/testing/0001-linux7.1-rc1-bore-6.8.0-rc1.patch"
+BORE_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+BORE_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 BORE_DIR="$WORKDIR/bore-scheduler"
 BORE_UPSTREAM_PATCH="$PATCHDIR/0001-bore-upstream.patch"
-BORE_PATCH="$ROOT/patches/bore/7.1.4-bore-6.8.0-rc1.patch"
-BORE_PORT_VERSION="6.8.0-rc1"
-BORE_PORT_UPSTREAM_SHA256="87b9b6f5bedc05db2fb59e921ca7cd172a2a68c1267834d5c5c771cc0f48fd36"
-BORE_SCHED_EXT_REPO="https://github.com/firelzrd/bore-scheduler.git"
-BORE_SCHED_EXT_COMMIT="16bf5baebbb42cdba393c501ba9c2af5f84e4749"
-BORE_SCHED_EXT_PATCH_PATH="patches/additions/0002-sched-ext-coexistence-fix.patch"
+BORE_PATCH="$PATCHDIR/01-bore-current-port.patch"
+BORE_PORT_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+BORE_PORT_UPSTREAM_SHA256="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+BORE_SCHED_EXT_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+BORE_SCHED_EXT_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+BORE_SCHED_EXT_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 BORE_SCHED_EXT_DIR="$WORKDIR/bore-scheduler-sched-ext"
 BORE_SCHED_EXT_UPSTREAM_PATCH="$PATCHDIR/0002-bore-sched-ext-upstream.patch"
-BORE_SCHED_EXT_PATCH="$ROOT/patches/bore/7.1.4-sched-ext-coexistence-fix.patch"
-BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c"
+BORE_SCHED_EXT_PATCH="$PATCHDIR/01-bore-sched-ext-current-port.patch"
+BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 
-# Marie is fetched as a pinned local Git checkout rather than through a raw
-# patch URL. Only the exact patch blob is materialized in the workspace.
-MARIE_REPO="https://github.com/firelzrd/lru_marie.git"
-MARIE_COMMIT="a05089b42e58420b4f74659f7d27cc0448ecf258"
-MARIE_PATCH_PATH="patches/testing/0001-linux7.3-rc1-lru_marie-0.11.1r2.patch"
+# Marie is fetched from the authenticated current-upstream lock. Only the exact locked patch blob is materialized.
+MARIE_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+MARIE_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+MARIE_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 MARIE_PATCH="$PATCHDIR/02-lru-marie.patch"
-PATCH_MARIE_VERSION="${PATCH_MARIE_VERSION:-0.11.1r2}"
+PATCH_MARIE_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 
 # Append the canonical TurboDecky built-in arguments.
 # CMDLINE_OVERRIDE stays disabled so bootloader parameters
@@ -75,7 +74,7 @@ download() {
 }
 
 fetch_marie_testing_patch() {
-  echo "==> Fetching pinned Marie LRU $PATCH_MARIE_VERSION testing source locally"
+  echo "==> Fetching current locked Marie LRU $PATCH_MARIE_VERSION testing source locally"
   rm -rf "$MARIEDIR"
   git init --quiet "$MARIEDIR"
   git -C "$MARIEDIR" remote add origin "$MARIE_REPO"
@@ -94,13 +93,13 @@ fetch_marie_testing_patch() {
     echo "Version: $PATCH_MARIE_VERSION"
     echo "Path: $MARIE_PATCH_PATH"
     echo "SHA256: $(sha256sum "$MARIE_PATCH" | awk '{print $1}')"
-    echo "Acquisition: pinned current-upstream partial Git checkout; no local fallback"
+    echo "Acquisition: authenticated current-upstream lock; no local fallback"
   } | tee "$LOGDIR/02-lru-marie-provenance.txt"
 }
 fetch_bore_source() {
   local upstream_sha256
 
-  echo "==> Fetching the pinned upstream BORE $BORE_PORT_VERSION source locally"
+  echo "==> Fetching current locked upstream BORE $BORE_PORT_VERSION source locally"
   rm -rf "$BORE_DIR"
   git init --quiet "$BORE_DIR"
   git -C "$BORE_DIR" remote add origin "$BORE_REPO"
@@ -112,7 +111,7 @@ fetch_bore_source() {
   git -C "$BORE_DIR" show "FETCH_HEAD:$BORE_PATCH_PATH" > "$BORE_UPSTREAM_PATCH"
   test -s "$BORE_UPSTREAM_PATCH"
   grep -Fq 'diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c' "$BORE_UPSTREAM_PATCH"
-  grep -Fq 'SCHED_BORE_VERSION  "6.8.0-rc1"' "$BORE_UPSTREAM_PATCH"
+  grep -Fq "SCHED_BORE_VERSION  \"$BORE_PORT_VERSION\"" "$BORE_UPSTREAM_PATCH"
   grep -Fq 'sched_bore' "$BORE_UPSTREAM_PATCH"
   upstream_sha256="$(sha256sum "$BORE_UPSTREAM_PATCH" | awk '{print $1}')"
   if [[ "$upstream_sha256" != "$BORE_PORT_UPSTREAM_SHA256" ]]; then
@@ -121,7 +120,7 @@ fetch_bore_source() {
   fi
 
   test -s "$BORE_PATCH"
-  grep -Fq 'sched: port BORE 6.8.0-rc1 to Linux 7.1.4' "$BORE_PATCH"
+  grep -Fq "Subject: [PATCH] linux${KERNEL_VERSION}-bore-${BORE_PORT_VERSION}" "$BORE_PATCH"
   grep -Fq 'diff --git a/kernel/sched/bore.c b/kernel/sched/bore.c' "$BORE_PATCH"
   grep -Fq 'SCHED_BORE_VERSION' "$BORE_PATCH"
 
@@ -135,14 +134,14 @@ fetch_bore_source() {
     echo "Reviewed port upstream SHA256: $BORE_PORT_UPSTREAM_SHA256"
     echo "Linux port: ${BORE_PATCH#$ROOT/}"
     echo "Linux port SHA256: $(sha256sum "$BORE_PATCH" | awk '{print $1}')"
-    echo "Acquisition: pinned local partial Git checkout plus reviewed local port"
+    echo "Acquisition: authenticated current-upstream lock plus target compatibility adapter"
   } | tee "$LOGDIR/01-bore-provenance.txt"
 }
 
 fetch_bore_sched_ext_source() {
   local upstream_sha256
 
-  echo "==> Fetching the pinned upstream BORE sched_ext coexistence fix"
+  echo "==> Fetching current locked upstream BORE sched_ext coexistence fix"
   rm -rf "$BORE_SCHED_EXT_DIR"
   git init --quiet "$BORE_SCHED_EXT_DIR"
   git -C "$BORE_SCHED_EXT_DIR" remote add origin "$BORE_SCHED_EXT_REPO"
@@ -161,7 +160,7 @@ fetch_bore_sched_ext_source() {
   fi
 
   test -s "$BORE_SCHED_EXT_PATCH"
-  grep -Fq 'sched: port 0002 sched-ext coexistence fix to Linux 7.1.4' "$BORE_SCHED_EXT_PATCH"
+  grep -Fq "Subject: [PATCH] sched: adapt locked sched-ext coexistence fix to Linux $KERNEL_VERSION" "$BORE_SCHED_EXT_PATCH"
   grep -Fq 'extern void reweight_task(struct task_struct *p, int prio);' "$BORE_SCHED_EXT_PATCH"
 
   {
@@ -173,7 +172,7 @@ fetch_bore_sched_ext_source() {
     echo "Reviewed port upstream SHA256: $BORE_SCHED_EXT_PORT_UPSTREAM_SHA256"
     echo "Linux port: ${BORE_SCHED_EXT_PATCH#$ROOT/}"
     echo "Linux port SHA256: $(sha256sum "$BORE_SCHED_EXT_PATCH" | awk '{print $1}')"
-    echo "Acquisition: pinned local partial Git checkout plus reviewed local port"
+    echo "Acquisition: authenticated current-upstream lock plus target compatibility adapter"
   } | tee "$LOGDIR/01-bore-sched-ext-provenance.txt"
 }
 
@@ -273,14 +272,14 @@ report_bore_rejects() {
 apply_bore_patch() {
   local file="$1"
 
-  echo "==> Applying the reviewed BORE 6.8.0-rc1 Linux 7.1.4 port"
+  echo "==> Applying upstream BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/01-bore.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
       | tee "$LOGDIR/01-bore.apply.log"
   else
     cat "$LOGDIR/01-bore.dry-run.log"
-    report_bore_rejects "BORE 6.8.0-rc1 for Linux 7.1.4" \
+    report_bore_rejects "BORE $BORE_PORT_VERSION for Linux $KERNEL_VERSION" \
       "$LOGDIR/01-bore-port-rejects.log"
     return 1
   fi
@@ -293,8 +292,8 @@ apply_bore_patch() {
   grep -Fq 'struct bore_ctx' include/linux/sched.h
   grep -Fq 'sched_bore' kernel/sched/fair.c
   grep -Fq 'CONFIG_SCHED_BORE' kernel/sched/Makefile
-  grep -Fq 'SCHED_BORE_VERSION' kernel/sched/bore.c
-  echo "==> BORE 6.8.0-rc1 Linux port applied successfully"
+  grep -Fq "SCHED_BORE_VERSION  \"$BORE_PORT_VERSION\"" include/linux/sched/bore.h
+  echo "==> BORE $BORE_PORT_VERSION Linux port applied successfully"
 }
 
 apply_bore_sched_ext_coexistence_fix() {
@@ -307,7 +306,7 @@ apply_bore_sched_ext_coexistence_fix() {
       | tee "$LOGDIR/01-bore-sched-ext.apply.log"
   else
     cat "$LOGDIR/01-bore-sched-ext.dry-run.log"
-    report_bore_rejects "BORE sched_ext coexistence fix for Linux 7.1.4" \
+    report_bore_rejects "BORE sched_ext coexistence fix for Linux $KERNEL_VERSION" \
       "$LOGDIR/01-bore-sched-ext-port-rejects.log"
     return 1
   fi
@@ -546,7 +545,7 @@ cp .config "$LOGDIR/final.config"
 
 if [[ "$MODE" == "package" ]]; then
   echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"
-  "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="7.1.4-1turbodecky1"
+  "${MAKE[@]}" -j"$JOBS" bindeb-pkg KDEB_PKGVERSION="${KERNEL_DEB_VERSION:?KERNEL_DEB_VERSION must be resolved}"
   find "$WORKDIR" -maxdepth 1 -type f -name '*.deb' -exec cp -v {} "$ARTIFACTS/" \;
   "$ROOT/scripts/build-tuning-package.sh"
 else
