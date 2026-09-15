@@ -72,7 +72,7 @@ class BoreLinuxPortTests(unittest.TestCase):
         shared_anchor = '''apply_marie_testing_patch "$MARIE_PATCH"
 apply_bore_patch "$BORE_PATCH"
 apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
-apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
+apply_adios_patch "$PATCHDIR/0003-adios-current.patch"
 '''
         self.assertIn(shared_anchor, core)
         self.assertIn(shared_anchor, wrapper)

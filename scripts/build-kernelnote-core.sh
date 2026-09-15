@@ -14,7 +14,7 @@ MAKE=(make LLVM=1 LLVM_IAS=1)
 
 KERNEL_TAG="v7.1.4"
 KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
-ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
+ADIOS_URL="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 
 # Bootstrap anchors for the generated build only. The resolver obtains current
 # upstream BORE and sched_ext bytes, then finalize-bore-stable-port.py replaces
@@ -358,6 +358,22 @@ apply_adios_patch() {
     return 0
   fi
 
+  # ADIOS and Marie both carry the same setlocalversion identity hunk in
+  # current upstream releases. Accept that reject only when the ADIOS hunk is
+  # provably already present; any real content mismatch still fails closed.
+  if [[ -f "$KERNELDIR/scripts/setlocalversion.rej" ]]; then
+    if filterdiff -i '*/scripts/setlocalversion' "$file" | \
+        patch --batch --reverse --dry-run --strip=1 \
+> "$LOGDIR/03-adios-setlocalversion-already-applied.log" 2>&1; then
+      echo "==> ADIOS setlocalversion hunk already present; preserving equivalent upstream change"
+      rm -f "$KERNELDIR/scripts/setlocalversion.rej" "$KERNELDIR/scripts/setlocalversion.orig"
+    else
+      cat "$LOGDIR/03-adios-setlocalversion-already-applied.log" >&2 || true
+      echo "ADIOS setlocalversion reject is not an already-applied equivalent hunk" >&2
+      return 1
+    fi
+  fi
+
   mapfile -t rejects < <(find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort)
   expected=("block/elevator.c.rej")
 
@@ -435,13 +451,13 @@ git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 fetch_marie_testing_patch
 fetch_bore_source
 fetch_bore_sched_ext_source
-download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
+download "$ADIOS_URL" "$PATCHDIR/0003-adios-current.patch"
 
 cd "$KERNELDIR"
 apply_marie_testing_patch "$MARIE_PATCH"
 apply_bore_patch "$BORE_PATCH"
 apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
-apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
+apply_adios_patch "$PATCHDIR/0003-adios-current.patch"
 
 echo "==> Generating upstream x86-64 base configuration"
 "${MAKE[@]}" x86_64_defconfig

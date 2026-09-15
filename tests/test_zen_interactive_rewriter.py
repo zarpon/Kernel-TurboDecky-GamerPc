@@ -65,7 +65,7 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
             result = path.read_text(encoding="utf-8")
             self.assertIn(
                 "fetch_requested_patch_series\nfetch_reflex_patch\n"
-                'download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"\n\n'
+                'download "$ADIOS_URL" "$PATCHDIR/0003-adios-current.patch"\n\n'
                 "fetch_zen_interactive_profile\n\ncd \"$KERNELDIR\"",
                 result,
             )
