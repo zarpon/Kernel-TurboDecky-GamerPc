@@ -23,6 +23,7 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
+
           path = Path("scripts/build-kernelnote.sh")
           text = path.read_text(encoding="utf-8")
           text = text.replace(
@@ -39,6 +40,14 @@ jobs:
           )
           text = text.replace(nap_old, nap_new)
           path.write_text(text, encoding="utf-8")
+
+          helper = Path("tools/upstream-only-cleanup.py")
+          source = helper.read_text(encoding="utf-8")
+          old = r"(?=\n\n  fetch_candidate_patch|\n\n\})"
+          new = r"(?=\n\n  fetch_candidate_patch|\n\s*\})"
+          if source.count(old) != 1:
+              raise SystemExit(f"requested-series terminal regex count={source.count(old)}")
+          helper.write_text(source.replace(old, new, 1), encoding="utf-8")
           PY
           python3 tools/upstream-only-cleanup.py
 
