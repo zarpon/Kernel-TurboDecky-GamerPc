@@ -169,19 +169,11 @@ class ResolverTests(unittest.TestCase):
             self.assertIn("linux7.9", record["selected_path"])
             self.assertEqual(record["project_version"], "9.0")
 
-    def test_newer_current_release_outranks_older_exact_fallback_ref(self) -> None:
+    def test_historical_fallback_refs_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             repo = tmp / "repo"
             init_repo(repo, {"patches/7.1/demo-v2.0.patch": patch("demo 2.0")})
-            exact_commit = run("git", "rev-parse", "HEAD", cwd=repo).stdout.strip()
-            (repo / "patches/7.1/demo-v2.0.patch").unlink()
-            target = repo / "patches/7.0/demo-v3.0.patch"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(patch("demo 3.0"), encoding="utf-8")
-            run("git", "add", "-A", cwd=repo)
-            run("git", "commit", "-qm", "remove exact", cwd=repo)
-            current_commit = run("git", "rev-parse", "HEAD", cwd=repo).stdout.strip()
             manifest = {
                 "schema": 1,
                 "components": {
@@ -189,7 +181,7 @@ class ResolverTests(unittest.TestCase):
                         "kind": "git_patch",
                         "repo": str(repo),
                         "ref": "main",
-                        "fallback_refs": [exact_commit],
+                        "fallback_refs": ["a" * 40],
                         "exact_globs": ["patches/{series}/demo-*.patch"],
                         "fallback_globs": ["patches/*/demo-*.patch"],
                         "require_exact_series": False,
@@ -200,17 +192,17 @@ class ResolverTests(unittest.TestCase):
             }
             manifest_path = tmp / "manifest.json"
             manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-            output = tmp / "resolved"
-            run(
-                "python3", str(RESOLVER), "--manifest", str(manifest_path),
-                "--output-dir", str(output), "--kernel-version", "7.1.3",
-                "--kernel-series", "7.1",
+            result = subprocess.run(
+                [
+                    "python3", str(RESOLVER), "--manifest", str(manifest_path),
+                    "--output-dir", str(tmp / "resolved"), "--kernel-version", "7.1.3",
+                    "--kernel-series", "7.1",
+                ],
+                text=True,
+                capture_output=True,
             )
-            record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
-            self.assertEqual(record["commit"], current_commit)
-            self.assertEqual(record["selection"], "fallback")
-            self.assertIn("7.0", record["path"])
-            self.assertEqual(record["project_version"], "3.0")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("historical patch fallback is forbidden", result.stderr)
 
     def test_git_symlink_patch_is_followed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -280,7 +272,7 @@ class ResolverTests(unittest.TestCase):
                 capture_output=True,
             )
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("no exact compatible path", result.stderr)
+            self.assertIn("no exact compatible current-upstream path", result.stderr)
 
     def test_dynamic_upstream_sha_is_recorded_in_the_lock(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

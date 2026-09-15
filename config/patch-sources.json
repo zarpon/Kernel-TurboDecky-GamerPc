@@ -34,9 +34,6 @@
         "package/kernel/mac80211/patches/ath11k/910-ath11k-fix-remapped-ce-accessing-issue-on-64bit-OS.patch"
       ],
       "fallback_globs": [],
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ],
       "kind": "git_patch",
       "output": "21-ath11k-remapped-ce.patch",
       "ref": "main",
@@ -106,9 +103,6 @@
       "fallback_globs": [
         "*/misc/0001-clang-polly.patch"
       ],
-      "fallback_refs": [
-        "ea739d734ec179864b21446856315bc49f7c52fa"
-      ],
       "kind": "git_patch",
       "output": "16-clang-polly.patch",
       "ref": "master",
@@ -121,10 +115,6 @@
       ],
       "fallback_globs": [
         "linux-tkg-patches/*/0002-clear-patches.patch"
-      ],
-      "fallback_refs": [
-        "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
-        "d837d80398a62ea884caabad36530093f9711d49"
       ],
       "kind": "git_patch",
       "output": "09-clear.patch",
@@ -157,9 +147,6 @@
       "fallback_globs": [
         "*/misc/dkms-clang.patch"
       ],
-      "fallback_refs": [
-        "ea739d734ec179864b21446856315bc49f7c52fa"
-      ],
       "kind": "git_patch",
       "output": "15-dkms-clang.patch",
       "ref": "master",
@@ -179,10 +166,6 @@
       ],
       "fallback_globs": [
         "linux-tkg-patches/*/0007-v*-fsync1_via_futex_waitv.patch"
-      ],
-      "fallback_refs": [
-        "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
-        "d837d80398a62ea884caabad36530093f9711d49"
       ],
       "kind": "git_patch",
       "output": "10-fsync-futex-waitv.patch",
@@ -208,8 +191,6 @@
         "patches/testing/*lru_marie*.patch"
       ],
       "kind": "git_patch",
-      "local_fallback_metadata": "../patches/fallback/lru_marie.json",
-      "local_fallback_patch": "../patches/fallback/lru_marie.patch",
       "output": "02-lru-marie.patch",
       "project_version_regex": "lru[_-]marie[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:r[0-9]+)?)",
       "ref": "main",
@@ -225,9 +206,6 @@
         "package/kernel/mac80211/patches/subsys/304-mac80211-minstrel_ht-rework-rate-downgrade-code-and-.patch"
       ],
       "fallback_globs": [],
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ],
       "kind": "git_patch",
       "output": "20-minstrel-downgrade.patch",
       "ref": "main",
@@ -239,9 +217,6 @@
         "package/kernel/mac80211/patches/subsys/303-mac80211-minstrel_ht-reduce-fluctuations-in-rate-pro.patch"
       ],
       "fallback_globs": [],
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ],
       "kind": "git_patch",
       "output": "19-minstrel-fluctuation.patch",
       "ref": "main",
@@ -253,9 +228,6 @@
         "package/kernel/mac80211/patches/subsys/302-mac80211-minstrel_ht-fix-MINSTREL_FRAC-macro.patch"
       ],
       "fallback_globs": [],
-      "fallback_refs": [
-        "0ff1553bd731c0db28043fc9caab90bdc32587f3"
-      ],
       "kind": "git_patch",
       "output": "18-minstrel-frac.patch",
       "ref": "main",
@@ -289,10 +261,6 @@
       ],
       "fallback_globs": [
         "linux-tkg-patches/*/0013-optimize_harder_O3.patch"
-      ],
-      "fallback_refs": [
-        "489513b1a3b9339d40d9e4718c7eb4e90c2e2723",
-        "d837d80398a62ea884caabad36530093f9711d49"
       ],
       "kind": "git_patch",
       "output": "11-o3.patch",
@@ -347,9 +315,6 @@
       ],
       "fallback_globs": [
         "*/misc/0001-cgroup-vram.patch"
-      ],
-      "fallback_refs": [
-        "ea739d734ec179864b21446856315bc49f7c52fa"
       ],
       "kind": "git_patch",
       "output": "24-cgroup-vram.patch",

@@ -44,8 +44,6 @@ MARIE_COMMIT="a05089b42e58420b4f74659f7d27cc0448ecf258"
 MARIE_PATCH_PATH="patches/testing/0001-linux7.3-rc1-lru_marie-0.11.1r2.patch"
 MARIE_PATCH="$PATCHDIR/02-lru-marie.patch"
 PATCH_MARIE_VERSION="${PATCH_MARIE_VERSION:-0.11.1r2}"
-MARIE_FALLBACK_PATCH="$ROOT/patches/fallback/lru_marie.patch"
-MARIE_FALLBACK_METADATA="$ROOT/patches/fallback/lru_marie.json"
 
 # Append the canonical TurboDecky built-in arguments.
 # CMDLINE_OVERRIDE stays disabled so bootloader parameters
@@ -77,46 +75,28 @@ download() {
 }
 
 fetch_marie_testing_patch() {
-  local acquisition="pinned local partial Git checkout; no raw patch URL"
   echo "==> Fetching pinned Marie LRU $PATCH_MARIE_VERSION testing source locally"
   rm -rf "$MARIEDIR"
   git init --quiet "$MARIEDIR"
   git -C "$MARIEDIR" remote add origin "$MARIE_REPO"
   git -C "$MARIEDIR" config remote.origin.promisor true
   git -C "$MARIEDIR" config remote.origin.partialclonefilter blob:none
-
-  if git -C "$MARIEDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$MARIE_COMMIT" \
-      2>&1 | tee "$LOGDIR/02-lru-marie-fetch.log" && \
-      git -C "$MARIEDIR" show "FETCH_HEAD:$MARIE_PATCH_PATH" > "$MARIE_PATCH"; then
-    test -s "$MARIE_PATCH"
-  else
-    rm -f "$MARIE_PATCH"
-    echo "==> Marie upstream source unavailable; using maintained local fallback"
-    python3 "$ROOT/scripts/validate-marie-fallback.py" \
-      --patch "$MARIE_FALLBACK_PATCH" \
-      --metadata "$MARIE_FALLBACK_METADATA"
-    PATCH_MARIE_VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["project_version"])' "$MARIE_FALLBACK_METADATA")"
-    MARIE_COMMIT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' "$MARIE_FALLBACK_METADATA")"
-    MARIE_PATCH_PATH="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["selected_path"])' "$MARIE_FALLBACK_METADATA")"
-    cp "$MARIE_FALLBACK_PATCH" "$MARIE_PATCH"
-    acquisition="maintained local fallback"
-  fi
-
+  git -C "$MARIEDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$MARIE_COMMIT" 2>&1 | tee "$LOGDIR/02-lru-marie-fetch.log"
+  git -C "$MARIEDIR" show "FETCH_HEAD:$MARIE_PATCH_PATH" > "$MARIE_PATCH"
   test -s "$MARIE_PATCH"
   grep -Fq 'lru_marie' "$MARIE_PATCH"
   grep -Fq 'LRU_MARIE' "$MARIE_PATCH"
 
   {
-    echo "Marie source policy: testing-compatible"
+    echo "Marie source policy: current upstream testing release only"
     echo "Repository: firelzrd/lru_marie"
     echo "Commit: $MARIE_COMMIT"
     echo "Version: $PATCH_MARIE_VERSION"
     echo "Path: $MARIE_PATCH_PATH"
     echo "SHA256: $(sha256sum "$MARIE_PATCH" | awk '{print $1}')"
-    echo "Acquisition: $acquisition"
+    echo "Acquisition: pinned current-upstream partial Git checkout; no local fallback"
   } | tee "$LOGDIR/02-lru-marie-provenance.txt"
 }
-
 fetch_bore_source() {
   local upstream_sha256
 
@@ -233,7 +213,7 @@ PY
 apply_marie_testing_patch() {
   local file="$1" status=0
 
-  echo "==> Applying local Marie LRU $PATCH_MARIE_VERSION testing patch for Linux 7.1"
+  echo "==> Applying Marie LRU $PATCH_MARIE_VERSION upstream testing patch"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/02-lru-marie.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \

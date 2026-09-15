@@ -343,83 +343,6 @@ def write_bytes(path: Path, data: bytes) -> None:
 
 
 
-def load_local_fallback(
-    spec: dict[str, Any],
-    manifest_root: Path | None,
-    component: str,
-    kernel: KernelVersion,
-) -> tuple[bytes, dict[str, Any]] | None:
-    patch_value = spec.get("local_fallback_patch")
-    metadata_value = spec.get("local_fallback_metadata")
-    if not patch_value or not metadata_value:
-        return None
-    if manifest_root is None:
-        raise ResolverError(f"local fallback root is unavailable for {component}")
-
-    patch_path = (manifest_root / str(patch_value)).resolve()
-    metadata_path = (manifest_root / str(metadata_value)).resolve()
-    try:
-        data = patch_path.read_bytes()
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ResolverError(f"unable to read local fallback for {component}: {exc}") from exc
-
-    if metadata.get("schema") != 1:
-        raise ResolverError(f"unsupported local fallback metadata for {component}")
-    validate_patch(data, component, list(spec.get("required_markers", [])))
-    actual_sha256 = sha256(data)
-    if metadata.get("sha256") != actual_sha256:
-        raise ResolverError(
-            f"local fallback SHA-256 mismatch for {component}: "
-            f"{actual_sha256} != {metadata.get('sha256')}"
-        )
-    if metadata.get("size") != len(data):
-        raise ResolverError(
-            f"local fallback size mismatch for {component}: "
-            f"{len(data)} != {metadata.get('size')}"
-        )
-
-    selected = str(metadata.get("selected_path", ""))
-    resolved_path = str(metadata.get("path", selected))
-    repo = str(metadata.get("repo", ""))
-    ref = str(metadata.get("ref", ""))
-    commit = str(metadata.get("commit", ""))
-    if not selected or not resolved_path or not repo or not ref:
-        raise ResolverError(f"local fallback metadata is incomplete for {component}")
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise ResolverError(f"local fallback commit is invalid for {component}: {commit!r}")
-
-    target = extract_kernel_target(selected)
-    if compatibility_score(target, kernel)[0] <= 0:
-        raise ResolverError(
-            f"local fallback for {component} targets "
-            f"{target.text if target else 'unknown'} and is incompatible with {kernel.text}"
-        )
-    if spec.get("require_exact_series", False) and target and target.series != kernel.series:
-        raise ResolverError(
-            f"local fallback for {component} targets {target.text}, not {kernel.text}"
-        )
-
-    detected_version = project_version(selected, spec.get("project_version_regex"))
-    recorded_version = metadata.get("project_version")
-    if detected_version and recorded_version and detected_version != recorded_version:
-        raise ResolverError(
-            f"local fallback version mismatch for {component}: "
-            f"{detected_version} != {recorded_version}"
-        )
-
-    return data, {
-        "repo": repo,
-        "ref": ref,
-        "commit": commit,
-        "selected_path": selected,
-        "path": resolved_path,
-        "selection": "local-fallback",
-        "kernel_target": target.text if target else metadata.get("kernel_target"),
-        "project_version": recorded_version or detected_version,
-        "fallback_metadata": str(metadata_path),
-    }
-
 
 def resolve(
     manifest: dict[str, Any],
@@ -428,6 +351,15 @@ def resolve(
     series_text: str,
     manifest_root: Path | None = None,
 ) -> dict[str, Any]:
+    forbidden_source_keys = {"fallback_refs", "local_fallback_patch", "local_fallback_metadata"}
+    for component_name, component_record in manifest.get("components", {}).items():
+        stale_keys = sorted(forbidden_source_keys.intersection(component_record))
+        if stale_keys:
+            raise ResolverError(
+                f"historical patch fallback is forbidden for {component_name}: "
+                + ", ".join(stale_keys)
+            )
+
     temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))
     repos_dir = temp_root / "repos"
     files_dir = temp_root / "files"
@@ -451,7 +383,7 @@ def resolve(
 
             if kind in {"git_patch", "git_file"}:
                 repo = spec["repo"]
-                refs = [spec.get("ref", "main"), *spec.get("fallback_refs", [])]
+                refs = [spec.get("ref", "main")]
                 values = {"kernel_version": kernel.text, "series": series_text}
                 options: list[tuple[tuple[Any, ...], Path, str, str, str, str]] = []
                 ref_errors: list[str] = []
@@ -508,19 +440,12 @@ def resolve(
                             )
 
                 if not options:
-                    fallback = load_local_fallback(
-                        spec, manifest_root, component, kernel
+                    detail = " | ".join(ref_errors) if ref_errors else "no matching paths"
+                    expectation = "exact " if spec.get("require_exact_series", False) else ""
+                    raise ResolverError(
+                        f"no {expectation}compatible current-upstream path found for {component} and Linux "
+                        f"{series_text}: {detail}; port the newest upstream release"
                     )
-                    if fallback is None:
-                        detail = " | ".join(ref_errors) if ref_errors else "no matching paths"
-                        expectation = "exact " if spec.get("require_exact_series", False) else ""
-                        raise ResolverError(
-                            f"no {expectation}compatible path found for {component} and Linux "
-                            f"{series_text}: {detail}"
-                        )
-                    data, fallback_record = fallback
-                    write_bytes(output_path, data)
-                    record.update(fallback_record)
                 else:
                     _, repo_path, commit, ref, mode, selected, resolved_path = max(
                         options, key=lambda item: item[0]
@@ -551,7 +476,7 @@ def resolve(
                             "commit": commit,
                             "selected_path": selected,
                             "path": resolved_path,
-                            "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",
+                            "selection": mode,
                             "repo_dir": f"repos/{repo_path.name}",
                             "kernel_target": target.text if target else None,
                             "project_version": project_version(
@@ -570,8 +495,7 @@ def resolve(
                         candidate = fetch_url(url)
                         validate_patch(candidate, component, list(spec.get("required_markers", [])))
                         # Integrity is recorded from the downloaded bytes in the
-                        # generated lock; fixed fallback metadata remains independently
-                        # checked by load_local_fallback().
+                        # generated lock; integrity is captured in patch-lock.json.
                         data = candidate
                         selected_url = url
                         break
