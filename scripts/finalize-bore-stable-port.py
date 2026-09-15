@@ -140,6 +140,23 @@ def materialize_bore_patchlevel_port(lock_path, record, upstream_patch, kernel_v
 _base.load_locked_bore = load_locked_bore
 _base.materialize_bore_patchlevel_port = materialize_bore_patchlevel_port
 
+# The latest upstream coexistence patch still expresses the pre-7.3 helper in
+# terms of reweight_entity(). Linux 7.3 split that operation, and BORE 6.8.0
+# exposes reweight_task_fair() specifically to preserve both halves. Validate
+# the locked upstream helper, but keep the reviewed semantic adapter from the
+# maintained template instead of copying the now-incomplete old implementation.
+_base_replace_port_function = _base.replace_port_function
+
+
+def _replace_port_function_semantic(template: str, upstream: str) -> str:
+    _base.reweight_task_patch_lines(upstream, "locked BORE sched_ext source")
+    if "reweight_task_fair(task_rq(p), p, &lw);" in template:
+        return template
+    return _base_replace_port_function(template, upstream)
+
+
+_base.replace_port_function = _replace_port_function_semantic
+
 _base_replace_regex_once = _base.replace_regex_once
 
 
