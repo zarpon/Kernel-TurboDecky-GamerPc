@@ -89,11 +89,18 @@ jobs:
           new.write_bytes(old.read_bytes()); old.unlink()
           one('scripts/validate-dynamic-patches-local.sh', 'test_bore_liquorix_port.py', 'test_bore_port.py')
 
+          # Keep the generic git_file materialization test, only remove its old identity.
           t = 'tests/test_dynamic_patch_resolver.py'
-          one(t, ', "liquorix_config"}', '}')
-          one(t, '            components["liquorix_config"]["kind"] = "git_file"\n            components["liquorix_config"]["output"] = "files/liquorix.config"\n', '')
-          one(t, '                if name == "liquorix_config":\n                    output.write_text("CONFIG_GENERIC_CPU=y\\\n", encoding="utf-8")\n                else:\n                    output.write_text(patch(f"{name} snapshot"), encoding="utf-8")\n', '                output.write_text(patch(f"{name} snapshot"), encoding="utf-8")\n')
-          one(t, '                \'LIQUORIX_CONFIG_URL="old"\\\nADIOS_URL="old"\\\n\'\n', '                \'ADIOS_URL="old"\\\n\'\n')
+          s = get(t)
+          fixture_changes = {
+              'liquorix_config': 'generic_config_fixture',
+              'liquorix.config': 'generic.config',
+              'LIQUORIX_CONFIG_URL': 'GENERIC_CONFIG_URL',
+          }
+          for a,b in fixture_changes.items():
+              if a not in s: raise SystemExit(f'dynamic resolver fixture anchor missing: {a}')
+              s = s.replace(a,b)
+          put(t,s)
 
           one('PATCH-SOURCES.md', 'patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a configuração-base do\nLiquorix.\n', 'patches TTM/DMEM de VRAM, linux-tkg, CachyOS e OpenWrt. A configuração-base\né gerada pelo `x86_64_defconfig` da própria árvore Linux-alvo.\n')
           one('PATCH-AUDIT.md', 'O GamerPC também contém componentes que não existiam no Charcoal, como VRAM/\nTTM e a configuração Liquorix genérica.\n', 'O GamerPC também contém componentes que não existiam no Charcoal, como a\nintegração VRAM/TTM. A configuração-base vem diretamente da árvore Linux-alvo.\n')
