@@ -57,7 +57,6 @@ jobs:
 
             python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"
           '''
-          # YAML/Python nesting adds indentation to the literal above; normalize it to shell function indentation.
           replacement = '\n'.join(line[10:] if line.startswith('          ') else line for line in replacement.splitlines()) + '\n'
           text = text[:start] + replacement + text[end:]
 
@@ -68,15 +67,16 @@ jobs:
           text = text.replace('0003-adios-3.2.0.patch', '0003-adios-current.patch')
           path.write_text(text, encoding='utf-8')
 
-          for test in Path('tests').glob('*.py'):
-              src = test.read_text(encoding='utf-8')
+          # Keep the integration wrapper and tests synchronized with the version-neutral name.
+          for target in [Path('scripts/build-kernelnote.sh'), *Path('tests').glob('*.py')]:
+              src = target.read_text(encoding='utf-8')
               if '0003-adios-3.2.0.patch' in src:
-                  test.write_text(src.replace('0003-adios-3.2.0.patch', '0003-adios-current.patch'), encoding='utf-8')
+                  target.write_text(src.replace('0003-adios-3.2.0.patch', '0003-adios-current.patch'), encoding='utf-8')
 
           Path('.github/workflows/fix-adios-once.yml').unlink()
           PY
 
-          bash -n scripts/build-kernelnote-core.sh
+          bash -n scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
           python3 -m py_compile scripts/*.py tests/*.py
           scripts/validate-dynamic-patches-local.sh
           if grep -Rni --exclude-dir=.git --exclude-dir=work --exclude-dir=logs 'adios-3\.2\.0\|ADIOS-3\.2\.0' .; then
