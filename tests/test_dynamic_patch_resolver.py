@@ -333,7 +333,7 @@ class RewriterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             components = {}
-            git_names = {"bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "vram", "liquorix_config"}
+            git_names = {"bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "vram", "generic_config_fixture"}
             requested = {
                 "c23_libbpf": "08-c23-libbpf.patch", "clear": "09-clear.patch",
                 "fsync": "10-fsync-futex-waitv.patch", "o3": "11-o3.patch",
@@ -350,8 +350,8 @@ class RewriterTests(unittest.TestCase):
                     "commit": "a" * 40, "path": f"patches/{name}.patch", "ref": "main",
                     "project_version": "9.9.9",
                 }
-            components["liquorix_config"]["kind"] = "git_file"
-            components["liquorix_config"]["output"] = "files/liquorix.config"
+            components["generic_config_fixture"]["kind"] = "git_file"
+            components["generic_config_fixture"]["output"] = "files/generic.config"
             for name, output in requested.items():
                 components[name] = {"kind": "http_patch", "output": f"files/{output}"}
             lock = {"schema": 1, "components": components}
@@ -359,7 +359,7 @@ class RewriterTests(unittest.TestCase):
             for name in git_names:
                 output = tmp / components[name]["output"]
                 output.parent.mkdir(parents=True, exist_ok=True)
-                if name == "liquorix_config":
+                if name == "generic_config_fixture":
                     output.write_text("CONFIG_GENERIC_CPU=y\n", encoding="utf-8")
                 else:
                     output.write_text(patch(f"{name} snapshot"), encoding="utf-8")
@@ -390,7 +390,7 @@ class RewriterTests(unittest.TestCase):
             core.write_text(
                 '#!/bin/bash\nROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"\n'
                 'WORKDIR="$ROOT/work"\nLOGDIR="$ROOT/logs"\nARTIFACTS="$ROOT/artifacts"\nPATCHDIR="$WORKDIR/patches"\n'
-                'LIQUORIX_CONFIG_URL="old"\nADIOS_URL="old"\n'
+                'GENERIC_CONFIG_URL="old"\nADIOS_URL="old"\n'
                 'BORE_REPO="old"\nBORE_BRANCH="main"\nBORE_COMMIT="old"\nBORE_PATCH_PATH="old"\n'
                 'BORE_SCHED_EXT_REPO="old"\nBORE_SCHED_EXT_COMMIT="old"\nBORE_SCHED_EXT_PATCH_PATH="old"\n'
                 'MARIE_REPO="old"\nMARIE_COMMIT="old"\nMARIE_PATCH_PATH="old"\nMARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n'

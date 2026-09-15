@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve the expected ADIOS default-elevator hunk on Liquorix 7.1.3."""
+"""Resolve the expected ADIOS default-elevator hunk on the target Linux source."""
 
 from pathlib import Path
 import sys
@@ -7,7 +7,7 @@ import sys
 
 def main() -> None:
     if len(sys.argv) != 2:
-        raise SystemExit("usage: apply-adios-liquorix.py /path/to/linux")
+        raise SystemExit("usage: apply-adios-default-elevator-port.py /path/to/linux")
 
     path = Path(sys.argv[1]) / "block/elevator.c"
     text = path.read_text(encoding="utf-8")
@@ -25,7 +25,7 @@ def main() -> None:
     replacement = """#ifdef CONFIG_MQ_IOSCHED_DEFAULT_ADIOS
 \tctx.name = "adios";
 #else /* !CONFIG_MQ_IOSCHED_DEFAULT_ADIOS */
-\t/* Preserve Liquorix defaults when ADIOS is not selected globally. */
+\t/* Preserve the target kernel defaults when ADIOS is not selected globally. */
 \tif (q->nr_hw_queues != 1 && !blk_mq_is_shared_tags(q->tag_set->flags))
 #if defined(CONFIG_ZEN_INTERACTIVE) && defined(CONFIG_MQ_IOSCHED_KYBER)
 \t\tctx.name = "kyber";
@@ -36,7 +36,7 @@ def main() -> None:
 """
 
     path.write_text(text[:start] + replacement + text[end:], encoding="utf-8")
-    print("Applied Liquorix compatibility for the ADIOS default elevator.")
+    print("Applied generic compatibility port for the ADIOS default elevator.")
 
 
 if __name__ == "__main__":

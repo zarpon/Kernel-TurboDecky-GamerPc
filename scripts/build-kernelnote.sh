@@ -205,7 +205,7 @@ apply_poc_patch() {
       | tee "$LOGDIR/05-poc-selector.apply.log"
   else
     cat "$LOGDIR/05-poc-selector.dry-run.log"
-    echo "==> Porting POC Selector across Liquorix/BORE offsets with fuzz <= 3"
+    echo "==> Porting POC Selector across target-kernel/BORE offsets with fuzz <= 3"
     set +e
     patch --batch --forward --fuzz=3 --strip=1 < "$file" \
       > "$LOGDIR/05-poc-selector.fuzz-apply.log" 2>&1
@@ -231,7 +231,7 @@ apply_poc_patch() {
 apply_nap_patch() {
   local file="$1" status=0
 
-  echo "==> Porting NAP 0.5.0 from Linux 6.18.3 to Liquorix Linux 7.1"
+  echo "==> Porting NAP 0.5.0 from Linux 6.18.3 to the target Linux series"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/06-nap.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \
@@ -372,7 +372,7 @@ assert_disabled_or_absent GDB_SCRIPTS
 )
 
 replace_once(
-    'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"\n',
+    'scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-thinlto"\n',
     'scripts/config --set-str LOCALVERSION "-kn-marie-bore-poc-nap-rfx-adios-zir-lto"\n'
 )
 

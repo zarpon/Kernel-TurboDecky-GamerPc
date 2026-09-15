@@ -1,0 +1,159 @@
+test_final_release_beats_rc_of_same_series (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_final_release_beats_rc_of_same_series) ... ok
+test_future_patchlevel_release (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_future_patchlevel_release) ... ok
+test_newer_rc_number_wins_within_same_series (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_newer_rc_number_wins_within_same_series) ... ok
+test_newer_release_candidate_beats_older_stable_series (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_newer_release_candidate_beats_older_stable_series) ... ok
+test_patchlevel_stable_release (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_patchlevel_stable_release) ... ok
+test_release_candidate_identity (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_release_candidate_identity) ... ok
+test_stable_record_wins_equal_version_transition (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_stable_record_wins_equal_version_transition) ... ok
+test_two_component_final_mainline_release (tests.test_latest_stable_identity.LatestUpstreamIdentityTest.test_two_component_final_mainline_release) ... ok
+test_static_config_contains_virtualbox_requirements (tests.test_virtualbox_host_compat.VirtualBoxHostCompatibilityTest.test_static_config_contains_virtualbox_requirements) ... ok
+test_wrapper_enforces_virtualbox_host_requirements (tests.test_virtualbox_host_compat.VirtualBoxHostCompatibilityTest.test_wrapper_enforces_virtualbox_host_requirements) ... ok
+test_external_modules_default_to_llvm_and_skip_polly (tests.test_external_module_toolchain.ExternalModuleToolchainTest.test_external_modules_default_to_llvm_and_skip_polly) ... ok
+test_helper_is_owned_by_polly_integrator (tests.test_external_module_toolchain.ExternalModuleToolchainTest.test_helper_is_owned_by_polly_integrator) ... ok
+test_dynamic_upstream_sha_is_recorded_in_the_lock (tests.test_dynamic_patch_resolver.ResolverTests.test_dynamic_upstream_sha_is_recorded_in_the_lock) ... ok
+test_exact_required_fails (tests.test_dynamic_patch_resolver.ResolverTests.test_exact_required_fails) ... ok
+test_git_symlink_patch_is_followed (tests.test_dynamic_patch_resolver.ResolverTests.test_git_symlink_patch_is_followed) ... ok
+test_latest_exact_version_and_latest_release_fallback (tests.test_dynamic_patch_resolver.ResolverTests.test_latest_exact_version_and_latest_release_fallback) ... ok
+test_latest_release_outranks_kernel_distance (tests.test_dynamic_patch_resolver.ResolverTests.test_latest_release_outranks_kernel_distance) ... ok
+test_newer_current_release_outranks_older_exact_fallback_ref (tests.test_dynamic_patch_resolver.ResolverTests.test_newer_current_release_outranks_older_exact_fallback_ref) ... ok
+test_remote_commands_have_a_bounded_timeout (tests.test_dynamic_patch_resolver.ResolverTests.test_remote_commands_have_a_bounded_timeout) ... ok
+test_rewrite_is_idempotent_and_uses_local_lock (tests.test_dynamic_patch_resolver.RewriterTests.test_rewrite_is_idempotent_and_uses_local_lock) ... ok
+test_repository_relative_patch_symlink_is_followed (tests.test_dynamic_patch_symlinks.GitSymlinkTests.test_repository_relative_patch_symlink_is_followed) ... ok
+test_one_line_relative_patch_pointer_is_followed (tests.test_dynamic_patch_indirections.RegularIndirectionTests.test_one_line_relative_patch_pointer_is_followed) ... ok
+test_audit_describes_automatic_fallback_refresh (tests.test_marie_version_reporting.MarieVersionReportingTest.test_audit_describes_automatic_fallback_refresh) ... ok
+test_build_messages_and_fallback_use_current_metadata (tests.test_marie_version_reporting.MarieVersionReportingTest.test_build_messages_and_fallback_use_current_metadata) ... ok
+test_dynamic_rewriter_replaces_fallback_default (tests.test_marie_version_reporting.MarieVersionReportingTest.test_dynamic_rewriter_replaces_fallback_default) ... ok
+test_preserves_revision_release_fallback_for_rc_kernel (tests.test_marie_local_fallback.MarieLocalFallbackTest.test_preserves_revision_release_fallback_for_rc_kernel) ... fatal: '/tmp/tmp5biqjjz3/missing-upstream.git' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+fatal: '/tmp/tmp5biqjjz3/missing-upstream.git' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+ok
+test_rejects_corrupted_fallback (tests.test_marie_local_fallback.MarieLocalFallbackTest.test_rejects_corrupted_fallback) ... fatal: '/tmp/tmpcspfyqjb/missing-upstream.git' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+fatal: '/tmp/tmpcspfyqjb/missing-upstream.git' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+ok
+test_uses_valid_local_fallback_when_upstream_is_unavailable (tests.test_marie_local_fallback.MarieLocalFallbackTest.test_uses_valid_local_fallback_when_upstream_is_unavailable) ... fatal: '/tmp/tmpfdvgmz36/missing-upstream.git' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+fatal: '/tmp/tmpfdvgmz36/missing-upstream.git' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+ok
+test_core_defaults_are_updated_idempotently (tests.test_marie_fallback_updater.MarieFallbackUpdaterTest.test_core_defaults_are_updated_idempotently) ... ok
+test_metadata_has_no_time_dependent_fields (tests.test_marie_fallback_updater.MarieFallbackUpdaterTest.test_metadata_has_no_time_dependent_fields) ... ok
+test_build_defers_bore_to_the_exact_dynamic_lock (tests.test_bore_port.BoreLinuxPortTests.test_build_defers_bore_to_the_exact_dynamic_lock) ... ok
+test_dynamic_manifest_requires_native_bore_71_source (tests.test_bore_port.BoreLinuxPortTests.test_dynamic_manifest_requires_native_bore_71_source) ... ok
+test_sched_ext_coexistence_fix_is_pinned_and_applied_after_bore (tests.test_bore_port.BoreLinuxPortTests.test_sched_ext_coexistence_fix_is_pinned_and_applied_after_bore) ... ok
+test_dynamic_finalizer_runs_after_the_series_rewrite (tests.test_bore_stable_port.BoreStablePortTests.test_dynamic_finalizer_runs_after_the_series_rewrite) ... ok
+test_latest_stable_rewrite_leaves_bore_for_the_locked_finalizer (tests.test_bore_stable_port.BoreStablePortTests.test_latest_stable_rewrite_leaves_bore_for_the_locked_finalizer) ... ok
+test_latest_stable_rewriter_does_not_carry_a_version_specific_bore_port (tests.test_bore_stable_port.BoreStablePortTests.test_latest_stable_rewriter_does_not_carry_a_version_specific_bore_port) ... ok
+test_exact_locked_patch_is_validated (tests.test_bore_stable_finalizer.BoreStableFinalizerTests.test_exact_locked_patch_is_validated) ... ok
+test_exact_sched_ext_patch_is_validated (tests.test_bore_stable_finalizer.BoreStableFinalizerTests.test_exact_sched_ext_patch_is_validated) ... ok
+test_fallback_source_is_rejected (tests.test_bore_stable_finalizer.BoreStableFinalizerTests.test_fallback_source_is_rejected) ... ok
+test_final_rewrite_uses_locked_upstream_patch (tests.test_bore_stable_finalizer.BoreStableFinalizerTests.test_final_rewrite_uses_locked_upstream_patch) ... ok
+test_sched_ext_port_carries_the_current_locked_helper_body (tests.test_bore_stable_finalizer.BoreStableFinalizerTests.test_sched_ext_port_carries_the_current_locked_helper_body) ... ok
+test_sched_ext_structural_change_fails_closed (tests.test_bore_stable_finalizer.BoreStableFinalizerTests.test_sched_ext_structural_change_fails_closed) ... ok
+test_workflow_finalizes_bore_after_dynamic_resolution (tests.test_bore_stable_finalizer.BoreStableFinalizerTests.test_workflow_finalizes_bore_after_dynamic_resolution) ... ok
+test_injects_full_module_build_and_key_product_checks (tests.test_validation_modules.ValidationModuleRewriteTests.test_injects_full_module_build_and_key_product_checks) ... ok
+test_requires_the_exact_validation_anchor (tests.test_validation_modules.ValidationModuleRewriteTests.test_requires_the_exact_validation_anchor) ... ok
+test_bore_port_is_finalized_after_dynamic_source_resolution (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_bore_port_is_finalized_after_dynamic_source_resolution) ... ok
+test_full_lto_is_mandatory_and_verified_after_olddefconfig (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_full_lto_is_mandatory_and_verified_after_olddefconfig) ... ok
+test_main_dispatcher_uses_the_current_manual_input_contract (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_main_dispatcher_uses_the_current_manual_input_contract) ... ok
+test_manual_runs_package_artifacts_and_gate_release_to_main (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_manual_runs_package_artifacts_and_gate_release_to_main) ... ok
+test_python_validation_allows_an_empty_optional_glob (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_python_validation_allows_an_empty_optional_glob) ... ok
+test_reflex_keeps_vendor_pstate_drivers_in_passive_mode (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_reflex_keeps_vendor_pstate_drivers_in_passive_mode) ... ok
+test_two_component_stable_kernel_version_is_normalized (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_two_component_stable_kernel_version_is_normalized) ... ok
+test_zen_interactive_is_persistent_and_verified (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_zen_interactive_is_persistent_and_verified) ... ok
+test_zen_source_follows_the_resolved_kernel_series (tests.test_manual_workflow_contract.ManualWorkflowContractTests.test_zen_source_follows_the_resolved_kernel_series) ... ok
+test_resolver_discovers_only_introduction_commit_files (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_discovers_only_introduction_commit_files) ... ok
+test_resolver_does_not_retry_permanent_blob_errors (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_does_not_retry_permanent_blob_errors) ... ok
+test_resolver_fetch_profile_composes_a_local_series_checkout (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_fetch_profile_composes_a_local_series_checkout) ... ==> Zen resolver: git ls-remote --heads /tmp/tmpqus77bwx/zen.git 'refs/heads/*/zen-sauce' (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git init --quiet (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git remote add origin /tmp/tmpqus77bwx/zen.git (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git config remote.origin.promisor true (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git config remote.origin.partialclonefilter blob:none (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: fetching 7.1/zen-sauce at depth 128
+==> Zen resolver: git fetch --force --no-tags --depth=128 --filter=blob:none origin refs/heads/7.1/zen-sauce (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git log --reverse --format=%H --fixed-strings --grep 'ZEN: INTERACTIVE: Base config item' FETCH_HEAD -- init/Kconfig (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git log --reverse --format=%H -S 'config ZEN_INTERACTIVE' FETCH_HEAD -- init/Kconfig (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git show 9ce937bbbacf5ab19e2a7e01ce08e1b3a1c8c5a0:init/Kconfig (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git show '9ce937bbbacf5ab19e2a7e01ce08e1b3a1c8c5a0^:init/Kconfig' (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git log --format=%H -G evdev_reclaim_client FETCH_HEAD -- drivers/input/evdev.c (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git rev-parse '35d7d9ce36883703439200a910c4e2ce188fb5c8^' (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git diff --full-index --no-ext-diff --no-renames 9ce937bbbacf5ab19e2a7e01ce08e1b3a1c8c5a0 35d7d9ce36883703439200a910c4e2ce188fb5c8 -- drivers/input/evdev.c (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git show -s --format=%s 35d7d9ce36883703439200a910c4e2ce188fb5c8 (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git log --format=%H -G 'select CPU_FREQ_GOV_SCHEDUTIL' FETCH_HEAD -- drivers/cpufreq/Kconfig.x86 (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git rev-parse 'e76d089a46c5030756f8d02afc35a7770abf3ce5^' (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git diff --full-index --no-ext-diff --no-renames 35d7d9ce36883703439200a910c4e2ce188fb5c8 e76d089a46c5030756f8d02afc35a7770abf3ce5 -- drivers/cpufreq/Kconfig.x86 (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git show -s --format=%s e76d089a46c5030756f8d02afc35a7770abf3ce5 (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git rev-parse FETCH_HEAD (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git rev-parse '9ce937bbbacf5ab19e2a7e01ce08e1b3a1c8c5a0^' (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git diff-tree --no-commit-id --name-only -r 9ce937bbbacf5ab19e2a7e01ce08e1b3a1c8c5a0 (timeout 90s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git show e76d089a46c5030756f8d02afc35a7770abf3ce5:init/Kconfig (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git show e76d089a46c5030756f8d02afc35a7770abf3ce5:mm/page_alloc.c (timeout 180s)
+==> Zen resolver command completed in 0.0s
+==> Zen resolver: git diff --full-index --no-ext-diff --no-renames d24592a73d853791129260bb55f7e8df85d801f3 e76d089a46c5030756f8d02afc35a7770abf3ce5 -- init/Kconfig mm/page_alloc.c (timeout 180s)
+==> Zen resolver command completed in 0.0s
+ok
+test_resolver_has_bounded_commands_and_total_deadline (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_has_bounded_commands_and_total_deadline) ... ok
+test_resolver_keeps_symbol_hunks_and_excludes_thp (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_keeps_symbol_hunks_and_excludes_thp) ... ok
+test_resolver_main_writes_patch_lock_and_provenance (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_main_writes_patch_lock_and_provenance) ... Resolved official Zen interactive profile head from 7.1/zen-sauce: 2 hunks in 2 files; added 1 compatibility commits; excluded 1 THP hunks
+ok
+test_resolver_materializes_current_compatibility_commits (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_materializes_current_compatibility_commits) ... ok
+test_resolver_prefers_exact_series_and_falls_back_to_older_series (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_prefers_exact_series_and_falls_back_to_older_series) ... ok
+test_resolver_retries_transient_promisor_blob_failures (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_resolver_retries_transient_promisor_blob_failures) ... ==> Zen resolver: transient promisor-blob download failure; retrying (1/2)
+ok
+test_rewriter_does_not_depend_on_a_sched_ext_digest_anchor (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_rewriter_does_not_depend_on_a_sched_ext_digest_anchor) ... ok
+test_rewriter_integrates_official_profile_idempotently (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_rewriter_integrates_official_profile_idempotently) ... ok
+test_rewriter_rejects_missing_anchor (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_rewriter_rejects_missing_anchor) ... ok
+test_rewriter_survives_prior_fetch_injections (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_rewriter_survives_prior_fetch_injections) ... ok
+test_thp_guard_rejects_functional_thp_changes (tests.test_zen_interactive_rewriter.ZenInteractiveRewriterTests.test_thp_guard_rejects_functional_thp_changes) ... ok
+
+----------------------------------------------------------------------
+Ran 68 tests in 1.393s
+
+OK
+THP admission simulation passed: zero-fill cap 0.25 MiB -> 1.60 MiB; swap candidate cap 0 KiB -> 0 KiB
+dpkg-deb: building package 'turbodecky-tuning' in '/tmp/tmp.uPKCGflCQa/artifacts/turbodecky-tuning_1.3.3_all.deb'.
+runtime tuning validation passed
+Marie fallback 0.11.1r2 validated: a28ff39ed30034290ae7e30ae42f0725b9fdb531e3a10a127f26f53b0c217551
+Dynamic patch source validation passed

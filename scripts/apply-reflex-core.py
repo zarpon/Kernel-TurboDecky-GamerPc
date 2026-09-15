@@ -92,7 +92,7 @@ normalize_changed_whitespace() {
       | tee "$LOGDIR/07-reflex.apply.log"
   else
     cat "$LOGDIR/07-reflex.dry-run.log"
-    echo "==> Porting REFLEX across Liquorix offsets with fuzz <= 3"
+    echo "==> Porting REFLEX across target-kernel offsets with fuzz <= 3"
     set +e
     patch --batch --forward --fuzz=3 --strip=1 < "$file" \
       > "$LOGDIR/07-reflex.fuzz-apply.log" 2>&1
@@ -183,10 +183,10 @@ apply_bore_patch() {
 
     source = replace_once(
         source,
-        'cp "$WORKDIR/liquorix-amd64.config" .config\n',
+        'scripts/kconfig/merge_config.sh -m .config "$ROOT/config/kernelnote.config"\n',
         '''apply_reflex_patch "$REFLEX_PATCH"
 
-cp "$WORKDIR/liquorix-amd64.config" .config
+scripts/kconfig/merge_config.sh -m .config "$ROOT/config/kernelnote.config"
 ''',
         "REFLEX apply call",
     )

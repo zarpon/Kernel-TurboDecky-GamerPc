@@ -139,12 +139,12 @@ apply_zen_interactive_profile() {
         replacement = '\nfetch_zen_interactive_profile\n\ncd "$KERNELDIR"\n'
         text = replace_once(text, anchor, replacement, "Zen fetch boundary")
 
-    apply_marker = 'apply_zen_interactive_profile "$ZEN_INTERACTIVE_PATCH"\n\ncp '
+    apply_marker = 'apply_zen_interactive_profile "$ZEN_INTERACTIVE_PATCH"\n\nscripts/kconfig/merge_config.sh'
     if apply_marker not in text:
-        anchor = 'cp "$WORKDIR/liquorix-amd64.config" .config\n'
+        anchor = 'scripts/kconfig/merge_config.sh -m .config "$ROOT/config/kernelnote.config"\n'
         replacement = (
             'apply_zen_interactive_profile "$ZEN_INTERACTIVE_PATCH"\n\n'
-            'cp "$WORKDIR/liquorix-amd64.config" .config\n'
+            'scripts/kconfig/merge_config.sh -m .config "$ROOT/config/kernelnote.config"\n'
         )
         text = replace_once(text, anchor, replacement, "Zen apply call")
 

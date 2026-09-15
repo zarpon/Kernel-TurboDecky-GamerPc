@@ -14,7 +14,6 @@ MAKE=(make LLVM=1 LLVM_IAS=1)
 
 KERNEL_TAG="v7.1.4"
 KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
-LIQUORIX_CONFIG_URL="https://raw.githubusercontent.com/damentz/liquorix-package/56f0e85662990ee20b4ea10465a41a23b65ace2c/linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
 ADIOS_URL="https://raw.githubusercontent.com/firelzrd/adios/08bf078aac99075a0bef73c2b2497574a82e4c41/patches/stable/0001-linux6.19.3-ADIOS-3.2.0.patch"
 
 # Bootstrap anchors for the generated build only. The resolver obtains current
@@ -48,8 +47,8 @@ PATCH_MARIE_VERSION="${PATCH_MARIE_VERSION:-0.11.1r2}"
 MARIE_FALLBACK_PATCH="$ROOT/patches/fallback/lru_marie.patch"
 MARIE_FALLBACK_METADATA="$ROOT/patches/fallback/lru_marie.json"
 
-# Keep the existing Liquorix built-in arguments and append these canonical
-# kernel parameters. CMDLINE_OVERRIDE stays disabled so bootloader parameters
+# Append the canonical TurboDecky built-in arguments.
+# CMDLINE_OVERRIDE stays disabled so bootloader parameters
 # such as root=, resume= and console= are preserved.
 KERNEL_DEFAULT_CMDLINE=(
   "mitigations=off"
@@ -346,7 +345,7 @@ apply_adios_patch() {
   local file="$1" status
   local -a rejects expected
 
-  echo "==> Applying ADIOS with Liquorix compatibility handling"
+  echo "==> Applying ADIOS with target-kernel compatibility handling"
   if patch --batch --forward --strip=1 < "$file" > "$LOGDIR/03-adios.apply.log" 2>&1; then
     status=0
   else
@@ -367,7 +366,7 @@ apply_adios_patch() {
     return 1
   fi
 
-  python3 "$ROOT/scripts/apply-adios-liquorix.py" "$KERNELDIR"
+  python3 "$ROOT/scripts/apply-adios-default-elevator-port.py" "$KERNELDIR"
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
   git diff --check -- block/elevator.c
 
@@ -437,7 +436,6 @@ fetch_marie_testing_patch
 fetch_bore_source
 fetch_bore_sched_ext_source
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"
-download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
 
 cd "$KERNELDIR"
 apply_marie_testing_patch "$MARIE_PATCH"
@@ -445,7 +443,9 @@ apply_bore_patch "$BORE_PATCH"
 apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-3.2.0.patch"
 
-cp "$WORKDIR/liquorix-amd64.config" .config
+echo "==> Generating upstream x86-64 base configuration"
+"${MAKE[@]}" x86_64_defconfig
+scripts/kconfig/merge_config.sh -m .config "$ROOT/config/kernelnote.config"
 
 # BORE augments CFS/EEVDF. Alternative schedulers remain disabled so
 # the BORE implementation selected above is the active fair scheduler path.
@@ -475,9 +475,9 @@ scripts/config --disable LTO_NONE
 scripts/config --disable LTO_CLANG_FULL
 scripts/config --enable LTO_CLANG_THIN
 
-# Reproducible generic AMD64 build for LMDE. Avoid distro certificate paths and
-# Rust toolchain coupling from the upstream Liquorix generated configuration.
-scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"
+# Reproducible generic AMD64 build. Avoid distro certificate paths and
+# optional Rust toolchain coupling in the hosted build environment.
+scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-thinlto"
 scripts/config --disable LOCALVERSION_AUTO
 scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
 scripts/config --set-str SYSTEM_REVOCATION_KEYS ""

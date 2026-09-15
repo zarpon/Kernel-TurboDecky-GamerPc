@@ -179,7 +179,7 @@ PYGUD
     text = insert_after_exact_line_once(
         text,
         "configure_builtin_cmdline",
-        "\n# MULTIPLEXER is a boolean symbol. Liquorix may carry the stale module value,\n"
+        "\n# MULTIPLEXER is a boolean symbol. a previous external base configuration may carry the stale module value,\n"
         "# which olddefconfig normalizes with a warning unless corrected first.\n"
         "scripts/config --enable MULTIPLEXER\n",
         "MULTIPLEXER configuration",

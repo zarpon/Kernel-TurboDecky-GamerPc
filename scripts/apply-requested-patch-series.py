@@ -262,8 +262,8 @@ normalize_changed_whitespace() {
 
     source = replace_once(
         source,
-        'download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"\n',
-        '''download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"
+        'fetch_bore_sched_ext_source\n',
+        '''fetch_bore_sched_ext_source
 fetch_requested_patch_series
 ''',
         "requested series fetch call",

@@ -160,8 +160,8 @@ def patch_wrapper(path: Path) -> None:
     # anchor synchronized with that generated state.
     source = replace_once(
         source,
-        '-kernelnote-lqx-marie-bore-adios-thinlto',
-        '-kernelnote-lqx-marie-bore-adios-fulllto',
+        '-kernelnote-marie-bore-adios-thinlto',
+        '-kernelnote-marie-bore-adios-fulllto',
         "Full LTO integration-wrapper localversion anchor",
     )
 

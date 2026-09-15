@@ -4,8 +4,8 @@ English version: [README.en.md](README.en.md)
 
 Kernel Linux otimizado para entusiastas que querem alto
 desempenho em multimídia e jogos nas distribuições Debian, Ubuntu e derivados.
-O repositório `Kernel-TurboDecky-GamerPc` acompanha a versão estável mais
-recente publicada pelo kernel.org.
+O repositório `Kernel-TurboDecky-GamerPc` acompanha a versão upstream mais
+recente publicada pelo kernel.org, incluindo release candidates (RCs).
 
 ## Compatibilidade de hardware
 
@@ -68,7 +68,9 @@ máquina exposta ou de produção.
 
 Fonte: [Linux stable](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git).
 O build clona a tag `v<versão>` e confirma a versão pelo Makefile antes de
-aplicar qualquer patch.
+aplicar qualquer patch. A configuração-base é gerada pelo `x86_64_defconfig`
+da própria árvore Linux-alvo e recebe as sobreposições versionadas em
+`config/kernelnote.config`.
 
 
 ## Patchset de desempenho

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure the generated build for kernel.org latest stable Linux."""
+"""Configure the generated build for the newest kernel.org Linux release, including RCs."""
 
 from __future__ import annotations
 
@@ -24,9 +24,9 @@ def main() -> None:
     source = replace_once(
         source,
         'KERNEL_TAG="v7.1.4"\n',
-        ''': "${KERNEL_VERSION:?latest stable version was not resolved}"
-: "${KERNEL_SERIES:?latest stable series was not resolved}"
-: "${KERNEL_TAG:?latest stable tag was not resolved}"
+        ''': "${KERNEL_VERSION:?latest upstream version was not resolved}"
+: "${KERNEL_SERIES:?latest upstream series was not resolved}"
+: "${KERNEL_TAG:?latest upstream tag was not resolved}"
 : "${KERNEL_DEB_VERSION:?Debian package version was not resolved}"
 ''',
         "dynamic upstream tag",
@@ -40,7 +40,7 @@ def main() -> None:
     source = replace_once(
         source,
         'echo "==> Cloning current upstream Linux source tag $KERNEL_TAG"\n',
-        'echo "==> Cloning kernel.org latest stable source tag $KERNEL_TAG"\n',
+        'echo "==> Cloning kernel.org newest upstream source tag $KERNEL_TAG"\n',
         "clone description",
     )
     source = replace_once(
@@ -64,7 +64,7 @@ if [[ "$actual_kernel_version" != "$expected_kernel_version" ]]; then
   exit 1
 fi
 {
-  echo "Policy: kernel.org latest_stable"
+  echo "Policy: kernel.org newest upstream release including RCs"
   echo "Resolved version: $KERNEL_VERSION"
   echo "Resolved series: $KERNEL_SERIES"
   echo "Source tag: $KERNEL_TAG"
@@ -88,7 +88,7 @@ PY
 '''
     source = replace_once(path.read_text(encoding="utf-8") if False else source, whitespace_anchor, whitespace_block, "patched-file whitespace normalization")
 
-    config_anchor = 'cp "$WORKDIR/liquorix-amd64.config" .config\n'
+    config_anchor = 'scripts/kconfig/merge_config.sh -m .config "$ROOT/config/kernelnote.config"\n'
     config_block = config_anchor + r'''
 # Generic amd64 profile: keep the upstream platform, topology and driver
 # choices instead of pruning the build for one computer model.
@@ -145,7 +145,7 @@ assert_config "CONFIG_LTO_CLANG=y"
 assert_config "CONFIG_LTO_CLANG_FULL=y"
 '''
     source = replace_once(source, full_lto_assert_anchor, full_lto_assert_block, "Clang Full LTO post-olddefconfig assertions")
-    source = replace_once(source, 'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"', 'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-fulllto"', "Full LTO localversion marker")
+    source = replace_once(source, 'scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-thinlto"', 'scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-fulllto"', "Full LTO localversion marker")
     source = replace_once(source, 'echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"', 'echo "==> Building complete Clang Full LTO Debian packages with $JOBS parallel jobs"', "Full LTO package build description")
     source = replace_once(source, 'echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"', 'echo "==> Validating built-in kernel and Clang Full LTO link with $JOBS parallel jobs"', "Full LTO validation build description")
 
@@ -173,7 +173,7 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
 cp .config "$LOGDIR/final.config"
 ''', "media profile provenance")
     source = source.replace('KDEB_PKGVERSION="7.1.4-1turbodecky1"', 'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"')
-    source = source.replace('echo "==> Kernelnote ThinLTO build completed successfully"', 'echo "==> Latest-stable TurboDecky Full LTO build completed successfully"')
+    source = source.replace('echo "==> Kernelnote ThinLTO build completed successfully"', 'echo "==> Newest-upstream TurboDecky Full LTO build completed successfully"')
     path.write_text(source, encoding="utf-8")
 
 

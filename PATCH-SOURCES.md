@@ -127,8 +127,8 @@ selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 
 A resolução dinâmica cobre BORE, sua correção de coexistência com `sched_ext`,
 Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP, REFLEX, o perfil Zen interativo,
-patches TTM/DMEM de VRAM, linux-tkg, CachyOS, OpenWrt e a configuração-base do
-Liquorix.
+patches TTM/DMEM de VRAM, linux-tkg, CachyOS e OpenWrt. A configuração-base
+é gerada pelo `x86_64_defconfig` da própria árvore Linux-alvo.
 
 Patches de correção sem versão própria, como commits upstream específicos e
 séries enviadas por e-mail, são baixados novamente e registrados por SHA-256,

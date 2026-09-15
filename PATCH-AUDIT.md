@@ -55,5 +55,5 @@ os caminhos, a série, o SHA-256 e o tamanho ficam no `patch-lock.json` de cada
 build. Se a fonte deixar de aplicar, o fluxo tenta o port controlado com fuzz
 limitado e grava os rejeitos; qualquer rejeito não resolvido interrompe o build.
 
-O GamerPC também contém componentes que não existiam no Charcoal, como VRAM/
-TTM e a configuração Liquorix genérica.
+O GamerPC também contém componentes que não existiam no Charcoal, como a
+integração VRAM/TTM. A configuração-base vem diretamente da árvore Linux-alvo.

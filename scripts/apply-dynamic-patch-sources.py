@@ -162,7 +162,6 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         "patch lock preservation",
     )
 
-    text = replace_assignment(text, "LIQUORIX_CONFIG_URL", file_url(component(lock, "liquorix_config")))
     text = replace_assignment(text, "ADIOS_URL", file_url(component(lock, "adios")))
 
     for prefix, name in (("BORE", "bore"), ("MARIE", "marie"), ("REFLEX", "reflex")):
@@ -295,7 +294,7 @@ def validate_lock(lock: dict[str, Any]) -> None:
         raise RewriteError("unsupported patch lock schema")
     required = {
         "bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
-        "vram", "liquorix_config", *REQUESTED.keys(),
+        "vram", *REQUESTED.keys(),
     }
     missing = sorted(required - set(lock.get("components", {})))
     if missing:

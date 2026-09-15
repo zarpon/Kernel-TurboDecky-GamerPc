@@ -198,20 +198,6 @@
         "https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/2990_libbpf-v2-workaround-Wmaybe-uninitialized-false-pos.patch"
       ]
     },
-    "liquorix_config": {
-      "exact_globs": [
-        "linux-liquorix/debian/config/kernelarch-x86/config-arch-64"
-      ],
-      "fallback_globs": [],
-      "fallback_refs": [
-        "56f0e85662990ee20b4ea10465a41a23b65ace2c"
-      ],
-      "kind": "git_file",
-      "output": "liquorix-amd64.config",
-      "ref": "HEAD",
-      "repo": "https://github.com/damentz/liquorix-package.git",
-      "require_exact_series": true
-    },
     "marie": {
       "exact_globs": [
         "patches/stable/*linux{series}*lru_marie*.patch",

@@ -51,7 +51,7 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
 
     def test_rewriter_survives_prior_fetch_injections(self) -> None:
         original = CORE.read_text(encoding="utf-8")
-        old = 'download "$LIQUORIX_CONFIG_URL" "$WORKDIR/liquorix-amd64.config"\n'
+        old = 'fetch_bore_sched_ext_source\n'
         self.assertEqual(original.count(old), 1)
         transformed = original.replace(
             old,
@@ -64,7 +64,8 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
             rewriter.rewrite(path)
             result = path.read_text(encoding="utf-8")
             self.assertIn(
-                "fetch_requested_patch_series\nfetch_reflex_patch\n\n"
+                "fetch_requested_patch_series\nfetch_reflex_patch\n"
+                'download "$ADIOS_URL" "$PATCHDIR/0003-adios-3.2.0.patch"\n\n'
                 "fetch_zen_interactive_profile\n\ncd \"$KERNELDIR\"",
                 result,
             )

@@ -30,7 +30,7 @@ python3 -m unittest -v \
   "$ROOT/tests/test_marie_version_reporting.py" \
   "$ROOT/tests/test_marie_local_fallback.py" \
   "$ROOT/tests/test_marie_fallback_updater.py" \
-  "$ROOT/tests/test_bore_liquorix_port.py" \
+  "$ROOT/tests/test_bore_port.py" \
   "$ROOT/tests/test_bore_stable_port.py" \
   "$ROOT/tests/test_bore_stable_finalizer.py" \
   "$ROOT/tests/test_validation_modules.py" \
