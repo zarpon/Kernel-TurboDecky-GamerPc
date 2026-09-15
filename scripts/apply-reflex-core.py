@@ -155,14 +155,11 @@ PY
     | tee "$LOGDIR/07-reflex-diff-check.log"
 
   test -s drivers/cpufreq/cpufreq_reflex.c
-  if [[ "$PATCH_REFLEX_VERSION" != "__DYNAMIC_PATCH_LOCK_REQUIRED__" ]]; then
-    # Upstream may publish compatibility/repack revisions such as 0.3.3r2
-    # while the governor's runtime ABI/version remains 0.3.3. Validate both
-    # identities without incorrectly requiring the packaging revision suffix
-    # to be embedded in the source-level governor version macro.
-    runtime_version="$(printf '%s\n' "$PATCH_REFLEX_VERSION" | sed -E 's/r[0-9]+$//')"
-    grep -Fq "#define CPUFREQ_REFLEX_VERSION  \"$runtime_version\"" drivers/cpufreq/cpufreq_reflex.c
-  fi
+  # The lock always supplies a concrete upstream REFLEX project version before
+  # this generated core is executed. Compatibility/repack revisions such as
+  # 0.3.3r2 map to the runtime source version 0.3.3.
+  runtime_version="$(printf '%s\n' "$PATCH_REFLEX_VERSION" | sed -E 's/r[0-9]+$//')"
+  grep -Fq "#define CPUFREQ_REFLEX_VERSION  \"$runtime_version\"" drivers/cpufreq/cpufreq_reflex.c
   grep -Fq 'config CPU_FREQ_GOV_REFLEX' drivers/cpufreq/Kconfig
   grep -Fq 'config CPU_FREQ_DEFAULT_GOV_REFLEX' drivers/cpufreq/Kconfig
   grep -Fq 'cpufreq_default_governor(void)' drivers/cpufreq/cpufreq_reflex.c
