@@ -37,7 +37,7 @@ class BoreLinuxPortTests(unittest.TestCase):
         data = SCHED_EXT_PORT.read_bytes()
         self.assertEqual(
             hashlib.sha256(data).hexdigest(),
-            "f3940186540146a821c2fe5af51f2a540f71b730bf291e2af4881375b75aa9ad",
+            "6e639c7782df1e074b8e1802cac1fd1d6217e404b4b312be88b71286ae80c422",
         )
         text = data.decode("utf-8")
         for marker in (
