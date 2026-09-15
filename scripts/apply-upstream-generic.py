@@ -51,11 +51,13 @@ git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
         r'''git clone --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 actual_kernel_version="$(make -s -C "$KERNELDIR" kernelversion)"
 expected_kernel_version="$KERNEL_VERSION"
-# Final kernel.org tags may use X.Y while the kernel Makefile reports X.Y.0.
-# Canonicalize only that trailing-zero representation; all other mismatches
-# remain fatal so a wrong source tag cannot pass validation.
+# kernel.org's Makefile represents two-component final/RC tags as X.Y.0 and
+# X.Y.0-rcN, while release/tag identity is X.Y and X.Y-rcN. Canonicalize only
+# that synthetic zero patchlevel; all other source mismatches remain fatal.
 if [[ "$expected_kernel_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
   expected_kernel_version="${expected_kernel_version}.0"
+elif [[ "$expected_kernel_version" =~ ^([0-9]+\.[0-9]+)-rc([0-9]+)$ ]]; then
+  expected_kernel_version="${BASH_REMATCH[1]}.0-rc${BASH_REMATCH[2]}"
 fi
 if [[ "$actual_kernel_version" != "$expected_kernel_version" ]]; then
   echo "Cloned kernel version mismatch: $actual_kernel_version != $KERNEL_VERSION (canonical expected $expected_kernel_version)" >&2
@@ -84,12 +86,7 @@ PY
 PY
 }
 '''
-    source = replace_once(
-        source,
-        whitespace_anchor,
-        whitespace_block,
-        "patched-file whitespace normalization",
-    )
+    source = replace_once(path.read_text(encoding="utf-8") if False else source, whitespace_anchor, whitespace_block, "patched-file whitespace normalization")
 
     config_anchor = 'cp "$WORKDIR/liquorix-amd64.config" .config\n'
     config_block = config_anchor + r'''
@@ -147,35 +144,10 @@ assert_config "CONFIG_LTO=y"
 assert_config "CONFIG_LTO_CLANG=y"
 assert_config "CONFIG_LTO_CLANG_FULL=y"
 '''
-    source = replace_once(
-        source,
-        full_lto_assert_anchor,
-        full_lto_assert_block,
-        "Clang Full LTO post-olddefconfig assertions",
-    )
-
-    source = replace_once(
-        source,
-        'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"',
-        'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-fulllto"',
-        "Full LTO localversion marker",
-    )
-
-    # build-kernelnote.sh still consumes the historical ThinLTO validation
-    # comment as a structural anchor. Keep that comment intact here; the active
-    # Kconfig policy and post-olddefconfig assertions above are Full LTO.
-    source = replace_once(
-        source,
-        'echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"',
-        'echo "==> Building complete Clang Full LTO Debian packages with $JOBS parallel jobs"',
-        "Full LTO package build description",
-    )
-    source = replace_once(
-        source,
-        'echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"',
-        'echo "==> Validating built-in kernel and Clang Full LTO link with $JOBS parallel jobs"',
-        "Full LTO validation build description",
-    )
+    source = replace_once(source, full_lto_assert_anchor, full_lto_assert_block, "Clang Full LTO post-olddefconfig assertions")
+    source = replace_once(source, 'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-thinlto"', 'scripts/config --set-str LOCALVERSION "-kernelnote-lqx-marie-bore-adios-fulllto"', "Full LTO localversion marker")
+    source = replace_once(source, 'echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"', 'echo "==> Building complete Clang Full LTO Debian packages with $JOBS parallel jobs"', "Full LTO package build description")
+    source = replace_once(source, 'echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"', 'echo "==> Validating built-in kernel and Clang Full LTO link with $JOBS parallel jobs"', "Full LTO validation build description")
 
     assertion_anchor = 'assert_config "CONFIG_CPU_MITIGATIONS=y"\n'
     assertion_block = r'''assert_config "CONFIG_64BIT=y"
@@ -191,11 +163,7 @@ assert_disabled_or_absent X86_NATIVE_CPU
 assert_config "CONFIG_CPU_MITIGATIONS=y"
 '''
     source = replace_once(source, assertion_anchor, assertion_block, "generic amd64 assertions")
-
-    source = replace_once(
-        source,
-        'cp .config "$LOGDIR/final.config"\n',
-        '''{
+    source = replace_once(source, 'cp .config "$LOGDIR/final.config"\n', '''{
   echo "Target: generic amd64 desktop, laptop and workstation hardware"
   echo "CPU support: Intel and AMD x86-64 families retained from the upstream configuration"
   echo "Media support: upstream multimedia, graphics, audio, camera and wireless selections retained"
@@ -203,19 +171,9 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
 } | tee "$LOGDIR/media-profile.txt"
 
 cp .config "$LOGDIR/final.config"
-''',
-        "media profile provenance",
-    )
-
-    source = source.replace(
-        'KDEB_PKGVERSION="7.1.4-1turbodecky1"',
-        'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"',
-    )
-    source = source.replace(
-        'echo "==> Kernelnote ThinLTO build completed successfully"',
-        'echo "==> Latest-stable TurboDecky Full LTO build completed successfully"',
-    )
-
+''', "media profile provenance")
+    source = source.replace('KDEB_PKGVERSION="7.1.4-1turbodecky1"', 'KDEB_PKGVERSION="$KERNEL_DEB_VERSION"')
+    source = source.replace('echo "==> Kernelnote ThinLTO build completed successfully"', 'echo "==> Latest-stable TurboDecky Full LTO build completed successfully"')
     path.write_text(source, encoding="utf-8")
 
 
