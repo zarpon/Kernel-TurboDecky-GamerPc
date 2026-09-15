@@ -49,7 +49,18 @@ def select_latest_release(payload: dict) -> dict:
             candidates.append(release)
     if not candidates:
         raise SystemExit("kernel.org returned no downloadable non-EOL mainline/stable release")
-    return max(candidates, key=lambda release: version_key(str(release["version"])))
+
+    # Preserve the previous source-quality preference when kernel.org exposes
+    # duplicate records for exactly the same version during a transition.
+    # Version always wins first; stable only breaks an equal-version tie.
+    moniker_priority = {"mainline": 0, "stable": 1}
+    return max(
+        candidates,
+        key=lambda release: (
+            version_key(str(release["version"])),
+            moniker_priority.get(str(release.get("moniker", "")), -1),
+        ),
+    )
 
 
 def main() -> None:
