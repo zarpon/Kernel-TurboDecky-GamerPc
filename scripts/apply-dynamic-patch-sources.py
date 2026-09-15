@@ -132,9 +132,11 @@ def file_url(record: dict[str, Any]) -> str:
     return f'file://$RESOLVED_PATCH_ROOT/{record["output"]}'
 
 
-def project_version(record: dict[str, Any], fallback: str) -> str:
+def project_version(record: dict[str, Any], label: str) -> str:
     value = record.get("project_version")
-    return str(value) if value else fallback
+    if not value:
+        raise RewriteError(f"locked project version is missing for {label}")
+    return str(value)
 
 
 def patch_core(text: str, lock: dict[str, Any]) -> str:
@@ -187,8 +189,8 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
             text = replace_assignment(text, variable, value)
 
     versions = {
-        "MARIE": project_version(component(lock, "marie"), "unknown"),
-        "REFLEX": project_version(component(lock, "reflex"), "unknown"),
+        "MARIE": project_version(component(lock, "marie"), "marie"),
+        "REFLEX": project_version(component(lock, "reflex"), "reflex"),
     }
     if "PATCH_MARIE_VERSION=" in text:
         text = replace_assignment(text, "PATCH_MARIE_VERSION", versions["MARIE"])
@@ -229,11 +231,13 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         if old in text:
             text = text.replace(old, new)
 
-    for name, (output, prefix) in REQUESTED.items():
+    for name, (output, _prefix) in REQUESTED.items():
         component(lock, name)
-        anchor = f'"$REQUESTED_SERIES_DIR/{output}" "{prefix}" \\\n'
-        replacement = anchor + f'    "file://$RESOLVED_PATCH_ROOT/files/{output}" \\\n'
-        text = replace_once(text, anchor, replacement, f"local candidate {name}")
+        sentinel = f'"__DYNAMIC_PATCH_LOCK_REQUIRED__:{name}"'
+        text = replace_once(
+            text, sentinel, f'"file://$RESOLVED_PATCH_ROOT/files/{output}"',
+            f"locked candidate {name}",
+        )
 
     return text
 
@@ -257,30 +261,15 @@ def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
             text = replace_assignment(text, path_var, str(record["path"]))
 
     versions = {
-        "zram_ir": project_version(component(lock, "zram_ir"), "unknown"),
-        "poc": project_version(component(lock, "poc"), "unknown"),
-        "nap": project_version(component(lock, "nap"), "unknown"),
+        "zram_ir": project_version(component(lock, "zram_ir"), "zram_ir"),
+        "poc": project_version(component(lock, "poc"), "poc"),
+        "nap": project_version(component(lock, "nap"), "nap"),
     }
-    anchor = 'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"\n'
-    position = text.find(anchor)
-    if position < 0:
-        raise RewriteError("dynamic wrapper versions: NAP patch assignment is missing")
-    insertion = (
-        f'PATCH_ZRAM_IR_VERSION="{versions["zram_ir"]}"\n'
-        + f'PATCH_POC_VERSION="{versions["poc"]}"\n'
-        + f'PATCH_NAP_VERSION="{versions["nap"]}"\n'
-    )
-    position += len(anchor)
-    text = text[:position] + insertion + text[position:]
+    text = replace_assignment(text, "PATCH_ZRAM_IR_VERSION", versions["zram_ir"])
+    text = replace_assignment(text, "PATCH_POC_VERSION", versions["poc"])
+    text = replace_assignment(text, "PATCH_NAP_VERSION", versions["nap"])
 
     replacements = {
-        "grep -Fq '#define ZRAM_IR_VERSION \"1.2\"' drivers/block/zram/zram_drv.c":
-            '[[ "$PATCH_ZRAM_IR_VERSION" == "unknown" ]] || grep -Fq "$PATCH_ZRAM_IR_VERSION" drivers/block/zram/zram_drv.c',
-        "grep -Fq '#define CPUIDLE_NAP_VERSION  \"0.5.0\"' \\\n    drivers/cpuidle/governors/nap/nap.c":
-            '[[ "$PATCH_NAP_VERSION" == "unknown" ]] || grep -Fq "$PATCH_NAP_VERSION" \\\n    drivers/cpuidle/governors/nap/nap.c',
-        "'Subject: [PATCH] linux7.1-rc1-zram-ir-1.2'": "'zram-ir'",
-        "'Subject: [PATCH] 7.1-rc1-poc-selector-v2.6.2r2'": "'poc-selector'",
-        "'Subject: [PATCH] 6.18.3-nap-v0.5.0'": "'nap'",
     }
     for old, new in replacements.items():
         if old in text:

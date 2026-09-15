@@ -74,7 +74,7 @@ class ZenInteractiveRewriterTests(unittest.TestCase):
         original = CORE.read_text(encoding="utf-8")
         original = original.replace(
             'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256='
-            '"cdf138cdb94fcb4e2988bd7d2873a51522fdb7212ec314fde202facaf8210b5c"',
+            '"__DYNAMIC_PATCH_LOCK_REQUIRED__"',
             'BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="new-lock-digest"',
             1,
         )

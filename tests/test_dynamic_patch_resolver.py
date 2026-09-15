@@ -358,7 +358,7 @@ class RewriterTests(unittest.TestCase):
             lock_path.write_text(json.dumps(lock), encoding="utf-8")
 
             requested_calls = "".join(
-                f'  "$REQUESTED_SERIES_DIR/{output}" "{prefix}" \\\n    "https://example.invalid/{output}"\n'
+                f'  "$REQUESTED_SERIES_DIR/{output}" "{prefix}" \\\n    "__DYNAMIC_PATCH_LOCK_REQUIRED__:{name}"\n'
                 for name, output, prefix in [
                     ("c23_libbpf", "08-c23-libbpf.patch", "08-c23-libbpf"),
                     ("clear", "09-clear.patch", "09-clear"),
@@ -396,7 +396,10 @@ class RewriterTests(unittest.TestCase):
                 'ZRAM_IR_REPO="old"\nZRAM_IR_COMMIT="old"\nZRAM_IR_PATCH_PATH="old"\n'
                 'POC_REPO="old"\nPOC_COMMIT="old"\nPOC_PATCH_PATH="old"\n'
                 'NAP_REPO="old"\nNAP_COMMIT="old"\nNAP_PATCH_PATH="old"\n'
-                'NAP_PATCH="$PATCHDIR/0006-nap-v0.5.0-linux7.1-port.patch"\n'
+                'NAP_PATCH="$PATCHDIR/0006-nap-current-port.patch"\n'
+                'PATCH_ZRAM_IR_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
+                'PATCH_POC_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
+                'PATCH_NAP_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
                 'VRAM_PATCH_REPO="old"\nVRAM_PATCH_COMMIT="old"\nVRAM_PATCH_PATH="old"\n',
                 encoding="utf-8",
             )
@@ -408,6 +411,7 @@ class RewriterTests(unittest.TestCase):
             self.assertEqual(first_wrapper, wrapper.read_text())
             self.assertIn("RESOLVED_PATCH_ROOT", first_core)
             self.assertIn("file://$RESOLVED_PATCH_ROOT/files/08-c23-libbpf.patch", first_core)
+            self.assertNotIn("https://example.invalid/", first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/bore', first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/bore_sched_ext_coexistence', first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/vram', first_wrapper)
