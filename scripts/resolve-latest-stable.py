@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve the current stable Linux release for TurboDecky GamerPc."""
+"""Resolve the newest upstream Linux release, including release candidates."""
 
 from __future__ import annotations
 
@@ -10,9 +10,8 @@ import urllib.request
 from pathlib import Path
 
 RELEASES_URL = "https://www.kernel.org/releases.json"
-# A final upstream Linux release can be X.Y (for example 7.2) or X.Y.Z.
-# Release candidates are deliberately excluded from latest_stable handling.
-VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+(?:\.[0-9]+)?$")
+# Accept final releases (X.Y / X.Y.Z) and release candidates (X.Y-rcN).
+VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+(?:(?:\.[0-9]+)|(?:-rc[0-9]+))?$")
 DEBIAN_KERNEL_RELEASE_RE = re.compile(r"^[0-9][A-Za-z0-9.+~_-]*$")
 
 
@@ -24,32 +23,33 @@ def append_key_value(path: Path | None, values: dict[str, str]) -> None:
             handle.write(f"{key}={value}\n")
 
 
-def select_release(payload: dict, version: str) -> dict:
-    """Return the downloadable record referenced by kernel.org latest_stable.
+def version_key(version: str) -> tuple[int, int, int, int]:
+    """Sort upstream versions so a newer mainline/RC outranks an older stable series."""
+    rc = re.fullmatch(r"([0-9]+)\.([0-9]+)-rc([0-9]+)", version)
+    if rc:
+        return int(rc.group(1)), int(rc.group(2)), 1, int(rc.group(3))
+    final = re.fullmatch(r"([0-9]+)\.([0-9]+)(?:\.([0-9]+))?", version)
+    if not final:
+        raise ValueError(version)
+    # A final X.Y outranks X.Y-rcN; stable X.Y.Z belongs to the final X.Y line.
+    patch = int(final.group(3) or 0)
+    return int(final.group(1)), int(final.group(2)), 2, patch
 
-    kernel.org can expose a newly released X.Y kernel with moniker=mainline while
-    latest_stable already points at that final release.  Therefore latest_stable
-    is authoritative and moniker is used only as a preference when duplicate
-    records exist during a release transition.
-    """
 
-    matching = [
-        release
-        for release in payload.get("releases", [])
-        if str(release.get("version", "")) == version
-        and not release.get("iseol", False)
-        and release.get("source")
-    ]
-    if not matching:
-        raise SystemExit(
-            f"kernel.org latest_stable {version!r} has no downloadable non-EOL release record"
-        )
-
-    priority = {"stable": 0, "mainline": 1}
-    return min(
-        matching,
-        key=lambda release: priority.get(str(release.get("moniker", "")), 2),
-    )
+def select_latest_release(payload: dict) -> dict:
+    candidates = []
+    for release in payload.get("releases", []):
+        version = str(release.get("version", "")).strip()
+        if (
+            VERSION_RE.fullmatch(version)
+            and not release.get("iseol", False)
+            and release.get("source")
+            and str(release.get("moniker", "")) in {"mainline", "stable"}
+        ):
+            candidates.append(release)
+    if not candidates:
+        raise SystemExit("kernel.org returned no downloadable non-EOL mainline/stable release")
+    return max(candidates, key=lambda release: version_key(str(release["version"])))
 
 
 def main() -> None:
@@ -61,18 +61,15 @@ def main() -> None:
 
     request = urllib.request.Request(
         RELEASES_URL,
-        headers={"User-Agent": "TurboDecky-GamerPc-stable-resolver/1.1"},
+        headers={"User-Agent": "TurboDecky-GamerPc-latest-upstream-resolver/2.0"},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         raw = response.read()
 
     payload = json.loads(raw)
-    version = str(payload.get("latest_stable", {}).get("version", "")).strip()
-    if not VERSION_RE.fullmatch(version):
-        raise SystemExit(f"kernel.org returned an invalid latest_stable version: {version!r}")
-
-    release = select_release(payload, version)
-    series = ".".join(version.split(".")[:2])
+    release = select_latest_release(payload)
+    version = str(release["version"]).strip()
+    series = ".".join(version.split("-")[0].split(".")[:2])
     kernel_release = f"{version}.turbodecky"
     publish_name = f"linux.{kernel_release}"
     if not DEBIAN_KERNEL_RELEASE_RE.fullmatch(kernel_release):
@@ -93,7 +90,7 @@ def main() -> None:
 
     args.log_dir.mkdir(parents=True, exist_ok=True)
     (args.log_dir / "kernel.org-releases.json").write_bytes(raw)
-    (args.log_dir / "latest-stable-kernel.txt").write_text(
+    (args.log_dir / "latest-upstream-kernel.txt").write_text(
         "\n".join(f"{key}={value}" for key, value in values.items()) + "\n",
         encoding="utf-8",
     )
@@ -112,7 +109,7 @@ def main() -> None:
         },
     )
 
-    print(f"Latest stable Linux: {version}")
+    print(f"Latest upstream Linux (RCs included): {version}")
     print(f"Kernel identity: {kernel_release}")
     print(f"Publish identity: {publish_name}")
     print(f"Source: {values['KERNEL_SOURCE_URL']}")
