@@ -26,60 +26,49 @@ jobs:
           import json
           import re
 
-          # 1. Production manifest: current upstream only. Cross-kernel globs remain
-          # available solely as a source for an explicit port of the current release.
-          manifest_path = Path('config/patch-sources.json')
-          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-          forbidden = {'fallback_refs', 'local_fallback_patch', 'local_fallback_metadata'}
+          manifest_path = Path("config/patch-sources.json")
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          forbidden = {"fallback_refs", "local_fallback_patch", "local_fallback_metadata"}
           removed = []
-          for name, record in manifest['components'].items():
+          for name, record in manifest["components"].items():
               for key in sorted(forbidden):
                   if key in record:
-                      removed.append(f'{name}.{key}')
+                      removed.append(f"{name}.{key}")
                       del record[key]
           if not removed:
-              raise SystemExit('expected historical fallback entries to remove, found none')
-          manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-          print('Removed manifest entries:', ', '.join(removed))
+              raise SystemExit("expected historical fallback entries to remove, found none")
+          manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print("Removed manifest entries:", ", ".join(removed))
 
-          # 2. Remove bundled old Marie snapshot and the tooling/tests that maintained it.
           stale_paths = [
-              Path('patches/fallback/lru_marie.patch'),
-              Path('patches/fallback/lru_marie.json'),
-              Path('scripts/update-marie-fallback.py'),
-              Path('scripts/validate-marie-fallback.py'),
-              Path('tests/test_marie_local_fallback.py'),
-              Path('tests/test_marie_fallback_updater.py'),
+              Path("patches/fallback/lru_marie.patch"),
+              Path("patches/fallback/lru_marie.json"),
+              Path("scripts/update-marie-fallback.py"),
+              Path("scripts/validate-marie-fallback.py"),
+              Path("tests/test_marie_local_fallback.py"),
+              Path("tests/test_marie_fallback_updater.py"),
           ]
           for stale in stale_paths:
               if not stale.exists():
-                  raise SystemExit(f'expected historical fallback path: {stale}')
+                  raise SystemExit(f"expected historical fallback path: {stale}")
               stale.unlink()
-          fallback_dir = Path('patches/fallback')
+          fallback_dir = Path("patches/fallback")
           if fallback_dir.exists() and not any(fallback_dir.iterdir()):
               fallback_dir.rmdir()
 
-          # 3. Base resolver: delete the local-fallback implementation and stop walking
-          # historical refs. Reject those keys if anyone reintroduces them later.
-          base_path = Path('scripts/resolve-patch-sources-base.py')
-          base = base_path.read_text(encoding='utf-8')
-
-          fn_start = base.index('\ndef load_local_fallback(')
-          fn_end = base.index('\ndef resolve(', fn_start)
-          base = base[:fn_start] + '\n' + base[fn_end:]
+          base_path = Path("scripts/resolve-patch-sources-base.py")
+          base = base_path.read_text(encoding="utf-8")
+          fn_start = base.index("\ndef load_local_fallback(")
+          fn_end = base.index("\ndef resolve(", fn_start)
+          base = base[:fn_start] + "\n" + base[fn_end:]
 
           old_refs = '                refs = [spec.get("ref", "main"), *spec.get("fallback_refs", [])]\n'
           if base.count(old_refs) != 1:
-              raise SystemExit(f'fallback_refs resolver assignment count={base.count(old_refs)}')
+              raise SystemExit(f"fallback_refs resolver assignment count={base.count(old_refs)}")
           base = base.replace(old_refs, '                refs = [spec.get("ref", "main")]\n', 1)
 
-          no_options_start = base.index(
-              '                if not options:\n                    fallback = load_local_fallback('
-          )
-          no_options_end = base.index(
-              '                else:\n                    _, repo_path, commit, ref, mode, selected, resolved_path = max(',
-              no_options_start,
-          )
+          no_options_start = base.index('                if not options:\n                    fallback = load_local_fallback(')
+          no_options_end = base.index('                else:\n                    _, repo_path, commit, ref, mode, selected, resolved_path = max(', no_options_start)
           no_options = '''                if not options:
                     detail = " | ".join(ref_errors) if ref_errors else "no matching paths"
                     expectation = "exact " if spec.get("require_exact_series", False) else ""
@@ -89,10 +78,7 @@ jobs:
                     )
 '''
           base = base[:no_options_start] + no_options + base[no_options_end:]
-          base = base.replace(
-              '                            "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",\n',
-              '                            "selection": mode,\n',
-          )
+          base = base.replace('                            "selection": mode if ref == refs[0] else f"{mode}-fallback-ref",\n', '                            "selection": mode,\n')
           base = base.replace(
               '                        # Integrity is recorded from the downloaded bytes in the\n'
               '                        # generated lock; fixed fallback metadata remains independently\n'
@@ -100,22 +86,10 @@ jobs:
               '                        # Integrity is recorded from the downloaded bytes in the generated lock.\n',
           )
 
-          resolve_anchor = '''def resolve(
-    manifest: dict[str, Any],
-    output_dir: Path,
-    kernel: KernelVersion,
-    series_text: str,
-    manifest_root: Path | None = None,
-) -> dict[str, Any]:
+          resolve_anchor = ''') -> dict[str, Any]:
     temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))
 '''
-          resolve_replacement = '''def resolve(
-    manifest: dict[str, Any],
-    output_dir: Path,
-    kernel: KernelVersion,
-    series_text: str,
-    manifest_root: Path | None = None,
-) -> dict[str, Any]:
+          resolve_replacement = ''') -> dict[str, Any]:
     forbidden_source_keys = {"fallback_refs", "local_fallback_patch", "local_fallback_metadata"}
     for component_name, component_record in manifest.get("components", {}).items():
         stale_keys = sorted(forbidden_source_keys.intersection(component_record))
@@ -128,20 +102,18 @@ jobs:
     temp_root = Path(tempfile.mkdtemp(prefix="patch-resolver-", dir=output_dir.parent))
 '''
           if base.count(resolve_anchor) != 1:
-              raise SystemExit(f'resolve() policy anchor count={base.count(resolve_anchor)}')
-          base = base.replace(resolve_anchor, resolve_replacement, 1)
-          base_path.write_text(base, encoding='utf-8')
+              raise SystemExit(f"resolve policy anchor count={base.count(resolve_anchor)}")
+          base_path.write_text(base.replace(resolve_anchor, resolve_replacement, 1), encoding="utf-8")
 
-          # 4. Replace the old behavior test with a fail-closed policy test.
-          tests_path = Path('tests/test_dynamic_patch_resolver.py')
-          tests = tests_path.read_text(encoding='utf-8')
+          tests_path = Path("tests/test_dynamic_patch_resolver.py")
+          tests = tests_path.read_text(encoding="utf-8")
           pattern = re.compile(
-              r'    def test_newer_current_release_outranks_older_exact_fallback_ref\(self\) -> None:\n.*?(?=\n    def test_git_symlink_patch_is_followed)',
+              r"    def test_newer_current_release_outranks_older_exact_fallback_ref\(self\) -> None:\n.*?(?=\n    def test_git_symlink_patch_is_followed)",
               re.S,
           )
           match = pattern.search(tests)
           if not match:
-              raise SystemExit('historical fallback-ref test block not found')
+              raise SystemExit("historical fallback-ref test block not found")
           new_test = '''    def test_historical_fallback_refs_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
@@ -177,45 +149,48 @@ jobs:
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("historical patch fallback is forbidden", result.stderr)
 '''
-          tests_path.write_text(tests[:match.start()] + new_test + tests[match.end():], encoding='utf-8')
+          tests_path.write_text(tests[:match.start()] + new_test + tests[match.end():], encoding="utf-8")
 
-          # 5. Validation contract: fallback absence is now mandatory.
-          validation_path = Path('scripts/validate-dynamic-patches-local.sh')
-          validation = validation_path.read_text(encoding='utf-8')
-          for obsolete in (
-              '  "$ROOT/scripts/update-marie-fallback.py" \\\n',
-              '  "$ROOT/scripts/validate-marie-fallback.py" \\\n',
-              '  "$ROOT/tests/test_marie_local_fallback.py" \\\n',
-              '  "$ROOT/tests/test_marie_fallback_updater.py" \\\n',
+          validation_path = Path("scripts/validate-dynamic-patches-local.sh")
+          validation = validation_path.read_text(encoding="utf-8")
+          obsolete_names = {
+              "update-marie-fallback.py",
+              "validate-marie-fallback.py",
+              "test_marie_local_fallback.py",
+              "test_marie_fallback_updater.py",
+          }
+          lines = validation.splitlines()
+          lines = [line for line in lines if not any(name in line for name in obsolete_names)]
+          validation = "\n".join(lines) + "\n"
+
+          validator_start = validation.find('  --patch "$ROOT/patches/fallback/lru_marie.patch"')
+          if validator_start != -1:
+              validator_end = validation.find("\n", validation.find("--metadata", validator_start)) + 1
+              validation = validation[:validator_start] + validation[validator_end:]
+
+          for old_line in (
+              'grep -Fq \'fallback_refs\' "$ROOT/config/patch-sources.json"\n',
+              'grep -Fq \'local_fallback_patch\' "$ROOT/config/patch-sources.json"\n',
+              'test -s "$ROOT/patches/fallback/lru_marie.patch"\n',
           ):
-              if obsolete not in validation:
-                  raise SystemExit(f'validation contract line missing: {obsolete!r}')
-              validation = validation.replace(obsolete, '', 1)
+              if old_line not in validation:
+                  raise SystemExit(f"old fallback validation line missing: {old_line!r}")
+              validation = validation.replace(old_line, "", 1)
 
-          old_contract = '''grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
-grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
-grep -Fq 'local_fallback_patch' "$ROOT/config/patch-sources.json"
-test -s "$ROOT/patches/fallback/lru_marie.patch"
-python3 "$ROOT/scripts/validate-marie-fallback.py" \\
-  --patch "$ROOT/patches/fallback/lru_marie.patch" \\
-  --metadata "$ROOT/patches/fallback/lru_marie.json"
-grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"
-'''
-          new_contract = '''grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
-! grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
+          lock_anchor = 'grep -Fq \'patch-lock.json\' "$ROOT/scripts/apply-dynamic-patch-sources.py"\n'
+          if validation.count(lock_anchor) != 1:
+              raise SystemExit(f"patch-lock validation anchor count={validation.count(lock_anchor)}")
+          absence_contract = '''! grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
 ! grep -Fq 'local_fallback_patch' "$ROOT/config/patch-sources.json"
 ! grep -Fq 'local_fallback_metadata' "$ROOT/config/patch-sources.json"
 test ! -e "$ROOT/patches/fallback/lru_marie.patch"
 test ! -e "$ROOT/patches/fallback/lru_marie.json"
 grep -Fq 'historical patch fallback is forbidden' "$ROOT/scripts/resolve-patch-sources-base.py"
-grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 '''
-          if validation.count(old_contract) != 1:
-              raise SystemExit(f'old fallback validation block count={validation.count(old_contract)}')
-          validation_path.write_text(validation.replace(old_contract, new_contract, 1), encoding='utf-8')
+          validation = validation.replace(lock_anchor, absence_contract + lock_anchor, 1)
+          validation_path.write_text(validation, encoding="utf-8")
 
-          # The migration workflow must not survive its own successful commit.
-          Path('.github/workflows/remove-historical-fallbacks-once.yml').unlink()
+          Path(".github/workflows/remove-historical-fallbacks-once.yml").unlink()
           PY
 
           python3 -m json.tool config/patch-sources.json >/dev/null
