@@ -32,6 +32,12 @@ REQUESTED = {
     "ath11k_upstream": ("23-ath11k-upstream.patch", "23-ath11k-upstream"),
 }
 
+BORE_FINALIZER_SENTINELS = {
+    "BORE_PORT_VERSION",
+    "BORE_PORT_UPSTREAM_SHA256",
+    "BORE_SCHED_EXT_PORT_UPSTREAM_SHA256",
+}
+
 
 class RewriteError(RuntimeError):
     pass
@@ -287,9 +293,24 @@ def validate_lock(lock: dict[str, Any]) -> None:
         raise RewriteError(f"patch lock is incomplete: {', '.join(missing)}")
 
 
-def reject_unresolved_sentinels(label: str, text: str) -> None:
+def reject_unresolved_sentinels(
+    label: str, text: str, *, allowed_assignment_variables: set[str] | None = None
+) -> None:
+    checked = text
+    for variable in sorted(allowed_assignment_variables or set()):
+        pattern = re.compile(
+            rf'^{re.escape(variable)}="__DYNAMIC_PATCH_LOCK_REQUIRED__"$', re.MULTILINE
+        )
+        matches = list(pattern.finditer(checked))
+        if len(matches) != 1:
+            raise RewriteError(
+                f"{label}: expected one finalizer-owned sentinel assignment for {variable}, "
+                f"found {len(matches)}"
+            )
+        checked = pattern.sub(f'{variable}="__BORE_FINALIZER_OWNED__"', checked, count=1)
+
     unresolved = sorted(set(re.findall(
-        r"__DYNAMIC_PATCH_LOCK_REQUIRED__(?::[A-Za-z0-9_.-]+)?", text
+        r"__DYNAMIC_PATCH_LOCK_REQUIRED__(?::[A-Za-z0-9_.-]+)?", checked
     )))
     if unresolved:
         raise RewriteError(
@@ -309,7 +330,9 @@ def main() -> None:
         lock = materialize_locked_repositories(lock_path, lock)
         core = patch_core(core_path.read_text(encoding="utf-8"), lock)
         wrapper = patch_wrapper(wrapper_path.read_text(encoding="utf-8"), lock)
-        reject_unresolved_sentinels("generated core", core)
+        reject_unresolved_sentinels(
+            "generated core", core, allowed_assignment_variables=BORE_FINALIZER_SENTINELS
+        )
         reject_unresolved_sentinels("build wrapper", wrapper)
     except RewriteError as exc:
         raise SystemExit(f"dynamic patch source rewrite failed: {exc}") from exc
