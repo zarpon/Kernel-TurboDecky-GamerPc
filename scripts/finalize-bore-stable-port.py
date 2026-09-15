@@ -68,7 +68,7 @@ def load_locked_bore(lock_path: Path, kernel_version: str):
         )
     if record.get("selection") != "exact":
         raise _base.FinalizeError(
-            "the latest upstream kernel has no exact-series BORE source; refuse to reuse an older reviewed port"
+            "the latest upstream kernel has no exact BORE source; refuse to reuse an older reviewed port"
         )
     source_target = str(record.get("kernel_target", ""))
     source_version = _base.version_tuple(source_target, "locked BORE kernel target")
