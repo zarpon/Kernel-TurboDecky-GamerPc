@@ -25,14 +25,10 @@ class BoreStablePortTests(unittest.TestCase):
         self.assertNotIn("BORE_SUPPORTED_KERNELS", source)
         self.assertNotIn("6.8.0-rc1", source)
 
-    def test_latest_stable_rewrite_leaves_bore_porting_for_the_locked_finalizer(self) -> None:
+    def test_latest_stable_rewrite_leaves_bore_for_the_locked_finalizer(self) -> None:
         implementation = inspect.getsource(latest_stable.patch_core)
-        # Generic post-patch whitespace normalization is allowed here because it
-        # changes no scheduler semantics or upstream identity. Version selection,
-        # patch materialization and scheduler compatibility remain finalizer-only.
-        self.assertNotIn("BORE_PORT_", implementation)
-        self.assertNotIn("materialize_bore", implementation.lower())
-        self.assertNotIn("sched_ext", implementation.lower())
+        self.assertNotIn("BORE_", implementation)
+        self.assertNotIn("bore", implementation.lower())
 
     def test_dynamic_finalizer_runs_after_the_series_rewrite(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
