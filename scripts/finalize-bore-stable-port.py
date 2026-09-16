@@ -248,6 +248,26 @@ def _replace_regex_once_with_rc_subject(
 _base.replace_regex_once = _replace_regex_once_with_rc_subject
 
 
+def finalize_locked_bore_whitespace(core: Path) -> None:
+    """Keep whitespace repair owned by the authenticated locked BORE finalizer."""
+    source = core.read_text(encoding="utf-8")
+    old = '  git diff --check | tee "$LOGDIR/01-bore-diff-check.log"\n'
+    new = '''  if ! git diff --check > "$LOGDIR/01-bore-diff-check.log" 2>&1; then
+    cat "$LOGDIR/01-bore-diff-check.log"
+    echo "==> Normalizing whitespace from locked upstream BORE patch"
+    normalize_changed_whitespace
+    git diff --check | tee "$LOGDIR/01-bore-diff-check-after-fix.log"
+  fi
+'''
+    if new in source:
+        return
+    if source.count(old) != 1:
+        raise _base.FinalizeError(
+            f"BORE diff-check anchor changed; expected exactly one, found {source.count(old)}"
+        )
+    core.write_text(source.replace(old, new, 1), encoding="utf-8")
+
+
 def finalize_cpu_optimization_fallback() -> None:
     if len(sys.argv) < 2:
         raise _base.FinalizeError("generated core path is missing for final compatibility rewrite")
@@ -261,6 +281,9 @@ def finalize_cpu_optimization_fallback() -> None:
 
 def main() -> None:
     _base.main()
+    if len(sys.argv) < 2:
+        raise _base.FinalizeError("generated core path is missing for BORE whitespace finalization")
+    finalize_locked_bore_whitespace(Path(sys.argv[1]))
     finalize_cpu_optimization_fallback()
 
 
