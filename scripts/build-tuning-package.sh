@@ -6,6 +6,18 @@ ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
 TUNING_VERSION="1.3.3"
 
+# Production package builds have already emitted final.config, modules.order and
+# linux-image. Validate that complete payload before adding the tuning package.
+# Standalone tuning-package tests intentionally have none of those kernel files.
+if [[ -s "$ROOT/logs/final.config" && -s "$ROOT/work/linux/modules.order" ]] && \
+   compgen -G "$ARTIFACTS/linux-image-*.deb" >/dev/null; then
+  python3 "$ROOT/scripts/validate-generic-pc-package.py" \
+    --config "$ROOT/logs/final.config" \
+    --modules-order "$ROOT/work/linux/modules.order" \
+    --artifacts "$ARTIFACTS" \
+    --report "$ROOT/logs/generic-pc-package-coverage.txt"
+fi
+
 rm -rf "$PKGROOT"
 install -d "$PKGROOT/DEBIAN" \
            "$PKGROOT/etc/sysctl.d" \
