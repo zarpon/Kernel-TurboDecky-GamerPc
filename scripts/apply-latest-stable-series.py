@@ -70,22 +70,6 @@ def patch_core(path: Path) -> None:
         # A preceding upstream-only rewrite may have removed the complete
         # source block. Absence is valid; do not resurrect historical sources.
 
-    bore_diff_old = '  git diff --check | tee "$LOGDIR/01-bore-diff-check.log"\n'
-    bore_diff_new = '''  if ! git diff --check > "$LOGDIR/01-bore-diff-check.log" 2>&1; then
-    cat "$LOGDIR/01-bore-diff-check.log"
-    echo "==> Normalizing whitespace from locked upstream BORE patch"
-    normalize_changed_whitespace
-    git diff --check | tee "$LOGDIR/01-bore-diff-check-after-fix.log"
-  fi
-'''
-    if bore_diff_new not in source:
-        source = replace_once(
-            source,
-            bore_diff_old,
-            bore_diff_new,
-            "BORE locked patch whitespace normalization",
-        )
-
     gud_fix = r'''fix_gud_full_lto_bounds() {
   local gud_source="drivers/gpu/drm/gud/gud_connector.c"
 
