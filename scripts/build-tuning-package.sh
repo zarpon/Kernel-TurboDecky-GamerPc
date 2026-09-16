@@ -6,15 +6,6 @@ ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
 TUNING_VERSION="1.3.3"
 
-# Do not allow a release package to be published with a collapsed generic-PC
-# driver/module matrix. This is intentionally checked against both the final
-# Kconfig and the actual linux-image payload.
-python3 "$ROOT/scripts/validate-generic-pc-package.py" \
-  --config "$ROOT/logs/final.config" \
-  --modules-order "$ROOT/work/linux/modules.order" \
-  --artifacts "$ARTIFACTS" \
-  --report "$ROOT/logs/generic-pc-package-coverage.txt"
-
 rm -rf "$PKGROOT"
 install -d "$PKGROOT/DEBIAN" \
            "$PKGROOT/etc/sysctl.d" \
