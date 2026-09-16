@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -65,6 +66,23 @@ def main() -> int:
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
+
+    missing_inputs = [
+        str(path)
+        for path in (args.config, args.modules_order)
+        if not path.is_file()
+    ]
+    isolated_tuning_build = bool(os.environ.get("TURBODECKY_ARTIFACTS")) and bool(
+        os.environ.get("TURBODECKY_TUNING_PKGROOT")
+    )
+    if missing_inputs:
+        if isolated_tuning_build:
+            print(
+                "Generic PC kernel coverage check deferred for isolated tuning-package test; "
+                "kernel build inputs do not exist yet: " + ", ".join(missing_inputs)
+            )
+            return 0
+        fail("required coverage inputs are missing: " + ", ".join(missing_inputs))
 
     cfg = parse_config(args.config)
     module_symbols = sum(value == "m" for value in cfg.values())
