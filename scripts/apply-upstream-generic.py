@@ -76,6 +76,41 @@ fi
         "source version verification",
     )
 
+    # The upstream x86_64_defconfig is intentionally small and collapsed the
+    # production module matrix from thousands of modules to a few dozen. Seed
+    # only Kconfig from the last validated full-coverage TurboDecky package.
+    # Kernel code and patch sources still come from the newest-upstream policy.
+    source = replace_once(
+        source,
+        '"${MAKE[@]}" x86_64_defconfig\n',
+        r'''GENERIC_PC_BASELINE_URL="https://github.com/zarpon/Kernel-TurboDecky-GamerPc/releases/download/7.2.5.turbodecky-173e64a/linux-image-7.2.5.turbodecky_7.2.5-1turbodecky1_amd64.deb"
+GENERIC_PC_BASELINE_SHA256="d08df6a5f7e54295e13dd079ae2af128a7c9976c57bfc07844409f3da238a012"
+GENERIC_PC_BASELINE_DEB="$WORKDIR/generic-pc-baseline.deb"
+GENERIC_PC_BASELINE_ROOT="$WORKDIR/generic-pc-baseline-root"
+
+echo "==> Seeding generic-PC hardware configuration from validated TurboDecky 7.2.5 production baseline"
+download "$GENERIC_PC_BASELINE_URL" "$GENERIC_PC_BASELINE_DEB"
+printf '%s  %s\n' "$GENERIC_PC_BASELINE_SHA256" "$GENERIC_PC_BASELINE_DEB" | sha256sum --check --strict
+rm -rf "$GENERIC_PC_BASELINE_ROOT"
+dpkg-deb -x "$GENERIC_PC_BASELINE_DEB" "$GENERIC_PC_BASELINE_ROOT"
+baseline_config="$GENERIC_PC_BASELINE_ROOT/boot/config-7.2.5.turbodecky"
+test -s "$baseline_config"
+grep -Fq 'CONFIG_DRM_AMDGPU=m' "$baseline_config"
+grep -Fq 'CONFIG_BLK_DEV_NVME=y' "$baseline_config"
+grep -Fq 'CONFIG_BT=m' "$baseline_config"
+grep -Fq 'CONFIG_MODULE_COMPRESS_ZSTD=y' "$baseline_config"
+cp "$baseline_config" .config
+{
+  echo "Baseline: TurboDecky 7.2.5 production final config"
+  echo "Source package: $GENERIC_PC_BASELINE_URL"
+  echo "Package SHA256: $GENERIC_PC_BASELINE_SHA256"
+  echo "Baseline module symbols: $(grep -c '=m$' .config)"
+  echo "Policy: configuration seed only; newest upstream kernel and patch sources remain authoritative"
+} | tee "$LOGDIR/generic-pc-baseline.txt"
+''',
+        "generic PC production baseline",
+    )
+
     whitespace_anchor = '''    path.write_text("".join(output), encoding="utf-8")
 PY
 }
@@ -166,7 +201,7 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
     source = replace_once(source, 'cp .config "$LOGDIR/final.config"\n', '''{
   echo "Target: generic amd64 desktop, laptop and workstation hardware"
   echo "CPU support: Intel and AMD x86-64 families retained from the upstream configuration"
-  echo "Media support: upstream multimedia, graphics, audio, camera and wireless selections retained"
+  echo "Media support: broad production GPU, storage, network, wireless, Bluetooth, USB and audio module coverage retained"
   echo "Policy: no model-specific CPU, topology or device pruning"
 } | tee "$LOGDIR/media-profile.txt"
 
