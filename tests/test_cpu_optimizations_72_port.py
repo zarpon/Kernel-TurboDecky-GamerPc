@@ -128,15 +128,18 @@ class CpuOptimization72PortTests(unittest.TestCase):
             with self.assertRaises(port.PortError):
                 port.port_kconfig(kconfig, reject, "7.2")
 
-    def test_other_kernel_series_is_refused(self) -> None:
+    def test_linux_73_rc_is_supported_by_semantic_adapter(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             kconfig = root / "Kconfig.cpu"
             reject = root / "Kconfig.cpu.rej"
             kconfig.write_text(fixture(), encoding="utf-8")
             reject.write_text(reject_fixture(), encoding="utf-8")
-            with self.assertRaises(port.PortError):
-                port.port_kconfig(kconfig, reject, "7.3")
+
+            port.port_kconfig(kconfig, reject, "7.3-rc4")
+            result = kconfig.read_text(encoding="utf-8")
+            self.assertIn("M686 || MK8 || MVIAC7 || MCORE2", result)
+            self.assertIn("config X86_TSC\n\tdef_bool y\n\nconfig X86_HAVE_PAE", result)
 
 
 if __name__ == "__main__":

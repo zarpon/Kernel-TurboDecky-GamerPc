@@ -16,6 +16,7 @@ python3 -m py_compile \
   "$ROOT/scripts/apply-zarpon-generic-name.py" \
   "$ROOT/scripts/apply-latest-stable-series.py" \
   "$ROOT/scripts/finalize-bore-stable-port.py" \
+  "$ROOT/scripts/normalize-cpu-optimizations-generic.py" \
   "$ROOT/scripts/apply-zen-interactive.py"
 python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
 python3 -m unittest -v \
@@ -30,6 +31,8 @@ python3 -m unittest -v \
   "$ROOT/tests/test_bore_stable_port.py" \
   "$ROOT/tests/test_bore_stable_finalizer.py" \
   "$ROOT/tests/test_validation_modules.py" \
+  "$ROOT/tests/test_cpu_optimizations_72_port.py" \
+  "$ROOT/tests/test_cpu_optimizations_generic_normalization.py" \
   "$ROOT/tests/test_manual_workflow_contract.py" \
   "$ROOT/tests/test_zen_interactive_rewriter.py"
 bash "$ROOT/tests/test_runtime_tuning.sh"
@@ -48,6 +51,7 @@ grep -Fq 'amd_pstate=passive' "$ROOT/scripts/build-kernelnote-core.sh"
 grep -Fq 'CONFIG_X86_INTEL_PSTATE=y' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_X86_AMD_PSTATE=y' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2' "$ROOT/config/kernelnote.config"
+grep -Fq '# CONFIG_X86_NATIVE_CPU is not set' "$ROOT/config/kernelnote.config"
 grep -Fq 'intel_pstate=passive' "$ROOT/config/kernelnote.config"
 grep -Fq 'amd_pstate=passive' "$ROOT/config/kernelnote.config"
 grep -Fq 'resolve-patch-sources.py' "$ROOT/scripts/apply-zarpon-generic-name.py"

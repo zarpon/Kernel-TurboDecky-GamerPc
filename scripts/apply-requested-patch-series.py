@@ -223,6 +223,10 @@ apply_requested_patch_series() {
   apply_requested_patch "Bluetooth SSP key-size check" "$REQUESTED_SERIES_DIR/12-bt-ssp-key-size.patch" "12-bt-ssp"
   apply_requested_patch "libbpf Wmaybe-uninitialized workaround" "$REQUESTED_SERIES_DIR/13-libbpf-uninitialized.patch" "13-libbpf-uninitialized"
   apply_requested_patch "Universal x86 CPU optimizations" "$REQUESTED_SERIES_DIR/14-cpu-optimizations.patch" "14-cpu-optimizations"
+  python3 "$ROOT/scripts/normalize-cpu-optimizations-generic.py" \
+    "$KERNELDIR/arch/x86/Kconfig.cpu" "$KERNELDIR/arch/x86/Makefile" \
+    | tee "$LOGDIR/14-cpu-optimizations-generic-normalization.log"
+  ! grep -Fq 'depends on !X86_NATIVE_CPU' "$KERNELDIR/arch/x86/Kconfig.cpu"
   apply_requested_patch "Clang DKMS compatibility" "$REQUESTED_SERIES_DIR/15-dkms-clang.patch" "15-dkms-clang"
   apply_requested_patch "Clang Polly support" "$REQUESTED_SERIES_DIR/16-clang-polly.patch" "16-clang-polly"
   apply_requested_patch "Always print firmware file name" "$REQUESTED_SERIES_DIR/17-firmware-name.patch" "17-firmware-name"
