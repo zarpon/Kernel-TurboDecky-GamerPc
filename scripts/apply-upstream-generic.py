@@ -34,7 +34,7 @@ def main() -> None:
     source = replace_once(
         source,
         'KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"\n',
-        'KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"\n',
+        'KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"\n',
         "upstream repository",
     )
     source = replace_once(
@@ -76,10 +76,6 @@ fi
         "source version verification",
     )
 
-    # The upstream x86_64_defconfig is intentionally small and collapsed the
-    # production module matrix from thousands of modules to a few dozen. Seed
-    # only Kconfig from the last validated full-coverage TurboDecky package.
-    # Kernel code and patch sources still come from the newest-upstream policy.
     source = replace_once(
         source,
         '"${MAKE[@]}" x86_64_defconfig\n',
@@ -121,7 +117,7 @@ PY
 PY
 }
 '''
-    source = replace_once(path.read_text(encoding="utf-8") if False else source, whitespace_anchor, whitespace_block, "patched-file whitespace normalization")
+    source = replace_once(source, whitespace_anchor, whitespace_block, "patched-file whitespace normalization")
 
     config_anchor = 'scripts/kconfig/merge_config.sh -m .config "$ROOT/config/kernelnote.config"\n'
     config_block = config_anchor + r'''
