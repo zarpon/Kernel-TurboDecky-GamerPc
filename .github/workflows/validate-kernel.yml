@@ -136,6 +136,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
+          chmod +x scripts/validate-dynamic-patches-local.sh
           scripts/validate-dynamic-patches-local.sh
           python3 scripts/apply-reflex-core.py scripts/build-kernelnote-core.sh scripts/build-kernelnote.sh
           python3 scripts/apply-upstream-generic.py scripts/build-kernelnote-core.sh
