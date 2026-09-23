@@ -2,8 +2,9 @@ name: Daily full kernel build
 
 on:
   schedule:
-    # GitHub Actions cron uses UTC. 03:00 UTC = 00:00 America/Sao_Paulo (Brasilia).
-    - cron: '0 3 * * *'
+    # Avoid minute 00: GitHub documents higher scheduled-workflow load at the start of each hour.
+    # 03:17 UTC = 00:17 America/Sao_Paulo (Brasilia).
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
