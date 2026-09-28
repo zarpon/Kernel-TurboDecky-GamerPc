@@ -1,4 +1,5 @@
 Daily full kernel build trigger.
 
-Last requested build: 2026-08-27T02:14:00-03:00
-Source: daily monitor recovery after no recorded 2026-08-27 scheduled full build
+Last requested build: 2026-09-28T06:22:00-03:00
+Source: permanent monitor recovery after no recorded 2026-09-28 scheduled full build by 09:22 UTC
+Recovery contract: push to main triggers release-on-main.yml, which dispatches validate-kernel.yml with publish_release=true
