@@ -30,9 +30,6 @@ incluído; seu módulo DKMS precisa ser recompilado para o novo `uname -r`. Com
 Secure Boot ativo, a imagem e os módulos personalizados precisam ser assinados
 ou a verificação deve ser desativada.
 
-> **Steam Deck:** se usar este kernel em um sistema baseado em Debian/Ubuntu no
-> Deck, ative o IOMMU na BIOS antes da instalação. Salve a configuração e reinicie.
-
 ## Benefícios esperados
 
 - **Responsividade e jogos:** BORE e POC Selector favorecem tarefas

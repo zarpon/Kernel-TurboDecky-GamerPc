@@ -30,9 +30,6 @@ driver is not included; its DKMS module must be rebuilt for the new `uname -r`.
 With Secure Boot enabled, the custom image and modules must be signed or
 verification must be disabled.
 
-> **Steam Deck:** If using this kernel on a Debian/Ubuntu-based system on the
-> Deck, enable IOMMU in BIOS before installation. Save the setting and reboot.
-
 ## Expected benefits
 
 - **Responsiveness and gaming:** BORE and POC Selector favor interactive tasks:
