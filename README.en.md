@@ -30,6 +30,9 @@ driver is not included; its DKMS module must be rebuilt for the new `uname -r`.
 With Secure Boot enabled, the custom image and modules must be signed or
 verification must be disabled.
 
+> **Steam Deck:** If using this kernel on a Debian/Ubuntu-based system on the
+> Deck, enable IOMMU in BIOS before installation. Save the setting and reboot.
+
 ## Expected benefits
 
 - **Responsiveness and gaming:** BORE and POC Selector favor interactive tasks:
@@ -46,6 +49,11 @@ verification must be disabled.
   `CONFIG_X86_AMD_PSTATE_DEFAULT_MODE=2`.
 - **I/O and loading:** ADIOS adjusts deadlines and batches according to device
   latency, favoring synchronous operations during heavy disk access.
+- **AMD integrated-GPU DMA latency:** on supported AMD IOMMUs, PerfOpt is enabled automatically for
+  eligible devices using an identity DMA domain; the optimized IOMMU path may
+  reduce DMA latency.
+  This path leaves ATS/PRI/PASID/SVA unconfigured and changes DMA isolation; the
+  actual effect depends on hardware and workload, with no guaranteed percentage. There is no runtime amdgpu.iommu_perfopt opt-out.
 - **Memory:** Marie LRU reduces aggressive reclaim and thrashing; ZRAM-IR uses
   LZ4 and ZSTD to retain more useful pages under memory pressure.
 - **VRAM management:** the `dmem` controller and the TTM port prioritize the

@@ -30,6 +30,9 @@ incluído; seu módulo DKMS precisa ser recompilado para o novo `uname -r`. Com
 Secure Boot ativo, a imagem e os módulos personalizados precisam ser assinados
 ou a verificação deve ser desativada.
 
+> **Steam Deck:** se usar este kernel em um sistema baseado em Debian/Ubuntu no
+> Deck, ative o IOMMU na BIOS antes da instalação. Salve a configuração e reinicie.
+
 ## Benefícios esperados
 
 - **Responsividade e jogos:** BORE e POC Selector favorecem tarefas
@@ -47,6 +50,10 @@ ou a verificação deve ser desativada.
 - **I/O e carregamento:** ADIOS ajusta deadlines e lotes conforme a latência
   do dispositivo, favorecendo operações síncronas durante acesso intenso a
   disco.
+- **Latência de DMA na GPU integrada AMD:** em IOMMU AMD compatível, o PerfOpt é habilitado automaticamente para
+  dispositivos elegíveis usando um domínio DMA identity; o caminho otimizado do
+  IOMMU pode reduzir a latência de DMA. Esse caminho não configura ATS/PRI/PASID/SVA e altera
+  o isolamento de DMA; o efeito depende do hardware e da carga, sem percentual garantido. Não há opção amdgpu.iommu_perfopt para desativá-lo em tempo de execução.
 - **Memória:** Marie LRU reduz reclaim agressivo e thrashing; ZRAM-IR usa LZ4
   e ZSTD para manter mais páginas úteis sob pressão de memória.
 - **Gerenciamento de VRAM:** o controlador `dmem` e o port TTM priorizam o

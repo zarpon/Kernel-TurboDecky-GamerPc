@@ -16,19 +16,40 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def patch_core(path: Path) -> None:
-    source = path.read_text(encoding="utf-8")
-    source = replace_once(
-        source,
-        'MAKE=(make LLVM=1 LLVM_IAS=1)\n',
-        ''': "${KERNEL_RELEASE_NAME:?latest stable kernel identity was not resolved}"
-# Keep the generic x86-64 CPU Kconfig choice and never use -march=native,
+def ensure_kernelrelease_makevar(source: str) -> str:
+    plain_make = 'MAKE=(make LLVM=1 LLVM_IAS=1)\n'
+    dynamic_make = 'MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")\n'
+    release_guard = ': "${KERNEL_RELEASE_NAME:?latest stable kernel identity was not resolved}"\n'
+
+    if source.count(plain_make) == 1 and dynamic_make not in source:
+        replacement = release_guard + '''# Keep the generic x86-64 CPU Kconfig choice and never use -march=native,
 # which would target the GitHub runner. KERNELRELEASE controls uname -r,
 # module paths, vermagic, installed image names and Debian package names.
 MAKE=(make LLVM=1 LLVM_IAS=1 KERNELRELEASE="$KERNEL_RELEASE_NAME")
-''',
-        "dynamic TurboDecky KERNELRELEASE",
+'''
+        return replace_once(
+            source,
+            plain_make,
+            replacement,
+            "dynamic TurboDecky KERNELRELEASE",
+        )
+
+    if (
+        plain_make not in source
+        and source.count(dynamic_make) == 1
+        and source.count(release_guard) == 1
+    ):
+        return source
+
+    raise SystemExit(
+        "dynamic TurboDecky KERNELRELEASE: expected one plain MAKE anchor or "
+        "one already configured dynamic MAKE anchor"
     )
+
+
+def patch_core(path: Path) -> None:
+    source = path.read_text(encoding="utf-8")
+    source = ensure_kernelrelease_makevar(source)
 
     source = replace_once(
         source,

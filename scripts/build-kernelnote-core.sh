@@ -380,6 +380,29 @@ apply_adios_patch() {
   echo "==> ADIOS compatibility layer applied successfully"
 }
 
+apply_iommu_perfopt_patch() {
+  local file="$1"
+
+  echo "==> Applying the AMD IOMMU PerfOpt v3 patch"
+  if git apply --check "$file" > "$LOGDIR/04-iommu-perfopt-check.log" 2>&1; then
+    git apply "$file" | tee "$LOGDIR/04-iommu-perfopt-apply.log"
+  elif git apply --reverse --check "$file" > "$LOGDIR/04-iommu-perfopt-already-applied.log" 2>&1; then
+    echo "==> AMD IOMMU PerfOpt is already present in the selected Linux source"
+  else
+    cat "$LOGDIR/04-iommu-perfopt-check.log"
+    cat "$LOGDIR/04-iommu-perfopt-already-applied.log" >&2 || true
+    echo "AMD IOMMU PerfOpt patch does not match the selected Linux source" >&2
+    return 1
+  fi
+
+  git diff --check -- drivers/iommu/amd/amd_iommu_types.h \
+    drivers/iommu/amd/init.c drivers/iommu/amd/iommu.c include/linux/amd-iommu.h
+  grep -Fq '#define MMIO_PERF_OPT_OFFSET' drivers/iommu/amd/amd_iommu_types.h
+  grep -Fq 'amd_iommu_perfopt_set(iommu, TRUE)' drivers/iommu/amd/init.c
+  grep -Fq 'dev_data->perfopt =' drivers/iommu/amd/iommu.c
+  echo "==> AMD IOMMU PerfOpt v3 patch applied successfully"
+}
+
 assert_config() {
   local expected="$1"
   if ! grep -Fqx "$expected" .config; then
@@ -447,6 +470,7 @@ apply_marie_testing_patch "$MARIE_PATCH"
 apply_bore_patch "$BORE_PATCH"
 apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-current.patch"
+apply_iommu_perfopt_patch "$ROOT/patches/iommu-perfopt-consolidado-v3.patch"
 
 echo "==> Generating upstream x86-64 base configuration"
 "${MAKE[@]}" x86_64_defconfig
