@@ -70,6 +70,7 @@ class BoreLinuxPortTests(unittest.TestCase):
             bore["exact_globs"],
             [
                 "patches/testing/0001-linux{series}*-bore-*.patch",
+                "patches/stable/0001-linux{series}*-bore-*.patch",
                 "patches/stable/linux-{series}-bore/0001-linux{series}*-bore-*.patch",
             ],
         )
