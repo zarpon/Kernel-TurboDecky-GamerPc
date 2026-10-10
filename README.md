@@ -96,22 +96,15 @@ da própria árvore Linux-alvo e recebe as sobreposições versionadas em
   `ExecStartPre` de `systemd-zram-setup@` reforça a configuração antes da
   inicialização; o helper UDEV permanece apenas como contingência segura e
   nunca redefine swap ativo.
-- **VRAM por cgroup / TTM** — política derivada dos patches de pixelcluster,
-  agregada e fixada no commit
-  [`ea739d734ec179864b21446856315bc49f7c52fa`](https://github.com/CachyOS/kernel-patches/tree/ea739d734ec179864b21446856315bc49f7c52fa/7.0/misc).
-  O port habilita `CONFIG_CGROUP_DMEM=y`, separa a cobrança do cgroup da
-  alocação TTM, considera proteção `low/min` durante despejo e seleciona
-  buffers não protegidos antes dos buffers do jogo.
+- **VRAM por cgroup / TTM** — suporte nativo da base upstream, habilitado por
+  `CONFIG_CGROUP_DMEM=y`. O pacote de userspace `turbodecky-vram` é preservado;
+  o patch agregado antigo não é baixado nem reaplicado.
 
-O workflow também resolve e registra C23 libbpf, Clear Linux, fsync via
-`FUTEX_WAIT_MULTIPLE`, O3, Bluetooth SSP, workaround libbpf, otimizações
-universais de CPU sem selecioná-las para um modelo específico, compatibilidade
-DKMS-Clang, Polly, diagnósticos de firmware, três correções minstrel_ht e
-correções ath11k. As quatro fontes OpenWrt do commit
-[`0ff1553b`](https://github.com/openwrt/openwrt/tree/0ff1553bd731c0db28043fc9caab90bdc32587f3)
-ficam versionadas em `patches/openwrt-0ff1553/`; o rework de downgrade possui
-um port com contexto Linux 7.1. Cada patch tem fonte, commit ou URL, SHA-256,
-tentativa de aplicação, detecção de integração prévia e relatório de rejeitos.
+O workflow resolve e registra Clear Linux, O3, workaround libbpf, otimizações
+universais de CPU, DKMS-Clang, Polly, diagnósticos de firmware, três correções
+minstrel_ht e o fix ath11k remapped CE. O revert ath11k DISABLE_KEY existente é
+preservado. O fsync legado opcode 31 e os patches já upstream de C23/libbpf,
+Bluetooth SSP e Qualcomm ath11k foram removidos da série.
 
 ## Gerenciamento de VRAM por cgroup
 
@@ -269,3 +262,21 @@ pelas dependências declaradas, usa `dpkg`, corrige dependências externas com
 
 Após a instalação, reinicie o computador e confirme o kernel com `uname -r`.
 As instruções completas estão em [INSTALL.md](INSTALL.md).
+
+## Perfil de compilação e swap
+
+O kernel usa O3. ZRAM é o swap padrão, com LZ4 primário e zstd como
+recompressor. Zswap permanece compilado, mas desligado por padrão.
+Para trocar no próximo boot, acrescente à linha do kernel:
+
+```text
+systemd.zram=0 zswap.enabled=1
+```
+
+`systemd.zram=0` desativa os dispositivos criados pelo zram-generator.
+Zswap precisa de um swap em disco/arquivo configurado e ativo; ele não cria
+esse backend. Para voltar ao perfil padrão, retire esses argumentos, ou use
+`systemd.zram=1 zswap.enabled=0`.
+
+O tuning usa `vm.vfs_cache_pressure=100`, `vm.dirty_background_ratio=2` e
+`vm.dirty_ratio=10`. Os defaults próprios do LRU Marie são preservados.

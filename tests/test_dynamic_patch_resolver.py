@@ -325,16 +325,14 @@ class RewriterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             components = {}
-            git_names = {"bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "vram", "generic_config_fixture"}
+            git_names = {"bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "generic_config_fixture"}
             requested = {
-                "c23_libbpf": "08-c23-libbpf.patch", "clear": "09-clear.patch",
-                "fsync": "10-fsync-futex-waitv.patch", "o3": "11-o3.patch",
-                "bt_ssp": "12-bt-ssp-key-size.patch", "libbpf_uninitialized": "13-libbpf-uninitialized.patch",
+                "clear": "09-clear.patch", "o3": "11-o3.patch", "libbpf_uninitialized": "13-libbpf-uninitialized.patch",
                 "cpu_optimizations": "14-cpu-optimizations.patch", "dkms_clang": "15-dkms-clang.patch",
                 "clang_polly": "16-clang-polly.patch", "firmware_name": "17-firmware-name.patch",
                 "minstrel_frac": "18-minstrel-frac.patch", "minstrel_fluctuation": "19-minstrel-fluctuation.patch",
                 "minstrel_downgrade": "20-minstrel-downgrade.patch", "ath11k_remapped_ce": "21-ath11k-remapped-ce.patch",
-                "ath11k_disable_key": "22-ath11k-disable-key.patch", "ath11k_upstream": "23-ath11k-upstream.patch",
+                "ath11k_disable_key": "22-ath11k-disable-key.patch",
             }
             for name in git_names:
                 components[name] = {
@@ -360,11 +358,8 @@ class RewriterTests(unittest.TestCase):
             requested_calls = "".join(
                 f'  "$REQUESTED_SERIES_DIR/{output}" "{prefix}" \\\n    "__DYNAMIC_PATCH_LOCK_REQUIRED__:{name}"\n'
                 for name, output, prefix in [
-                    ("c23_libbpf", "08-c23-libbpf.patch", "08-c23-libbpf"),
                     ("clear", "09-clear.patch", "09-clear"),
-                    ("fsync", "10-fsync-futex-waitv.patch", "10-fsync"),
                     ("o3", "11-o3.patch", "11-o3"),
-                    ("bt_ssp", "12-bt-ssp-key-size.patch", "12-bt-ssp"),
                     ("libbpf_uninitialized", "13-libbpf-uninitialized.patch", "13-libbpf-uninitialized"),
                     ("cpu_optimizations", "14-cpu-optimizations.patch", "14-cpu-optimizations"),
                     ("dkms_clang", "15-dkms-clang.patch", "15-dkms-clang"),
@@ -375,7 +370,6 @@ class RewriterTests(unittest.TestCase):
                     ("minstrel_downgrade", "20-minstrel-downgrade.patch", "20-minstrel-downgrade"),
                     ("ath11k_remapped_ce", "21-ath11k-remapped-ce.patch", "21-ath11k-remapped-ce"),
                     ("ath11k_disable_key", "22-ath11k-disable-key.patch", "22-ath11k-disable-key"),
-                    ("ath11k_upstream", "23-ath11k-upstream.patch", "23-ath11k-upstream"),
                 ]
             )
             core = tmp / "core.sh"
@@ -399,8 +393,7 @@ class RewriterTests(unittest.TestCase):
                 'NAP_PATCH="$PATCHDIR/0006-nap-current-port.patch"\n'
                 'PATCH_ZRAM_IR_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
                 'PATCH_POC_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
-                'PATCH_NAP_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n'
-                'VRAM_PATCH_REPO="old"\nVRAM_PATCH_COMMIT="old"\nVRAM_PATCH_PATH="old"\n',
+                'PATCH_NAP_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"\n',
                 encoding="utf-8",
             )
             run("python3", str(REWRITER), str(core), str(wrapper), str(lock_path))
@@ -410,11 +403,11 @@ class RewriterTests(unittest.TestCase):
             self.assertEqual(first_core, core.read_text())
             self.assertEqual(first_wrapper, wrapper.read_text())
             self.assertIn("RESOLVED_PATCH_ROOT", first_core)
-            self.assertIn("file://$RESOLVED_PATCH_ROOT/files/08-c23-libbpf.patch", first_core)
+            self.assertIn("file://$RESOLVED_PATCH_ROOT/files/09-clear.patch", first_core)
             self.assertNotIn("https://example.invalid/", first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/bore', first_core)
             self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/bore_sched_ext_coexistence', first_core)
-            self.assertIn('$RESOLVED_PATCH_ROOT/materialized-repos/vram', first_wrapper)
+            self.assertNotIn('VRAM_PATCH_REPO', first_wrapper)
             rewritten_lock = json.loads(lock_path.read_text())
             bore = rewritten_lock["components"]["bore"]
             self.assertRegex(bore["snapshot_commit"], r"^[0-9a-f]{40}$")

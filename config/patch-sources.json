@@ -40,13 +40,6 @@
       "repo": "https://github.com/openwrt/openwrt.git",
       "require_exact_series": true
     },
-    "ath11k_upstream": {
-      "kind": "http_patch",
-      "output": "23-ath11k-upstream.patch",
-      "urls": [
-        "https://lore.kernel.org/all/20260319065608.2408179-1-reshma.rajkumar@oss.qualcomm.com/raw"
-      ]
-    },
     "bore": {
       "exact_globs": [
         "patches/testing/0001-linux{series}*-bore-*.patch",
@@ -79,22 +72,6 @@
       "required_markers": [
         "void reweight_task(struct task_struct *p, int prio)",
         "reweight_entity"
-      ]
-    },
-    "bt_ssp": {
-      "kind": "http_patch",
-      "output": "12-bt-ssp-key-size.patch",
-      "urls": [
-        "https://lore.kernel.org/linux-bluetooth/20190522070540.48895-1-marcel@holtmann.org/raw",
-        "https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/2000_BT-Check-key-sizes-only-if-Secure-Simple-Pairing-enabled.patch"
-      ]
-    },
-    "c23_libbpf": {
-      "kind": "http_patch",
-      "output": "08-c23-libbpf.patch",
-      "urls": [
-        "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/patch/?id=d70f79fef65810faf64dbae1f3a1b5623cdb2345",
-        "https://github.com/torvalds/linux/commit/d70f79fef65810faf64dbae1f3a1b5623cdb2345.patch"
       ]
     },
     "clang_polly": {
@@ -160,19 +137,6 @@
       "urls": [
         "https://732852.bugs.gentoo.org/attachment.cgi?id=649432"
       ]
-    },
-    "fsync": {
-      "exact_globs": [
-        "linux-tkg-patches/{series}/0007-v{series}-fsync1_via_futex_waitv.patch"
-      ],
-      "fallback_globs": [
-        "linux-tkg-patches/*/0007-v*-fsync1_via_futex_waitv.patch"
-      ],
-      "kind": "git_patch",
-      "output": "10-fsync-futex-waitv.patch",
-      "ref": "master",
-      "repo": "https://github.com/Frogging-Family/linux-tkg.git",
-      "require_exact_series": false
     },
     "libbpf_uninitialized": {
       "kind": "http_patch",
@@ -308,23 +272,6 @@
       "required_markers": [
         "CPU_FREQ_GOV_REFLEX",
         "cpufreq_reflex"
-      ]
-    },
-    "vram": {
-      "exact_globs": [
-        "{series}/misc/0001-cgroup-vram.patch"
-      ],
-      "fallback_globs": [
-        "*/misc/0001-cgroup-vram.patch"
-      ],
-      "kind": "git_patch",
-      "output": "24-cgroup-vram.patch",
-      "ref": "master",
-      "repo": "https://github.com/CachyOS/kernel-patches.git",
-      "require_exact_series": false,
-      "required_markers": [
-        "struct ttm_bo_alloc_state",
-        "dmem_cgroup_get_common_ancestor"
       ]
     },
     "zram_ir": {

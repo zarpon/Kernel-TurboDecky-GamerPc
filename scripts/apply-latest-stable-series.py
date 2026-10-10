@@ -41,7 +41,6 @@ def patch_core(path: Path) -> None:
 
     legacy_series_replacements = {
         "linux-tkg-patches/7.1/": "linux-tkg-patches/${KERNEL_SERIES}/",
-        "0007-v7.1-fsync1_via_futex_waitv.patch": "0007-v${KERNEL_SERIES}-fsync1_via_futex_waitv.patch",
         "genpatches/trunk/7.1/": "genpatches/trunk/${KERNEL_SERIES}/",
         "kernel-patches/refs/heads/master/7.1/": "kernel-patches/refs/heads/master/${KERNEL_SERIES}/",
         "Compatibility policy: Linux 7.1-specific or upstream-integrated source preferred":

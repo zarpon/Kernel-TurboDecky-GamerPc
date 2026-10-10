@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
-TUNING_VERSION="1.3.3"
+TUNING_VERSION="1.3.4"
 
 # Production package builds have already emitted final.config, modules.order and
 # linux-image. Validate that complete payload before adding the tuning package.
@@ -52,7 +52,7 @@ Section: kernel
 Priority: optional
 Architecture: all
 Maintainer: TurboDecky GamerPc <noreply@localhost>
-Depends: clang, llvm, lld, make, procps, udev, systemd | systemd-standalone-tmpfiles
+Depends: clang, llvm, lld, make, procps, udev, systemd-zram-generator, systemd | systemd-standalone-tmpfiles
 Recommends: grub2-common
 Description: Runtime, boot and external-module defaults for TurboDecky GamerPc
  Sets Marie memory defaults, selects ADIOS, applies the requested Transparent

@@ -35,21 +35,8 @@ def rewrite(path: Path) -> None:
         return
 
     function = r'''fix_known_build_warnings() {
-  local futex_source="kernel/futex/syscalls.c"
   local gud_source="drivers/gpu/drm/gud/gud_connector.c"
   echo "==> Fixing known source and configuration warnings"
-  python3 - "$futex_source" <<'PYFIX'
-from pathlib import Path
-import re, sys
-path = Path(sys.argv[1]); text = path.read_text(encoding="utf-8")
-text, replacements = re.compile(r"^int futex_opcode_31\(", re.MULTILINE).subn("static int futex_opcode_31(", text)
-if replacements > 1: raise SystemExit(f"unexpected futex_opcode_31 definition count: {replacements}")
-path.write_text(text, encoding="utf-8")
-PYFIX
-  if grep -Fq 'futex_opcode_31(' "$futex_source"; then
-    grep -Fq 'static int futex_opcode_31(' "$futex_source"
-    ! grep -Eq '^int futex_opcode_31\(' "$futex_source"
-  fi
   python3 - "$gud_source" <<'PYGUD'
 from pathlib import Path
 import sys
@@ -73,8 +60,8 @@ PYGUD
   grep -Fq 'char (*buf)[GUD_CONNECTOR_TV_MODE_NAME_LEN]' "$gud_source"
   grep -Fq 'ret > buf_len' "$gud_source"
   grep -Fq "memchr(mode, '\\0', sizeof(*buf))" "$gud_source"
-  git diff --check -- "$futex_source" "$gud_source"
-  { echo "futex_opcode_31 linkage: translation-unit local"; echo "GUD TV-mode response: typed fixed-size slots plus explicit ret <= buf_len invariant for Full LTO/FORTIFY"; } | tee "$LOGDIR/known-warning-fixes.txt"
+  git diff --check -- "$gud_source"
+  { echo "GUD TV-mode response: typed fixed-size slots plus explicit ret <= buf_len invariant for Full LTO/FORTIFY"; } | tee "$LOGDIR/known-warning-fixes.txt"
 }
 
 '''

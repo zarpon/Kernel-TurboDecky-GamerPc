@@ -38,17 +38,17 @@ assert_config \"CONFIG_CMDLINE_BOOL=y\"
 
         self.assertEqual(first, second)
         self.assertIn("fix_known_build_warnings()", first)
-        self.assertIn("static int futex_opcode_31(", first)
+        self.assertNotIn("futex_opcode_31", first)
         self.assertIn(
             "apply_requested_patch_series\nfix_known_build_warnings\n"
             "apply_other_dynamic_series",
             first,
         )
         self.assertIn(
-            "configure_builtin_cmdline\n\n# MULTIPLEXER is a boolean symbol.",
+            "configure_builtin_cmdline\n\n# MULTIPLEXER is hidden; MUX_CORE is its public selector.",
             first,
         )
-        self.assertIn("scripts/config --enable MULTIPLEXER", first)
+        self.assertIn("scripts/config --enable MUX_CORE", first)
         self.assertIn('assert_config "CONFIG_MULTIPLEXER=y"', first)
 
 

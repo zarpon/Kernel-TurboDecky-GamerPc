@@ -94,22 +94,15 @@ versioned overrides in `config/kernelnote.config`.
   `systemd-zram-setup@` `ExecStartPre` reinforces the configuration before
   initialization; the UDEV helper remains only as a safe fallback and never
   reconfigures active swap.
-- **VRAM through cgroup / TTM** — policy derived from pixelcluster patches,
-  aggregated and pinned to commit
-  [`ea739d734ec179864b21446856315bc49f7c52fa`](https://github.com/CachyOS/kernel-patches/tree/ea739d734ec179864b21446856315bc49f7c52fa/7.0/misc).
-  The port enables `CONFIG_CGROUP_DMEM=y`, separates cgroup accounting from TTM
-  allocation, considers `low/min` protection during eviction, and selects
-  unprotected buffers before game buffers.
+- **VRAM through cgroup / TTM** — native upstream support, enabled by
+  `CONFIG_CGROUP_DMEM=y`. The `turbodecky-vram` userspace package is retained;
+  the old aggregate patch is no longer fetched or applied.
 
-The workflow also resolves and records C23 libbpf, Clear Linux, fsync through
-`FUTEX_WAIT_MULTIPLE`, O3, Bluetooth SSP, the libbpf workaround, universal CPU
-optimizations without targeting a specific model, DKMS-Clang compatibility,
-Polly, firmware diagnostics, three minstrel_ht fixes, and ath11k fixes. The four
-OpenWrt sources from commit
-[`0ff1553b`](https://github.com/openwrt/openwrt/tree/0ff1553bd731c0db28043fc9caab90bdc32587f3)
-are versioned under `patches/openwrt-0ff1553/`; the downgrade rework has a port
-with Linux 7.1 context. Every patch has a source, commit or URL, SHA-256,
-application attempt, prior-integration detection, and reject reporting.
+The workflow resolves Clear Linux, O3, the libbpf workaround, generic CPU
+optimizations, DKMS-Clang, Polly, firmware diagnostics, three minstrel_ht fixes
+and ath11k remapped CE. The existing ath11k DISABLE_KEY revert is retained.
+Legacy fsync opcode 31 and already-upstream C23/libbpf, Bluetooth SSP and
+Qualcomm ath11k patches were removed from the series.
 
 ## VRAM management through cgroup
 
@@ -265,3 +258,22 @@ external dependencies with `apt-get -f install`, and updates GRUB.
 
 After installation, reboot the computer and confirm the kernel with `uname -r`.
 Full instructions are available in [INSTALL.md](INSTALL.md).
+
+## Compilation and swap profile
+
+The kernel uses O3. ZRAM is the default swap, with primary LZ4 and zstd
+recompression. Zswap remains compiled in but is disabled by default.
+To switch at the next boot, append to the kernel command line:
+
+```text
+systemd.zram=0 zswap.enabled=1
+```
+
+`systemd.zram=0` disables devices created by zram-generator. Zswap requires
+a configured, active disk/file swap backend; it does not create one.
+Remove those arguments to restore the default, or use
+`systemd.zram=1 zswap.enabled=0`.
+
+Runtime tuning uses `vm.vfs_cache_pressure=100`,
+`vm.dirty_background_ratio=2` and `vm.dirty_ratio=10`. LRU Marie's own defaults
+are preserved.

@@ -92,25 +92,13 @@ def main() -> None:
 fetch_requested_patch_series() {
   echo "==> Resolving requested patch series, preferring Linux 7.1 revisions"
 
-  fetch_candidate_patch "C23 libbpf fix" \
-    "$REQUESTED_SERIES_DIR/08-c23-libbpf.patch" "08-c23-libbpf" \
-    "__DYNAMIC_PATCH_LOCK_REQUIRED__:c23_libbpf"
-
   fetch_candidate_patch "Clear Linux performance patches" \
     "$REQUESTED_SERIES_DIR/09-clear.patch" "09-clear" \
     "__DYNAMIC_PATCH_LOCK_REQUIRED__:clear"
 
-  fetch_candidate_patch "fsync FUTEX_WAIT_MULTIPLE compatibility" \
-    "$REQUESTED_SERIES_DIR/10-fsync-futex-waitv.patch" "10-fsync" \
-    "__DYNAMIC_PATCH_LOCK_REQUIRED__:fsync"
-
   fetch_candidate_patch "Optimize harder O3" \
     "$REQUESTED_SERIES_DIR/11-o3.patch" "11-o3" \
     "__DYNAMIC_PATCH_LOCK_REQUIRED__:o3"
-
-  fetch_candidate_patch "Bluetooth SSP key-size check" \
-    "$REQUESTED_SERIES_DIR/12-bt-ssp-key-size.patch" "12-bt-ssp" \
-    "__DYNAMIC_PATCH_LOCK_REQUIRED__:bt_ssp"
 
   fetch_candidate_patch "libbpf Wmaybe-uninitialized workaround" \
     "$REQUESTED_SERIES_DIR/13-libbpf-uninitialized.patch" "13-libbpf-uninitialized" \
@@ -151,10 +139,6 @@ fetch_requested_patch_series() {
   fetch_candidate_patch "ath11k DISABLE_KEY revert" \
     "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key" \
     "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_disable_key"
-
-  fetch_candidate_patch "ath11k Qualcomm upstream series" \
-    "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream" \
-    "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_upstream"
 }
 
 report_requested_rejects() {
@@ -216,11 +200,8 @@ apply_requested_patch() {
 }
 
 apply_requested_patch_series() {
-  apply_requested_patch "C23 libbpf fix" "$REQUESTED_SERIES_DIR/08-c23-libbpf.patch" "08-c23-libbpf"
   apply_requested_patch "Clear Linux performance patches" "$REQUESTED_SERIES_DIR/09-clear.patch" "09-clear"
-  apply_requested_patch "fsync FUTEX_WAIT_MULTIPLE compatibility" "$REQUESTED_SERIES_DIR/10-fsync-futex-waitv.patch" "10-fsync"
   apply_requested_patch "Optimize harder O3" "$REQUESTED_SERIES_DIR/11-o3.patch" "11-o3"
-  apply_requested_patch "Bluetooth SSP key-size check" "$REQUESTED_SERIES_DIR/12-bt-ssp-key-size.patch" "12-bt-ssp"
   apply_requested_patch "libbpf Wmaybe-uninitialized workaround" "$REQUESTED_SERIES_DIR/13-libbpf-uninitialized.patch" "13-libbpf-uninitialized"
   apply_requested_patch "Universal x86 CPU optimizations" "$REQUESTED_SERIES_DIR/14-cpu-optimizations.patch" "14-cpu-optimizations"
   python3 "$ROOT/scripts/normalize-cpu-optimizations-generic.py" \
@@ -240,10 +221,7 @@ apply_requested_patch_series() {
     return 1
   fi
   apply_requested_patch "ath11k DISABLE_KEY revert" "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key"
-  apply_requested_patch "ath11k Qualcomm upstream series" "$REQUESTED_SERIES_DIR/23-ath11k-upstream.patch" "23-ath11k-upstream"
 
-  grep -Fq 'const char *res;' tools/lib/bpf/libbpf.c
-  grep -Fq '#define FUTEX_WAIT_MULTIPLE' include/uapi/linux/futex.h
   grep -Fq 'config CC_OPTIMIZE_FOR_PERFORMANCE_O3' init/Kconfig
   grep -Fq 'config POLLY_CLANG' init/Kconfig
   echo "==> Requested patch series applied or confirmed integrated"

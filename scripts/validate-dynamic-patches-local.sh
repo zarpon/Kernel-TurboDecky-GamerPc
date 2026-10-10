@@ -61,7 +61,7 @@ if grep -Fq 'patch-external-module-toolchain.py' "$ROOT/scripts/apply-latest-sta
   exit 1
 fi
 grep -Fq 'drivers/gpu/drm/amd/amdgpu/amdgpu.ko' "$ROOT/scripts/apply-validation-modules.py"
-grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
+! grep -Fq '"vram"' "$ROOT/config/patch-sources.json"
 ! grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
 ! grep -Fq 'local_fallback_patch' "$ROOT/config/patch-sources.json"
 ! grep -Fq 'local_fallback_metadata' "$ROOT/config/patch-sources.json"
@@ -85,7 +85,7 @@ grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 grep -Fq 'kvm.enable_virt_at_load=0' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_INTEL=m' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"
-grep -Fq 'TUNING_VERSION="1.3.3"' "$ROOT/scripts/build-tuning-package.sh"
+grep -Fq 'TUNING_VERSION="1.3.4"' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Version: ${TUNING_VERSION}' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Depends: clang, llvm, lld, make' "$ROOT/scripts/build-tuning-package.sh"
 if grep -RIn --binary-files=without-match \

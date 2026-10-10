@@ -14,11 +14,8 @@ from typing import Any
 MARKER = "# Dynamic patch source lock"
 
 REQUESTED = {
-    "c23_libbpf": ("08-c23-libbpf.patch", "08-c23-libbpf"),
     "clear": ("09-clear.patch", "09-clear"),
-    "fsync": ("10-fsync-futex-waitv.patch", "10-fsync"),
     "o3": ("11-o3.patch", "11-o3"),
-    "bt_ssp": ("12-bt-ssp-key-size.patch", "12-bt-ssp"),
     "libbpf_uninitialized": ("13-libbpf-uninitialized.patch", "13-libbpf-uninitialized"),
     "cpu_optimizations": ("14-cpu-optimizations.patch", "14-cpu-optimizations"),
     "dkms_clang": ("15-dkms-clang.patch", "15-dkms-clang"),
@@ -29,7 +26,6 @@ REQUESTED = {
     "minstrel_downgrade": ("20-minstrel-downgrade.patch", "20-minstrel-downgrade"),
     "ath11k_remapped_ce": ("21-ath11k-remapped-ce.patch", "21-ath11k-remapped-ce"),
     "ath11k_disable_key": ("22-ath11k-disable-key.patch", "22-ath11k-disable-key"),
-    "ath11k_upstream": ("23-ath11k-upstream.patch", "23-ath11k-upstream"),
 }
 
 BORE_FINALIZER_SENTINELS = {
@@ -249,11 +245,11 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
 
 
 def patch_wrapper(text: str, lock: dict[str, Any]) -> str:
-    for prefix, name in (("ZRAM_IR", "zram_ir"), ("POC", "poc"), ("NAP", "nap"), ("VRAM_PATCH", "vram")):
+    for prefix, name in (("ZRAM_IR", "zram_ir"), ("POC", "poc"), ("NAP", "nap")):
         record = component(lock, name)
         repo_var = f"{prefix}_REPO"
         commit_var = f"{prefix}_COMMIT"
-        path_var = "VRAM_PATCH_PATH" if prefix == "VRAM_PATCH" else f"{prefix}_PATCH_PATH"
+        path_var = f"{prefix}_PATCH_PATH"
         if repo_var in text:
             text = replace_assignment(text, repo_var, repo_value(record))
         if commit_var in text:
@@ -286,7 +282,7 @@ def validate_lock(lock: dict[str, Any]) -> None:
         raise RewriteError("unsupported patch lock schema")
     required = {
         "bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
-        "vram", *REQUESTED.keys(),
+        *REQUESTED.keys(),
     }
     missing = sorted(required - set(lock.get("components", {})))
     if missing:

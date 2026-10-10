@@ -490,6 +490,8 @@ scripts/config --enable LRU_GEN
 scripts/config --enable LRU_GEN_ENABLED
 scripts/config --enable MQ_IOSCHED_ADIOS
 scripts/config --enable MQ_IOSCHED_DEFAULT_ADIOS
+scripts/config --enable ZSWAP
+scripts/config --disable ZSWAP_DEFAULT_ON
 scripts/config --module BLK_DEV_ZRAM
 
 # REFLEX is an external CPUFreq governor. Keep both vendor P-State drivers
@@ -542,6 +544,8 @@ assert_config "CONFIG_LTO=y"
 assert_config "CONFIG_LTO_CLANG=y"
 assert_config "CONFIG_LTO_CLANG_THIN=y"
 assert_config "CONFIG_LRU_MARIE=y"
+assert_config "CONFIG_ZSWAP=y"
+assert_disabled_or_absent ZSWAP_DEFAULT_ON
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
 assert_config "CONFIG_X86_INTEL_PSTATE=y"

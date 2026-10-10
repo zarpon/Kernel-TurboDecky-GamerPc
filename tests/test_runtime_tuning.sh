@@ -34,7 +34,7 @@ require_line "$zram_generator_dropin" "[zram0]"
 require_line "$zram_generator_dropin" "compression-algorithm = lz4 zstd"
 require_line "$zram_setup_dropin" "[Service]"
 require_line "$zram_setup_dropin" "ExecStartPre=/usr/lib/turbodecky/configure-zram-ir %I"
-require_line "$runtime_policy" "vm.vfs_cache_pressure = 150"
+require_line "$runtime_policy" "vm.vfs_cache_pressure = 100"
 require_line "$runtime_policy" "vm.compaction_proactiveness = 10"
 require_line "$runtime_policy" "vm.page-cluster = 0"
 require_line "$runtime_policy" "vm.compact_unevictable_allowed = 0"
@@ -43,7 +43,7 @@ require_line "$runtime_policy" "-kernel.sched_cfs_bandwidth_slice_us = 3000"
 require_line "$runtime_policy" "-kernel.split_lock_mitigate = 0"
 require_line "$runtime_policy" "vm.dirty_expire_centisecs = 1500"
 require_line "$runtime_policy" "vm.dirty_writeback_centisecs = 1500"
-require_line "$runtime_policy" "vm.dirty_ratio = 40"
+require_line "$runtime_policy" "vm.dirty_ratio = 10"
 require_line "$runtime_policy" "vm.dirty_background_ratio = 2"
 
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
@@ -213,9 +213,9 @@ PY
 TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.3.3_all.deb"
+deb="$sandbox/artifacts/turbodecky-tuning_1.3.4_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.3.3" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "1.3.4" ]] || fail "unexpected tuning package version"
 
 for payload in \
   './etc/sysctl.d/99-turbodecky.conf' \
