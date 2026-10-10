@@ -67,7 +67,7 @@ diff --git a/init/Kconfig b/init/Kconfig
         self.assertNotIn("sysctl_sched_base_slice", adapted)
         self.assertIn("sysctl_sched_migration_cost", adapted)
         self.assertIn("300000UL", adapted)
-        self.assertIn("sysctl_sched_cfs_bandwidth_slice", adapted)
+        self.assertNotIn("sysctl_sched_cfs_bandwidth_slice", adapted)
         self.assertIn("project policy unchanged", adapted)
         self.assertTrue(any("ADIOS" in item for item in exclusions))
         self.assertTrue(any("BORE" in item for item in exclusions))
@@ -100,7 +100,7 @@ diff --git a/init/Kconfig b/init/Kconfig
             ["init/Kconfig", "kernel/sched/fair.c"],
         )
 
-    def test_swap_hunk_is_replaced_with_balanced_semantic_port(self) -> None:
+    def test_swap_hunk_is_moved_to_runtime_policy(self) -> None:
         patch = """diff --git a/mm/swap.c b/mm/swap.c
 --- a/mm/swap.c
 +++ b/mm/swap.c
@@ -120,14 +120,45 @@ diff --git a/init/Kconfig b/init/Kconfig
 """
         adapted, exclusions = port.prepare_patch(patch)
 
-        self.assertEqual(adapted.count("diff --git a/mm/swap.c b/mm/swap.c"), 1)
-        self.assertEqual(adapted.count("page_cluster = 0;"), 1)
-        self.assertIn("+#else", adapted)
-        self.assertIn("+#endif", adapted)
-        port.assert_added_conditionals_balanced(
-            adapted, paths={"mm/swap.c"}
-        )
-        self.assertTrue(any("balanced semantic hunk" in item for item in exclusions))
+        self.assertNotIn("diff --git a/mm/swap.c b/mm/swap.c", adapted)
+        self.assertNotIn("page_cluster = 0;", adapted)
+        self.assertTrue(any("swap readahead/page-cluster" in item for item in exclusions))
+
+    def test_runtime_tunable_vm_and_split_lock_hunks_are_removed(self) -> None:
+        patch = """diff --git a/mm/Kconfig b/mm/Kconfig
+--- a/mm/Kconfig
++++ b/mm/Kconfig
+@@ -1 +1,3 @@
++config COMPACT_UNEVICTABLE_DEFAULT
++\tdefault 0 if ZEN_INTERACTIVE
+ value
+diff --git a/mm/page_alloc.c b/mm/page_alloc.c
+--- a/mm/page_alloc.c
++++ b/mm/page_alloc.c
+@@ -1 +1,3 @@
++#ifdef CONFIG_ZEN_INTERACTIVE
++static int watermark_boost_factor;
+ value
+diff --git a/arch/x86/kernel/cpu/bus_lock.c b/arch/x86/kernel/cpu/bus_lock.c
+--- a/arch/x86/kernel/cpu/bus_lock.c
++++ b/arch/x86/kernel/cpu/bus_lock.c
+@@ -1 +1,3 @@
++#ifdef CONFIG_ZEN_INTERACTIVE
++static unsigned int sysctl_sld_mitigate;
+ value
+diff --git a/init/Kconfig b/init/Kconfig
+--- a/init/Kconfig
++++ b/init/Kconfig
+@@ -1 +1,2 @@
++config ZEN_INTERACTIVE
+ value
+"""
+        adapted, exclusions = port.prepare_patch(patch)
+
+        self.assertNotIn("COMPACT_UNEVICTABLE_DEFAULT", adapted)
+        self.assertNotIn("watermark_boost_factor", adapted)
+        self.assertNotIn("sysctl_sld_mitigate", adapted)
+        self.assertGreaterEqual(len(exclusions), 3)
 
     def test_unterminated_added_conditional_is_rejected(self) -> None:
         malformed = """diff --git a/mm/swap.c b/mm/swap.c

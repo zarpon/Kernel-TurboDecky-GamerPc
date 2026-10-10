@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 PROJECT_OWNED_PATHS = {"block/elevator.c"}
-SEMANTIC_PORT_PATHS = {"mm/swap.c", "mm/swap_state.c"}
+SEMANTIC_PORT_PATHS = {"kernel/sched/fair.c"}
 BASE_SLICE_TOKEN = "sysctl_sched_base_slice"
 MIGRATION_SECTION = """diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
 --- a/kernel/sched/fair.c
@@ -118,6 +118,11 @@ def sanitize_kconfig_help(hunk: str) -> str:
         "Default scheduler for SQ": "\t    Default scheduler for SQ..: project policy unchanged",
         "Default scheduler for MQ": "\t    Default scheduler for MQ..: project policy unchanged",
         "Minimal granularity": "\t    Minimal granularity............: project policy unchanged",
+        "Compact unevictable": "\t    Compact unevictable............: userspace runtime policy",
+        "Watermark boost factor": "\t    Watermark boost factor.........: userspace runtime policy",
+        "Swap-in readahead": "\t    Swap-in readahead..............: userspace runtime policy",
+        "Bandwidth slice size": "\t    Bandwidth slice size...........: userspace runtime policy",
+        "Split lock mitigation": "\t    Split lock mitigation..........: userspace runtime policy",
     }
     lines: list[str] = []
     for line in hunk.splitlines(keepends=True):
@@ -129,6 +134,20 @@ def sanitize_kconfig_help(hunk: str) -> str:
         ending = "\n" if line.endswith("\n") else ""
         lines.append(prefix + replacement + ending)
     return "".join(lines)
+
+
+def runtime_tunable_reason(path: str, hunk: str) -> str | None:
+    checks = (
+        (path in {"mm/swap.c", "mm/swap_state.c"} and "page_cluster" in hunk, "swap readahead/page-cluster"),
+        (path == "mm/Kconfig" and "COMPACT_UNEVICTABLE_DEFAULT" in hunk, "unevictable compaction"),
+        (path == "mm/page_alloc.c" and "watermark_boost_factor" in hunk, "watermark boost"),
+        (path == "kernel/sched/fair.c" and "sysctl_sched_cfs_bandwidth_slice" in hunk, "CFS bandwidth slice"),
+        (path == "arch/x86/kernel/cpu/bus_lock.c" and "sysctl_sld_mitigate" in hunk, "split-lock mitigation"),
+    )
+    for matched, description in checks:
+        if matched:
+            return description
+    return None
 
 
 def assert_added_conditionals_balanced(text: str, *, paths: set[str] | None = None) -> None:
@@ -160,7 +179,6 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
     output: list[str] = []
     exclusions: list[str] = []
     migration_needed = False
-    swap_setup_needed = False
 
     for section in split_sections(text):
         header, hunks = split_hunks(section)
@@ -171,13 +189,12 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
         if path in PROJECT_OWNED_PATHS:
             exclusions.append(f"{path}: ADIOS project policy preserved")
             continue
-        if path == "mm/swap.c":
-            swap_setup_needed = True
-            exclusions.append("mm/swap.c: page-cluster tuning ported semantically to the target kernel layout")
-            continue
-
         selected: list[str] = []
         for hunk in hunks:
+            runtime_reason = runtime_tunable_reason(path, hunk)
+            if runtime_reason:
+                exclusions.append(f"{path}: {runtime_reason} moved to userspace runtime policy")
+                continue
             if path == "kernel/sched/fair.c" and BASE_SLICE_TOKEN in hunk:
                 migration_needed = "sysctl_sched_migration_cost" in hunk
                 exclusions.append("kernel/sched/fair.c: BORE base slice preserved; migration cost ported separately")
@@ -190,12 +207,6 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
 
     if migration_needed:
         output.append(MIGRATION_SECTION)
-    semantic_swap_path = ""
-    if swap_setup_needed:
-        section, semantic_swap_path = swap_setup_section()
-        output.append(section)
-        exclusions.append(f"Zen swap readahead policy applied at {semantic_swap_path}")
-
     result = "".join(output)
     if "diff --git a/block/elevator.c b/block/elevator.c" in result:
         raise PortError("project-owned block/elevator.c remained in Zen patch")
@@ -205,12 +216,16 @@ def prepare_patch(text: str) -> tuple[str, list[str]]:
         raise PortError("Zen Kconfig definition was lost while adapting the patch")
     if migration_needed and result.count("sysctl_sched_migration_cost") != 3:
         raise PortError("migration-cost semantic port is malformed")
-    if swap_setup_needed:
-        marker = f"diff --git a/{semantic_swap_path} b/{semantic_swap_path}"
-        if result.count(marker) != 1:
-            raise PortError("swap page-cluster semantic port is duplicated")
-        if result.count("page_cluster = 0;") != 1:
-            raise PortError("swap page-cluster semantic port is malformed")
+    forbidden_runtime_tokens = (
+        "page_cluster = 0;",
+        "COMPACT_UNEVICTABLE_DEFAULT",
+        "sysctl_sched_cfs_bandwidth_slice",
+        "sysctl_sld_mitigate",
+        "watermark_boost_factor",
+    )
+    for token in forbidden_runtime_tokens:
+        if token in result:
+            raise PortError(f"runtime-tunable Zen policy remained in kernel patch: {token}")
     assert_added_conditionals_balanced(result, paths=SEMANTIC_PORT_PATHS)
     return result, exclusions
 
