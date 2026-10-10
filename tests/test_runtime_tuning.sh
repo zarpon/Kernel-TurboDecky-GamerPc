@@ -213,11 +213,13 @@ PY
 TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.3.4_all.deb"
+deb="$sandbox/artifacts/turbodecky-tuning_1.4.0_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.3.4" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "1.4.0" ]] || fail "unexpected tuning package version"
 
 for payload in \
+  './usr/lib/gaming-swap/configure' \
+  './usr/lib/systemd/system/gaming-zswap.service' \
   './etc/sysctl.d/99-turbodecky.conf' \
   './usr/lib/turbodecky/configure-zram-ir' \
   './usr/lib/systemd/zram-generator.conf.d/90-turbodecky-zram.conf' \
@@ -241,5 +243,9 @@ cmp -s "$runtime_policy" "$package_root/etc/sysctl.d/99-turbodecky.conf" \
   || fail "package does not contain the expected sysctl policy"
 cmp -s "$thp_policy" "$package_root/usr/lib/tmpfiles.d/99-turbodecky-thp.conf" \
   || fail "package does not contain the expected THP policy"
+
+grep -Fq "/usr/lib/gaming-swap/configure" "$control_dir/postinst" \
+  || fail "postinst does not migrate swap"
+python3 "$root/tests/test_gaming_swap.py"
 
 echo "runtime tuning validation passed"

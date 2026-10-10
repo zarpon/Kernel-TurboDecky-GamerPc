@@ -62,27 +62,14 @@ uname -r
 dpkg -l 'linux-*turbodecky*'
 ```
 
-O pacote `turbodecky-tuning` pode aplicar políticas de sysctl, zram, THP e
+O pacote `turbodecky-tuning` pode aplicar políticas de sysctl, zswap, swapfile, THP e
 GRUB. Em particular, `mitigations=off nowatchdog` favorece desempenho, mas
 reduz proteções de segurança e desativa o watchdog do kernel. Revise essa
 política antes de usar o kernel em máquinas expostas ou de produção.
 
-## ZRAM após a instalação
+## Zswap e swapfile após a instalação
 
-Quando a distribuição gerencia `zram0` com `zram-generator`, o pacote
-`turbodecky-tuning` substitui somente a política de compressão antes da
-inicialização do dispositivo: LZ4 é o compressor primário e ZSTD é o
-recompressor de prioridade `1`. O tamanho do dispositivo, a prioridade de swap
-e os demais parâmetros definidos pela distribuição são preservados.
-
-O instalador não redefine um zram/swap que já esteja ativo, pois o kernel não
-permite alterar o compressor após `disksize`. Reinicie para aplicar a política
-e confirme após o boot:
-
-```bash
-cat /sys/block/zram0/comp_algorithm
-cat /sys/block/zram0/recomp_algorithm
-```
-
-`[lz4]` identifica o compressor primário. Em `recomp_algorithm`, o ZSTD deve
-aparecer configurado na prioridade `1`.
+O pacote configura LZ4 zswap e cria um swapfile de 150% da RAM na partição
+que contém `/home`. ZRAM e seus serviços são desativados persistentemente.
+Consulte [SWAP.md](SWAP.md) para requisitos, tratamento de falhas e
+verificação após reiniciar.

@@ -217,6 +217,10 @@ done <"$PACKAGE_LIST"
 [ "$#" -gt 0 ] || die "nenhum pacote válido foi encontrado"
 run_privileged apt-get install -y "$@"
 
+# A new kernel release can carry the same tuning package version. Verify the
+# idempotent host migration even when apt did not reconfigure that package.
+run_privileged /usr/lib/gaming-swap/configure
+
 if command -v update-grub >/dev/null 2>&1; then
   run_privileged update-grub
 fi

@@ -491,7 +491,14 @@ scripts/config --enable LRU_GEN_ENABLED
 scripts/config --enable MQ_IOSCHED_ADIOS
 scripts/config --enable MQ_IOSCHED_DEFAULT_ADIOS
 scripts/config --enable ZSWAP
-scripts/config --disable ZSWAP_DEFAULT_ON
+scripts/config --enable ZSWAP_DEFAULT_ON
+scripts/config --enable ZSWAP_SHRINKER_DEFAULT_ON
+for compressor in DEFLATE LZO 842 LZ4HC ZSTD; do
+  scripts/config --disable "ZSWAP_COMPRESSOR_DEFAULT_$compressor"
+done
+scripts/config --enable ZSWAP_COMPRESSOR_DEFAULT_LZ4
+scripts/config --enable ZSMALLOC
+scripts/config --enable CRYPTO_LZ4
 scripts/config --module BLK_DEV_ZRAM
 
 # REFLEX is an external CPUFreq governor. Keep both vendor P-State drivers
@@ -545,7 +552,11 @@ assert_config "CONFIG_LTO_CLANG=y"
 assert_config "CONFIG_LTO_CLANG_THIN=y"
 assert_config "CONFIG_LRU_MARIE=y"
 assert_config "CONFIG_ZSWAP=y"
-assert_disabled_or_absent ZSWAP_DEFAULT_ON
+assert_config "CONFIG_ZSWAP_DEFAULT_ON=y"
+assert_config "CONFIG_ZSWAP_SHRINKER_DEFAULT_ON=y"
+assert_config "CONFIG_ZSWAP_COMPRESSOR_DEFAULT_LZ4=y"
+assert_config "CONFIG_ZSMALLOC=y"
+assert_config "CONFIG_CRYPTO_LZ4=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
 assert_config "CONFIG_X86_INTEL_PSTATE=y"

@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
-TUNING_VERSION="1.3.4"
+TUNING_VERSION="1.4.0"
 
 # Production package builds have already emitted final.config, modules.order and
 # linux-image. Validate that complete payload before adding the tuning package.
@@ -26,7 +26,14 @@ install -d "$PKGROOT/DEBIAN" \
            "$PKGROOT/usr/lib/tmpfiles.d" \
            "$PKGROOT/usr/lib/systemd/zram-generator.conf.d" \
            "$PKGROOT/usr/lib/systemd/system/systemd-zram-setup@.service.d" \
-           "$PKGROOT/usr/lib/turbodecky"
+           "$PKGROOT/usr/lib/turbodecky" \
+           "$PKGROOT/usr/lib/gaming-swap" \
+           "$PKGROOT/usr/lib/systemd/system"
+
+install -m 0755 "$ROOT/packaging/configure-gaming-swap" \
+  "$PKGROOT/usr/lib/gaming-swap/configure"
+install -m 0644 "$ROOT/packaging/gaming-zswap.service" \
+  "$PKGROOT/usr/lib/systemd/system/gaming-zswap.service"
 
 install -m 0644 "$ROOT/packaging/99-kernelnote.conf" \
   "$PKGROOT/etc/sysctl.d/99-turbodecky.conf"
@@ -52,19 +59,20 @@ Section: kernel
 Priority: optional
 Architecture: all
 Maintainer: TurboDecky GamerPc <noreply@localhost>
-Depends: clang, llvm, lld, make, procps, udev, systemd-zram-generator, systemd | systemd-standalone-tmpfiles
+Depends: clang, llvm, lld, make, procps, udev, python3, util-linux, coreutils, btrfs-progs, systemd
 Recommends: grub2-common
 Description: Runtime, boot and external-module defaults for TurboDecky GamerPc
  Sets Marie memory defaults, selects ADIOS, applies the requested Transparent
- Hugepage policy, appends performance parameters to GRUB, configures every new
- zram device for ZRAM-IR with LZ4 primary compression and ZSTD priority-1
- recompression, and installs the LLVM toolchain required to compile VirtualBox,
+ Hugepage policy, appends performance parameters to GRUB, disables zram and
+ migrates swapfiles to /home with 150 percent RAM capacity and LZ4 zswap,
+ and installs the LLVM toolchain required to compile VirtualBox,
  DKMS and other external modules against this Clang kernel.
 EOF
 
 cat > "$PKGROOT/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
 set -e
+/usr/lib/gaming-swap/configure
 sysctl --system >/dev/null 2>&1 || true
 if command -v systemctl >/dev/null 2>&1; then
   systemctl daemon-reload >/dev/null 2>&1 || true
