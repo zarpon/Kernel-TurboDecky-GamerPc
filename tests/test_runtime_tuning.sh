@@ -213,9 +213,9 @@ PY
 TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.4.0_all.deb"
+deb="$sandbox/artifacts/turbodecky-tuning_1.4.1_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.4.0" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "1.4.1" ]] || fail "unexpected tuning package version"
 
 for payload in \
   './usr/lib/gaming-swap/configure' \
