@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).with_name("fix-nap-kernel-api.py")
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/fix-nap-kernel-api.py"
 
 FIXTURE = """static u32 nap_irq_total(u32 *dev, u32 *loc, u32 *res, u32 *cal)
 {
