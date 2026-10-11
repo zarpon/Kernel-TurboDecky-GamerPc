@@ -256,6 +256,8 @@ apply_nap_patch() {
   fi
 
   find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
+  python3 "$ROOT/scripts/fix-nap-kernel-api.py" \
+    drivers/cpuidle/governors/nap/nap.c
   git diff --check -- drivers/cpuidle \
     | tee "$LOGDIR/06-nap-diff-check.log"
   test -s drivers/cpuidle/governors/nap/nap.c
