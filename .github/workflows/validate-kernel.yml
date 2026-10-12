@@ -90,8 +90,9 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: .ccache
-          key: turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'scripts/*.sh', 'config/*.json', 'config/kernelnote.config', 'patches/bore/*.patch') }}
+          key: turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'scripts/*.sh', 'config/*.json', 'config/kernelnote.config', 'patches/bore/*.patch') }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/*.py', 'scripts/*.sh', 'config/*.json', 'config/kernelnote.config', 'patches/bore/*.patch') }}-
             turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.version }}-${{ runner.os }}-${{ runner.arch }}-
             turbodecky-ccache-clang18-fulllto-${{ steps.kernel.outputs.series }}-${{ runner.os }}-${{ runner.arch }}-
             turbodecky-ccache-clang18-fulllto-
@@ -165,7 +166,7 @@ jobs:
         run: ccache --show-stats || true
 
       - name: Save compiler cache
-        if: always() && steps.ccache-restore.outputs.cache-hit != 'true'
+        if: always() && !cancelled() && steps.ccache-restore.outputs.cache-primary-key != ''
         uses: actions/cache/save@v5
         with:
           path: .ccache
