@@ -160,7 +160,7 @@
      print(f"saved {len(recs)} CPUs to {cur}")
  
  
-@@ -300,9 +339,20 @@
+@@ -300,8 +339,20 @@
      s = sub.add_parser("restore", help="load the saved weights"); s.add_argument("--force", action="store_true"); s.set_defaults(f=cmd_restore)
      s = sub.add_parser("reset", help="back to the built-in default"); s.set_defaults(f=cmd_reset)
      a = p.parse_args()
@@ -179,7 +179,6 @@
  
  if __name__ == "__main__":
 -    main()
--
 +    try:
 +        main()
 +    except (OSError, struct.error, ValueError) as e:
@@ -199,10 +198,11 @@
    systemctl enable --now nap-state.service nap-state-save.timer
  
  nap-state.service restores the weights when the system comes up and saves them when it
-@@ -37,3 +37,36 @@
+@@ -36,3 +36,37 @@
+   Rebuild after changing the network: python3 napviz/build.py <kernel>/drivers/cpuidle/governors/nap
    Check the viewer's forward pass against the kernel's self-test vectors:
    node napviz/test_core.js <kernel>/drivers/cpuidle/governors/nap
- 
++
 +
 +Kernel package integration
 +==========================
@@ -238,7 +238,7 @@
 +Source commit and original file hashes are recorded in UPSTREAM.json.
 --- a/nap-state.service
 +++ b/nap-state.service
-@@ -2,13 +2,16 @@
+@@ -2,12 +2,16 @@
  Description=Restore and keep the learned weights of the nap cpuidle governor
  ConditionPathExists=/sys/devices/system/cpu/nap/weights
  After=sysinit.target
@@ -257,10 +257,9 @@
  
  [Install]
  WantedBy=multi-user.target
--
 --- a/nap-state-save.service
 +++ b/nap-state-save.service
-@@ -1,8 +1,12 @@
+@@ -1,7 +1,12 @@
  [Unit]
  Description=Save the learned weights of the nap cpuidle governor
  ConditionPathExists=/sys/devices/system/cpu/nap/weights
@@ -270,7 +269,6 @@
  [Service]
  Type=oneshot
 -ExecStart=/usr/local/sbin/napctl save
--
 +StateDirectory=nap
 +StateDirectoryMode=0700
 +UMask=0077
@@ -284,8 +282,3 @@
  
  [Timer]
  OnBootSec=30min
-@@ -7,4 +8,3 @@
- 
- [Install]
- WantedBy=timers.target
--
