@@ -38,7 +38,7 @@
      return f
  
  
-@@ -102,7 +113,8 @@
+@@ -117,7 +128,8 @@
      write_attr("weights_cpu", cpu)
      fd = os.open(f"{SYSFS}/weights", os.O_WRONLY)
      try:
@@ -46,9 +46,9 @@
 +        if os.write(fd, blob) != len(blob):
 +            die("the kernel accepted only part of the weight blob")
      except OSError as e:
-         die(f"the kernel rejected the weights: {os.strerror(e.errno)}")
-     finally:
-@@ -114,8 +126,9 @@
+         die(f"the kernel rejected the weights: {os.strerror(e.errno)}"
+             " (a blob from a nap with another network shape, or a damaged one; compare `napctl info` of the blob with the kernel's)")
+@@ -130,8 +142,9 @@
      check_blob(first)
      acc = array.array("f", first[HDR.size:])
      for b in blobs[1:]:
@@ -60,7 +60,7 @@
              die("blobs of different shapes")
          w = array.array("f", b[HDR.size:])
          for i in range(len(acc)):
-@@ -129,31 +142,59 @@
+@@ -145,31 +158,59 @@
      return HDR.pack(*f) + payload
  
  
@@ -131,17 +131,16 @@
      return sig, recs
  
  
-@@ -182,7 +223,8 @@
-     with open(a.file, "rb") as fh:
+@@ -205,7 +246,7 @@
          head = fh.read(8)
      if head == STATE_MAGIC:
--        apply_state(a.file, a.force, a.cpu)
-+        if not apply_state(a.file, a.force, a.cpu):
+         if not apply_state(a.file, a.force, a.cpu):
+-            sys.exit(1)
 +            return
      else:
          with open(a.file, "rb") as fh:
              load_blob(fh.read(), "all" if a.cpu is None else a.cpu)
-@@ -218,7 +260,7 @@
+@@ -246,7 +287,7 @@
  
  
  def cmd_save(a):
@@ -150,7 +149,7 @@
      cur, prev = f"{STATE_DIR}/state", f"{STATE_DIR}/state.prev"
      recs = []
      for c in online_cpus():
-@@ -228,9 +270,7 @@
+@@ -256,9 +297,7 @@
      if not recs:
          print("napctl: nothing learned yet, nothing saved")
          return
@@ -161,7 +160,7 @@
      print(f"saved {len(recs)} CPUs to {cur}")
  
  
-@@ -272,8 +312,20 @@
+@@ -300,9 +339,20 @@
      s = sub.add_parser("restore", help="load the saved weights"); s.add_argument("--force", action="store_true"); s.set_defaults(f=cmd_restore)
      s = sub.add_parser("reset", help="back to the built-in default"); s.set_defaults(f=cmd_reset)
      a = p.parse_args()
@@ -180,6 +179,7 @@
  
  if __name__ == "__main__":
 -    main()
+-
 +    try:
 +        main()
 +    except (OSError, struct.error, ValueError) as e:
@@ -199,11 +199,10 @@
    systemctl enable --now nap-state.service nap-state-save.timer
  
  nap-state.service restores the weights when the system comes up and saves them when it
-@@ -30,3 +30,37 @@
-   Rebuild after changing the network: python3 napviz/build.py <kernel>/drivers/cpuidle/governors/nap
+@@ -37,3 +37,36 @@
    Check the viewer's forward pass against the kernel's self-test vectors:
    node napviz/test_core.js <kernel>/drivers/cpuidle/governors/nap
-+
+ 
 +
 +Kernel package integration
 +==========================
@@ -239,7 +238,7 @@
 +Source commit and original file hashes are recorded in UPSTREAM.json.
 --- a/nap-state.service
 +++ b/nap-state.service
-@@ -2,12 +2,16 @@
+@@ -2,13 +2,16 @@
  Description=Restore and keep the learned weights of the nap cpuidle governor
  ConditionPathExists=/sys/devices/system/cpu/nap/weights
  After=sysinit.target
@@ -258,9 +257,10 @@
  
  [Install]
  WantedBy=multi-user.target
+-
 --- a/nap-state-save.service
 +++ b/nap-state-save.service
-@@ -1,7 +1,12 @@
+@@ -1,8 +1,12 @@
  [Unit]
  Description=Save the learned weights of the nap cpuidle governor
  ConditionPathExists=/sys/devices/system/cpu/nap/weights
@@ -270,6 +270,7 @@
  [Service]
  Type=oneshot
 -ExecStart=/usr/local/sbin/napctl save
+-
 +StateDirectory=nap
 +StateDirectoryMode=0700
 +UMask=0077
@@ -283,3 +284,8 @@
  
  [Timer]
  OnBootSec=30min
+@@ -7,4 +8,3 @@
+ 
+ [Install]
+ WantedBy=timers.target
+-
