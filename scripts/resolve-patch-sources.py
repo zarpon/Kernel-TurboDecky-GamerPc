@@ -76,10 +76,34 @@ def semantic_project_version(path: str, pattern: str | None) -> str | None:
 base.project_version = semantic_project_version
 
 
+def upstream_release_key(version: str) -> tuple[int, ...]:
+    """Order all stable/testing versions, including RC and post-release rN.
+
+    The release version is determined before comparing kernel targets. For one
+    release, a matching kernel series outranks a foreign kernel requiring port.
+    """
+    match = re.fullmatch(
+        r"(?P<base>\d+(?:\.\d+)*)(?P<suffix>-rc\d+|r\d+)?",
+        version.lower().removeprefix("v"),
+    )
+    if match is None:
+        raise base.ResolverError(f"unsupported upstream patch release version: {version!r}")
+    numbers = [int(item) for item in match.group("base").split(".")]
+    numbers = (numbers + [0] * 8)[:8]
+    suffix = match.group("suffix") or ""
+    if suffix.startswith("-rc"):
+        stage, revision = 1, int(suffix[3:])
+    elif suffix.startswith("r"):
+        stage, revision = 3, int(suffix[1:])
+    else:
+        stage, revision = 2, 0
+    return tuple(numbers + [stage, revision])
+
+
 def latest_first_candidate_score(
     path: str, kernel: Any, version_pattern: str | None
 ) -> tuple[Any, ...]:
-    """For versioned projects, newest upstream release outranks kernel proximity."""
+    """Compare the release first, then prefer its native kernel-series variant."""
     if not version_pattern:
         return _ORIGINAL_CANDIDATE_SCORE(path, kernel, version_pattern)
     target = base.extract_kernel_target(path)
@@ -96,7 +120,7 @@ def latest_first_candidate_score(
             f"versioned component candidate has no project version: {path}"
         )
     return (
-        base.version_key(version),
+        upstream_release_key(version),
         compat_rank,
         distance_rank,
         target_parts,

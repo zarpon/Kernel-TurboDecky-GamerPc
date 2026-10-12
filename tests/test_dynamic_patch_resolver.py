@@ -169,6 +169,100 @@ class ResolverTests(unittest.TestCase):
             self.assertIn("linux7.9", record["selected_path"])
             self.assertEqual(record["project_version"], "9.0")
 
+    def test_same_upstream_11_native_618_beats_73_variant_and_older_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            repo = tmp / "repo"
+            init_repo(repo, {
+                "patches/stable/0001-linux6.18.53-demo-v1.0.patch": patch("demo 1.0"),
+                "patches/testing/0001-linux6.18.22-demo-v1.1.patch": patch("demo 1.1 native"),
+                "patches/testing/0001-linux7.3-rc1-demo-v1.1.patch": patch("demo 1.1 foreign"),
+            })
+            manifest = {
+                "schema": 1,
+                "components": {
+                    "demo": {
+                        "kind": "git_patch",
+                        "repo": str(repo),
+                        "ref": "main",
+                        "exact_globs": [
+                            "patches/testing/*linux{series}*demo*.patch",
+                            "patches/stable/*linux{series}*demo*.patch",
+                        ],
+                        "fallback_globs": ["patches/*/*demo*.patch"],
+                        "require_exact_series": False,
+                        "output": "demo.patch",
+                        "project_version_regex": r"demo-v([0-9]+(?:\.[0-9]+)*)",
+                    }
+                },
+            }
+            path = tmp / "manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = tmp / "resolved"
+            run(
+                sys.executable, str(RESOLVER),
+                "--manifest", str(path), "--output-dir", str(output),
+                "--kernel-version", "6.18.53", "--kernel-series", "6.18",
+            )
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
+            self.assertIn("linux6.18.22-demo-v1.1.patch", record["selected_path"])
+            self.assertEqual(record["project_version"], "1.1")
+            self.assertEqual(record["selection"], "exact")
+
+    def test_newest_upstream_requires_port_when_no_native_variant_for_release(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            repo = tmp / "repo"
+            init_repo(repo, {
+                "patches/testing/0001-linux6.18.22-demo-v1.0.patch": patch("demo native older"),
+                "patches/testing/0001-linux7.3-rc1-demo-v1.1.patch": patch("demo 1.1 foreign"),
+            })
+            manifest = {
+                "schema": 1,
+                "components": {
+                    "demo": {
+                        "kind": "git_patch",
+                        "repo": str(repo),
+                        "ref": "main",
+                        "exact_globs": ["patches/testing/*linux{series}*demo*.patch"],
+                        "fallback_globs": ["patches/testing/*demo*.patch"],
+                        "require_exact_series": False,
+                        "output": "demo.patch",
+                        "project_version_regex": r"demo-v([0-9]+(?:\.[0-9]+)*)",
+                    }
+                },
+            }
+            manifest_path = tmp / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = tmp / "resolved"
+            run(
+                sys.executable, str(RESOLVER),
+                "--manifest", str(manifest_path), "--output-dir", str(output),
+                "--kernel-version", "6.18.53", "--kernel-series", "6.18",
+            )
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["demo"]
+            self.assertIn("linux7.3-rc1-demo-v1.1.patch", record["selected_path"])
+            self.assertEqual(record["project_version"], "1.1")
+            self.assertEqual(record["selection"], "fallback")
+
+    def test_upstream_release_order_rc_stable_and_post_release(self) -> None:
+        key = resolver_module.upstream_release_key
+        self.assertLess(key("1.1-rc2"), key("1.1"))
+        self.assertLess(key("1.1"), key("1.1r2"))
+        self.assertLess(key("1.1r2"), key("1.2-rc1"))
+        self.assertLess(key("1.2-rc1"), key("1.2"))
+        manifest = json.loads((ROOT / "config/patch-sources.json").read_text())
+        for component, sample, expected in (
+            ("reflex", "patches/0001-linux7.3-rc1-reflex-v0.4.0r2.patch", "0.4.0r2"),
+            ("poc", "patches/testing/0001-7.3-rc1-poc-selector-v3.0.1-rc2.patch", "3.0.1-rc2"),
+            ("bore", "patches/stable/0001-linux7.3-rc2-bore-7.0.1r2.patch", "7.0.1r2"),
+        ):
+            with self.subTest(component=component):
+                pattern = manifest["components"][component]["project_version_regex"]
+                self.assertEqual(
+                    resolver_module.project_version(sample, pattern), expected,
+                )
+
     def test_historical_fallback_refs_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
