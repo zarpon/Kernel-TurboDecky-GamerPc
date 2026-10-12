@@ -38,7 +38,7 @@ TARGET_INCLUDE = '''#include <linux/page_idle.h>
 #include "internal.h"
 #include "page_alloc.h"
 '''
-ORIGINAL_LOCALVERSION = '''diff --git a/localversion b/localversion
+ORIGINAL_LOCALVERSION = r'''diff --git a/localversion b/localversion
 deleted file mode 100644
 index 456553120f..0000000000
 --- a/localversion
@@ -56,14 +56,19 @@ class PortError(RuntimeError):
 def port(upstream: str, tree: Path, version: str) -> str:
     if not re.fullmatch(r'7\.3(?:-rc\d+|\.\d+)?', version):
         raise PortError(f'unreviewed kernel version: {version}')
-    if upstream.count(SUBJECT) != 1 or upstream.count(ORIGINAL_INCLUDE) != 1:
+    # An earlier, separately reviewed adapter may already have carried the
+    # Linux 7.3 kvm_types.h include into this same upstream patch. Accept
+    # exactly one original OR one already-ported hunk, never two or neither.
+    original = upstream.count(ORIGINAL_INCLUDE)
+    preported = upstream.count(PORTED_INCLUDE)
+    if upstream.count(SUBJECT) != 1 or original + preported != 1:
         raise PortError('upstream Marie revision or folio include hunk drifted')
     if upstream.count(ORIGINAL_LOCALVERSION) != 1:
         raise PortError('upstream localversion deletion hunk drifted')
     folio = (tree / 'mm/folio.c').read_text(encoding='utf-8')
     if folio.count(TARGET_INCLUDE) != 1 or '#include <linux/lru_marie.h>' in folio:
         raise PortError('target folio includes differ from reviewed Linux 7.3 layout')
-    patched = upstream.replace(ORIGINAL_INCLUDE, PORTED_INCLUDE, 1)
+    patched = upstream.replace(ORIGINAL_INCLUDE, PORTED_INCLUDE, 1) if original else upstream
     if (tree / 'localversion').exists():
         content = (tree / 'localversion').read_text(encoding='utf-8')
         if content != '-marie':

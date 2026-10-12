@@ -72,6 +72,25 @@ class Marie73PortTests(unittest.TestCase):
                 "7.3-rc7",
             )
 
+    def test_previous_reviewed_include_adapter_can_run_before_localversion_fix(self) -> None:
+        # This is the real build order: port-lru-marie-latest.py first,
+        # port-marie-folio-7.3.py second, with the same locked upstream patch.
+        earlier = self.upstream.replace(
+            MODULE.ORIGINAL_INCLUDE, MODULE.PORTED_INCLUDE, 1
+        )
+        self.assertEqual(
+            MODULE.port(earlier, self.root, "7.3-rc7"),
+            earlier.replace(MODULE.ORIGINAL_LOCALVERSION, "", 1),
+        )
+
+    def test_mixed_or_duplicate_folio_hunks_fail_closed(self) -> None:
+        mixed = self.upstream + MODULE.PORTED_INCLUDE
+        with self.assertRaisesRegex(MODULE.PortError, "include hunk drifted"):
+            MODULE.port(mixed, self.root, "7.3-rc7")
+        missing = self.upstream.replace(MODULE.ORIGINAL_INCLUDE, "")
+        with self.assertRaisesRegex(MODULE.PortError, "include hunk drifted"):
+            MODULE.port(missing, self.root, "7.3-rc7")
+
     def test_localversion_present_keeps_validated_upstream_deletion(self) -> None:
         (self.root / "localversion").write_text("-marie", encoding="utf-8")
         self.assertIn(
