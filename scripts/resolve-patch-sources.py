@@ -103,7 +103,7 @@ def upstream_release_key(version: str) -> tuple[int, ...]:
 def latest_first_candidate_score(
     path: str, kernel: Any, version_pattern: str | None
 ) -> tuple[Any, ...]:
-    """Compare the release first, then prefer its native kernel-series variant."""
+    """Compare latest numeric release, native kernel variant, then rN revision."""
     if not version_pattern:
         return _ORIGINAL_CANDIDATE_SCORE(path, kernel, version_pattern)
     target = base.extract_kernel_target(path)
@@ -119,8 +119,12 @@ def latest_first_candidate_score(
         raise base.ResolverError(
             f"versioned component candidate has no project version: {path}"
         )
+    release = upstream_release_key(version)
+    native_series = int(target is not None and target.series == kernel.series)
     return (
-        upstream_release_key(version),
+        release[:8],     # Latest numeric version of the project first
+        native_series,   # Prefer this kernel's variant within that version
+        release[8:],     # Only then compare RC/stable/rN variants
         compat_rank,
         distance_rank,
         target_parts,

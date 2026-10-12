@@ -245,6 +245,42 @@ class ResolverTests(unittest.TestCase):
             self.assertEqual(record["project_version"], "1.1")
             self.assertEqual(record["selection"], "fallback")
 
+    def test_same_numeric_upstream_version_prefers_native_over_foreign_r2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            repo = tmp / "repo"
+            init_repo(repo, {
+                "patches/testing/0001-linux6.18.22-lru_marie-0.12.0.patch": patch("Marie native"),
+                "patches/testing/0001-linux7.3-rc1-lru_marie-0.12.0r2.patch": patch("Marie r2 foreign"),
+            })
+            manifest = {
+                "schema": 1,
+                "components": {
+                    "marie": {
+                        "kind": "git_patch",
+                        "repo": str(repo),
+                        "ref": "main",
+                        "exact_globs": ["patches/testing/*linux{series}*lru_marie*.patch"],
+                        "fallback_globs": ["patches/testing/*lru_marie*.patch"],
+                        "require_exact_series": False,
+                        "output": "marie.patch",
+                        "project_version_regex": r"lru_marie-([0-9]+(?:\.[0-9]+)*(?:r[0-9]+)?)",
+                    }
+                },
+            }
+            path = tmp / "manifest.json"
+            path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = tmp / "resolved"
+            run(
+                sys.executable, str(RESOLVER),
+                "--manifest", str(path), "--output-dir", str(output),
+                "--kernel-version", "6.18.53", "--kernel-series", "6.18",
+            )
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["marie"]
+            self.assertIn("linux6.18.22-lru_marie-0.12.0.patch", record["selected_path"])
+            self.assertEqual(record["project_version"], "0.12.0")
+            self.assertEqual(record["selection"], "exact")
+
     def test_upstream_release_order_rc_stable_and_post_release(self) -> None:
         key = resolver_module.upstream_release_key
         self.assertLess(key("1.1-rc2"), key("1.1"))
