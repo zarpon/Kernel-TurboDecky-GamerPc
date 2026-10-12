@@ -221,6 +221,22 @@ apply_marie_testing_patch() {
       | tee "$LOGDIR/02-lru-marie.apply.log"
   else
     cat "$LOGDIR/02-lru-marie.dry-run.log"
+    if [[ "$PATCH_MARIE_VERSION" == "0.12.0r2" &&
+          "$KERNEL_VERSION" =~ ^7\.3(-rc[0-9]+|\.[0-9]+)?$ ]]; then
+      # The original current upstream patch remains SHA-locked.
+      local reviewed_port="$PATCHDIR/02-lru-marie-7.3-port.patch"
+      python3 "$ROOT/scripts/port-marie-folio-7.3.py" \
+        "$file" "$reviewed_port" "$KERNELDIR" "$KERNEL_VERSION"
+      sha256sum "$file" "$reviewed_port" | tee "$LOGDIR/02-lru-marie-port.sha256"
+      if ! patch --batch --forward --strip=1 --dry-run < "$reviewed_port" \
+          > "$LOGDIR/02-lru-marie-port.dry-run.log" 2>&1; then
+        cat "$LOGDIR/02-lru-marie-port.dry-run.log"
+        echo "Marie reviewed Linux 7.3 port does not apply; refusing fuzz fallback" >&2
+        return 1
+      fi
+      patch --batch --forward --strip=1 < "$reviewed_port" \
+        | tee "$LOGDIR/02-lru-marie.apply.log"
+    else
     echo "==> Retrying Marie with maximum safe patch fuzz"
     set +e
     patch --batch --forward --fuzz=3 --strip=1 < "$file" \
@@ -240,6 +256,7 @@ apply_marie_testing_patch() {
         done
       } | tee "$LOGDIR/02-lru-marie-port-rejects.log"
       return 1
+    fi
     fi
   fi
 

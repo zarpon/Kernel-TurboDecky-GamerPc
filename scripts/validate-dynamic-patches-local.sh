@@ -20,6 +20,7 @@ python3 -m py_compile \
   "$ROOT/scripts/normalize-cpu-optimizations-generic.py" \
   "$ROOT/scripts/apply-zen-interactive.py"
 python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
+python3 -m py_compile "$ROOT/scripts/port-marie-folio-7.3.py" "$ROOT/tests/test_marie_73_port.py"
 python3 -m unittest -v \
   "$ROOT/tests/test_latest_stable_identity.py" \
   "$ROOT/tests/test_virtualbox_host_compat.py" \
@@ -28,6 +29,7 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
   "$ROOT/tests/test_marie_version_reporting.py" \
+  "$ROOT/tests/test_marie_73_port.py" \
   "$ROOT/tests/test_bore_port.py" \
   "$ROOT/tests/test_bore_stable_port.py" \
   "$ROOT/tests/test_bore_stable_finalizer.py" \
