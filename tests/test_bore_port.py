@@ -76,7 +76,7 @@ class BoreLinuxPortTests(unittest.TestCase):
         )
         self.assertEqual(
             bore["project_version_regex"],
-            r"bore[-_]?([0-9]+(?:\.[0-9]+)+(?:-rc[0-9]+)?)",
+            r"bore[-_]?([0-9]+(?:\.[0-9]+)+(?:-rc[0-9]+|r[0-9]+)?)",
         )
         self.assertNotIn("approved_sha256", bore)
         sched_ext = manifest["bore_sched_ext_coexistence"]
