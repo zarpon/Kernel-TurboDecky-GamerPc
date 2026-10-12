@@ -213,6 +213,8 @@ apply_marie_testing_patch() {
   local file="$1" status=0
 
   echo "==> Applying Marie LRU $PATCH_MARIE_VERSION upstream testing patch"
+  python3 "$ROOT/scripts/port-lru-marie-latest.py" "$file" "$KERNELDIR/mm/folio.c" \
+    | tee "$LOGDIR/02-lru-marie-compatibility-port.log"
   if patch --batch --forward --strip=1 --dry-run < "$file" \
       > "$LOGDIR/02-lru-marie.dry-run.log" 2>&1; then
     patch --batch --forward --strip=1 < "$file" \

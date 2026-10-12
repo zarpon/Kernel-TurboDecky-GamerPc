@@ -13,6 +13,8 @@ class MarieVersionReportingTest(unittest.TestCase):
         self.assertIn("Fetching current locked Marie LRU $PATCH_MARIE_VERSION testing source locally", core)
         self.assertIn("Marie source policy: current upstream testing release only", core)
         self.assertIn("Applying Marie LRU $PATCH_MARIE_VERSION upstream testing patch", core)
+        self.assertIn("port-lru-marie-latest.py", core)
+        self.assertIn("02-lru-marie-compatibility-port.log", core)
         self.assertNotIn("MARIE_FALLBACK_PATCH", core)
         self.assertNotIn("MARIE_FALLBACK_METADATA", core)
         self.assertNotIn("using maintained local fallback", core)
