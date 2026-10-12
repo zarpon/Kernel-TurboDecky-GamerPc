@@ -213,11 +213,17 @@ PY
 TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.4.3_all.deb"
+deb="$sandbox/artifacts/turbodecky-tuning_1.5.0_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.4.3" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "1.5.0" ]] || fail "unexpected tuning package version"
 
 for payload in \
+  './usr/bin/napctl' \
+  './usr/lib/nap/configure-services' \
+  './usr/lib/systemd/system/nap-state.service' \
+  './usr/lib/systemd/system/nap-state-save.service' \
+  './usr/lib/systemd/system/nap-state-save.timer' \
+  './usr/share/nap/napviz.html' \
   './usr/lib/gaming-swap/configure' \
   './usr/lib/systemd/system/gaming-zswap.service' \
   './etc/sysctl.d/99-turbodecky.conf' \
@@ -246,6 +252,11 @@ cmp -s "$thp_policy" "$package_root/usr/lib/tmpfiles.d/99-turbodecky-thp.conf" \
 
 grep -Fq "/usr/lib/gaming-swap/configure" "$control_dir/postinst" \
   || fail "postinst does not migrate swap"
+grep -Fq "/usr/lib/nap/configure-services install" "$control_dir/postinst" \
+  || fail "postinst does not enable NAP state persistence"
+grep -Fq "/usr/lib/nap/configure-services remove" "$control_dir/prerm" \
+  || fail "prerm does not stop NAP persistence before package removal"
 python3 "$root/tests/test_gaming_swap.py"
+python3 "$root/tests/test_nap_tools.py"
 
 echo "runtime tuning validation passed"

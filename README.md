@@ -272,3 +272,10 @@ os serviços que o ativam são desativados persistentemente. Consulte
 
 O tuning usa `vm.vfs_cache_pressure=100`, `vm.dirty_background_ratio=2` e
 `vm.dirty_ratio=10`. Os defaults próprios do LRU Marie são preservados.
+
+## Ferramentas NAP
+
+A instalação preserva automaticamente o aprendizado do NAP entre boots e salva
+os pesos a cada 30 minutos. Inclui `napctl` e o visualizador offline
+`/usr/share/nap/napviz.html`, gerado com o modelo do kernel compilado. Consulte
+[NAP-TOOLS.md](NAP-TOOLS.md) para compatibilidade, comandos e verificação.

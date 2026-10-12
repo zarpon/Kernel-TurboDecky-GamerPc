@@ -277,3 +277,10 @@ Remove those arguments to restore the default, or use
 Runtime tuning uses `vm.vfs_cache_pressure=100`,
 `vm.dirty_background_ratio=2` and `vm.dirty_ratio=10`. LRU Marie's own defaults
 are preserved.
+
+## NAP tools
+
+Installation automatically preserves NAP learning across boots and saves
+weights every 30 minutes. It includes `napctl` and the offline viewer
+`/usr/share/nap/napviz.html`, generated from the compiled kernel model. See
+[NAP-TOOLS.md](NAP-TOOLS.md) for compatibility, commands and verification.

@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
-TUNING_VERSION="1.4.3"
+TUNING_VERSION="1.5.0"
 
 # Production package builds have already emitted final.config, modules.order and
 # linux-image. Validate that complete payload before adding the tuning package.
@@ -34,6 +34,16 @@ install -m 0755 "$ROOT/packaging/configure-gaming-swap" \
   "$PKGROOT/usr/lib/gaming-swap/configure"
 install -m 0644 "$ROOT/packaging/gaming-zswap.service" \
   "$PKGROOT/usr/lib/systemd/system/gaming-zswap.service"
+
+# Production packages use the model in the patched kernel, never an unrelated
+# prebuilt viewer. Standalone package tests can use the pinned upstream viewer.
+if [[ -d "$ROOT/work/linux" ]]; then
+  python3 "$ROOT/nap-tools/install-tools.py" --destdir "$PKGROOT" \
+    --kernel-dir "$ROOT/work/linux/drivers/cpuidle/governors/nap"
+else
+  python3 "$ROOT/nap-tools/install-tools.py" --destdir "$PKGROOT" \
+    --allow-prebuilt-viewer
+fi
 
 install -m 0644 "$ROOT/packaging/99-kernelnote.conf" \
   "$PKGROOT/etc/sysctl.d/99-turbodecky.conf"
@@ -65,6 +75,7 @@ Description: Runtime, boot and external-module defaults for TurboDecky GamerPc
  Sets Marie memory defaults, selects ADIOS, applies the requested Transparent
  Hugepage policy, appends performance parameters to GRUB, disables zram and
  migrates swapfiles to /home with 150 percent RAM capacity and LZ4 zswap,
+ preserves NAP learning across boots and installs napctl and an offline viewer,
  and installs the LLVM toolchain required to compile VirtualBox,
  DKMS and other external modules against this Clang kernel.
 EOF
@@ -72,6 +83,7 @@ EOF
 cat > "$PKGROOT/DEBIAN/postinst" <<'EOF'
 #!/bin/sh
 set -e
+/usr/lib/nap/configure-services install
 /usr/lib/gaming-swap/configure
 sysctl --system >/dev/null 2>&1 || true
 if command -v systemctl >/dev/null 2>&1; then
@@ -90,6 +102,9 @@ chmod 0755 "$PKGROOT/DEBIAN/postinst"
 cat > "$PKGROOT/DEBIAN/prerm" <<'EOF'
 #!/bin/sh
 set -e
+case "$1" in
+  remove|deconfigure) /usr/lib/nap/configure-services remove ;;
+esac
 exit 0
 EOF
 chmod 0755 "$PKGROOT/DEBIAN/prerm"
