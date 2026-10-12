@@ -212,10 +212,11 @@ PY
 # payload and post-install daemon reload are actually delivered in the DEB.
 TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
+  NAP_TOOLS_TEST_OFFLINE=1 \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.5.0_all.deb"
+deb="$sandbox/artifacts/turbodecky-tuning_1.5.1_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.5.0" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "1.5.1" ]] || fail "unexpected tuning package version"
 
 for payload in \
   './usr/bin/napctl' \
@@ -258,5 +259,6 @@ grep -Fq "/usr/lib/nap/configure-services remove" "$control_dir/prerm" \
   || fail "prerm does not stop NAP persistence before package removal"
 python3 "$root/tests/test_gaming_swap.py"
 python3 "$root/tests/test_nap_tools.py"
+python3 "$root/tests/test_nap_tools_refresh.py"
 
 echo "runtime tuning validation passed"

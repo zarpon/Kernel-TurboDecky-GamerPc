@@ -4,7 +4,32 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
-TUNING_VERSION="1.5.0"
+TUNING_VERSION="1.5.1"
+
+nap_tools="$ROOT/.resolved-nap-tools"
+nap_require_resolved=(--require-resolved)
+if [[ "${NAP_TOOLS_TEST_OFFLINE:-0}" == 1 ]]; then
+  [[ ! -d "$ROOT/work/linux" ]] || {
+    echo "Offline NAP fixtures are not permitted for production kernel packages" >&2
+    exit 1
+  }
+  nap_tools="$ROOT/nap-tools"
+  nap_require_resolved=()
+else
+  python3 "$ROOT/nap-tools/refresh-tools.py" --output "$nap_tools" \
+    --record "$ROOT/logs/nap-tools-upstream.json"
+  NAP_TOOLS_TEST_SOURCE_DIR="$nap_tools" python3 "$ROOT/tests/test_nap_tools.py"
+  # A changed upstream snapshot must be recognized as a package update even
+  # when the downstream tuning version has not changed between daily builds.
+  TUNING_VERSION+="$(python3 - "$nap_tools/UPSTREAM.json" <<'PY'
+import json
+import sys
+with open(sys.argv[1]) as stream:
+    manifest = json.load(stream)
+print(f"+nap.{manifest['commit_timestamp']}.{manifest['commit'][:12]}")
+PY
+)"
+fi
 
 # Production package builds have already emitted final.config, modules.order and
 # linux-image. Validate that complete payload before adding the tuning package.
@@ -38,10 +63,12 @@ install -m 0644 "$ROOT/packaging/gaming-zswap.service" \
 # Production packages use the model in the patched kernel, never an unrelated
 # prebuilt viewer. Standalone package tests can use the pinned upstream viewer.
 if [[ -d "$ROOT/work/linux" ]]; then
-  python3 "$ROOT/nap-tools/install-tools.py" --destdir "$PKGROOT" \
+  python3 "$nap_tools/install-tools.py" --source-dir "$nap_tools" \
+    "${nap_require_resolved[@]}" --destdir "$PKGROOT" \
     --kernel-dir "$ROOT/work/linux/drivers/cpuidle/governors/nap"
 else
-  python3 "$ROOT/nap-tools/install-tools.py" --destdir "$PKGROOT" \
+  python3 "$nap_tools/install-tools.py" --source-dir "$nap_tools" \
+    "${nap_require_resolved[@]}" --destdir "$PKGROOT" \
     --allow-prebuilt-viewer
 fi
 

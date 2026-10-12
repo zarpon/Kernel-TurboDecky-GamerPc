@@ -275,6 +275,9 @@ O tuning usa `vm.vfs_cache_pressure=100`, `vm.dirty_background_ratio=2` e
 
 ## Ferramentas NAP
 
+Cada build busca as ferramentas mais recentes na branch `main` do NAP e
+registra o commit e os hashes usados no pacote.
+
 A instalação preserva automaticamente o aprendizado do NAP entre boots e salva
 os pesos a cada 30 minutos. Inclui `napctl` e o visualizador offline
 `/usr/share/nap/napviz.html`, gerado com o modelo do kernel compilado. Consulte
