@@ -3,7 +3,8 @@
 
 The upstream Linux 7.3-rc1 patch adds lru_marie.h beside buffer_head.h.
 Linux 7.3-rc7 inserted kvm_types.h in that same include block. Rewrite only
-that exact hunk, and fail closed for every unknown source or patch shape.
+that exact hunk, accept the exact native 7.3-rc7 hunk unchanged, and fail
+closed for every unknown source or patch shape.
 """
 from __future__ import annotations
 
@@ -26,6 +27,17 @@ UPSTREAM_HUNK = (
 PORTED_HUNK = (
     "@@ -33,7 +33,8 @@\n"
     " #include <linux/page_idle.h>\n"
+    " #include <linux/local_lock.h>\n"
+    " #include <linux/buffer_head.h>\n"
+    " #include <linux/kvm_types.h>\n"
+    "+#include <linux/lru_marie.h>\n"
+    " \n"
+    ' #include "internal.h"\n'
+    ' #include "page_alloc.h"\n'
+)
+
+NATIVE_RC7_HUNK = (
+    "@@ -34,6 +34,7 @@\n"
     " #include <linux/local_lock.h>\n"
     " #include <linux/buffer_head.h>\n"
     " #include <linux/kvm_types.h>\n"
@@ -61,14 +73,26 @@ def adapt(patch_path: Path, folio_path: Path) -> str:
     patch = patch_path.read_text(encoding="utf-8")
     folio = folio_path.read_text(encoding="utf-8")
 
-    if patch.count(PORTED_HUNK) == 1 and UPSTREAM_HUNK not in patch:
+    upstream_count = patch.count(UPSTREAM_HUNK)
+    ported_count = patch.count(PORTED_HUNK)
+    native_rc7_count = patch.count(NATIVE_RC7_HUNK)
+
+    if native_rc7_count == 1 and upstream_count == 0 and ported_count == 0:
+        if folio.count(PORTED_CONTEXT) != 1:
+            raise PortError(
+                "native Linux 7.3-rc7 LRU Marie hunk selected, but target "
+                "mm/folio.c does not have exactly one reviewed rc7 context"
+            )
+        return "native-linux-7.3-rc7-hunk-compatible"
+
+    if ported_count == 1 and upstream_count == 0 and native_rc7_count == 0:
         return "already-ported"
 
-    count = patch.count(UPSTREAM_HUNK)
-    if count != 1:
+    if upstream_count != 1 or ported_count or native_rc7_count:
         raise PortError(
             "expected exactly one reviewed LRU Marie mm/folio.c include hunk; "
-            f"found {count}"
+            f"found upstream={upstream_count}, ported={ported_count}, "
+            f"native_rc7={native_rc7_count}"
         )
 
     if PORTED_CONTEXT in folio:
