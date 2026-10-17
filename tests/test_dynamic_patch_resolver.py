@@ -281,6 +281,41 @@ class ResolverTests(unittest.TestCase):
             self.assertEqual(record["project_version"], "0.12.0")
             self.assertEqual(record["selection"], "exact")
 
+    def test_latest_marie_100_rc1_uses_native_73_testing_patch(self) -> None:
+        config = json.loads((ROOT / "config/patch-sources.json").read_text())
+        pattern = config["components"]["marie"]["project_version_regex"]
+        for suffix in ("6.18.22", "7.2-rc1", "7.3-rc7"):
+            path = f"patches/testing/0001-linux{suffix}-lru_marie-1.0.0-rc1.patch"
+            self.assertEqual(resolver_module.project_version(path, pattern), "1.0.0-rc1")
+        self.assertLess(resolver_module.upstream_release_key("0.12.0"),
+                        resolver_module.upstream_release_key("1.0.0-rc1"))
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            repo = tmp / "repo"
+            init_repo(repo, {
+                "patches/stable/0001-linux7.3-rc7-lru_marie-0.12.0.patch": patch("old stable"),
+                "patches/testing/0001-linux6.18.22-lru_marie-1.0.0-rc1.patch": patch("new foreign"),
+                "patches/testing/0001-linux7.3-rc7-lru_marie-1.0.0-rc1.patch": patch("new native"),
+            })
+            src = {"schema": 1, "components": {"marie": {
+                "kind": "git_patch", "repo": str(repo), "ref": "main",
+                "exact_globs": ["patches/testing/*linux{series}*lru_marie*.patch",
+                                "patches/stable/*linux{series}*lru_marie*.patch"],
+                "fallback_globs": ["patches/*/*lru_marie*.patch"],
+                "require_exact_series": False, "output": "marie.patch",
+                "project_version_regex": pattern,
+            }}}
+            manifest_path = tmp / "manifest.json"
+            manifest_path.write_text(json.dumps(src), encoding="utf-8")
+            output = tmp / "resolved"
+            run(sys.executable, str(RESOLVER), "--manifest", str(manifest_path),
+                "--output-dir", str(output), "--kernel-version", "7.3-rc7",
+                "--kernel-series", "7.3")
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["marie"]
+            self.assertEqual(record["project_version"], "1.0.0-rc1")
+            self.assertEqual(record["selection"], "exact")
+            self.assertIn("linux7.3-rc7-lru_marie-1.0.0-rc1.patch", record["selected_path"])
+
     def test_upstream_release_order_rc_stable_and_post_release(self) -> None:
         key = resolver_module.upstream_release_key
         self.assertLess(key("1.1-rc2"), key("1.1"))
