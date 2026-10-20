@@ -150,7 +150,7 @@ jobs:
           python3 scripts/finalize-bore-stable-port.py scripts/build-kernelnote-core.sh
           python3 scripts/validate-resolved-patches.py --lock .resolved-patches/patch-lock.json
           shopt -s nullglob
-          python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)
+          python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py scripts/generate-release-notes.py)
           python3 -m py_compile "${python_sources[@]}"
           chmod +x scripts/build-kernelnote.sh scripts/build-kernelnote-core.sh scripts/build-tuning-package.sh scripts/depmod-turbodecky.sh
           mkdir -p logs
@@ -285,10 +285,19 @@ jobs:
             git tag "$tag" "$RELEASE_TARGET"
             git push origin "refs/tags/${tag}"
           fi
+          python3 scripts/generate-release-notes.py \
+            --lock .resolved-patches/patch-lock.json \
+            --kernel-version "$KERNEL_VERSION" \
+            --kernel-release "$KERNEL_RELEASE_NAME" \
+            --tag "$tag" \
+            --zip "turbodecky-linux-$KERNEL_RELEASE_NAME.zip" \
+            --output logs/release-notes.md
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$KERNEL_RELEASE_NAME"
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" \
+              --title "$KERNEL_RELEASE_NAME" --notes-file logs/release-notes.md
           else
-            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "$KERNEL_RELEASE_NAME" --generate-notes --verify-tag
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --title "$KERNEL_RELEASE_NAME" --notes-file logs/release-notes.md --verify-tag
           fi
           gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
 
