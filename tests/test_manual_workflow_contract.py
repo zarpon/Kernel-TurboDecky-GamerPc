@@ -65,7 +65,7 @@ class ManualWorkflowContractTests(unittest.TestCase):
     def test_python_validation_allows_an_empty_optional_glob(self) -> None:
         self.assertIn("shopt -s nullglob", WORKFLOW)
         self.assertIn(
-            "python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py)",
+            "python_sources=(scripts/apply-*.py scripts/resolve-*.py scripts/validate-*.py scripts/finalize-*.py scripts/generate-release-notes.py)",
             WORKFLOW,
         )
         self.assertIn('python3 -m py_compile "${python_sources[@]}"', WORKFLOW)
