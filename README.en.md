@@ -275,7 +275,7 @@ Remove those arguments to restore the default, or use
 `systemd.zram=1 zswap.enabled=0`.
 
 Runtime tuning uses `vm.vfs_cache_pressure=100`,
-`vm.dirty_background_ratio=2` and `vm.dirty_ratio=10`. LRU Marie's own defaults
+`vm.dirty_background_ratio=2` and `vm.dirty_ratio=5`. LRU Marie's own defaults
 are preserved.
 
 ## NAP tools

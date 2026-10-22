@@ -35,23 +35,24 @@ require_line "$zram_generator_dropin" "compression-algorithm = lz4 zstd"
 require_line "$zram_setup_dropin" "[Service]"
 require_line "$zram_setup_dropin" "ExecStartPre=/usr/lib/turbodecky/configure-zram-ir %I"
 require_line "$runtime_policy" "vm.vfs_cache_pressure = 100"
-require_line "$runtime_policy" "vm.compaction_proactiveness = 10"
+require_line "$runtime_policy" "vm.compaction_proactiveness = 15"
 require_line "$runtime_policy" "vm.page-cluster = 0"
+require_line "$runtime_policy" "vm.min_free_kbytes = 131072"
 require_line "$runtime_policy" "vm.compact_unevictable_allowed = 0"
 require_line "$runtime_policy" "vm.watermark_boost_factor = 0"
 require_line "$runtime_policy" "-kernel.sched_cfs_bandwidth_slice_us = 3000"
 require_line "$runtime_policy" "-kernel.split_lock_mitigate = 0"
 require_line "$runtime_policy" "vm.dirty_expire_centisecs = 1500"
-require_line "$runtime_policy" "vm.dirty_writeback_centisecs = 1500"
-require_line "$runtime_policy" "vm.dirty_ratio = 10"
+require_line "$runtime_policy" "vm.dirty_writeback_centisecs = 500"
+require_line "$runtime_policy" "vm.dirty_ratio = 5"
 require_line "$runtime_policy" "vm.dirty_background_ratio = 2"
 
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/enabled - - - - madvise"
-require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/defrag - - - - defer+madvise"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/defrag - - - - defer"
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/shmem_enabled - - - - advise"
 require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/defrag - - - - 0"
-require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 409"
-require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 0"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none - - - - 128"
+require_line "$thp_policy" "w- /sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap - - - - 8"
 
 # A distro may configure zram0 with zstd in its main generator configuration.
 # The TurboDecky drop-in must replace only the compression policy, preserving
@@ -130,16 +131,16 @@ if command -v systemd-tmpfiles >/dev/null 2>&1; then
 EOF
   systemd-tmpfiles --create --root="$rootfs"
   require_value "$rootfs/sys/kernel/mm/transparent_hugepage/enabled" "madvise"
-  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/defrag" "defer+madvise"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/defrag" "defer"
   require_value "$rootfs/sys/kernel/mm/transparent_hugepage/shmem_enabled" "advise"
   require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/defrag" "0"
-  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none" "409"
-  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap" "0"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none" "128"
+  require_value "$rootfs/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap" "8"
 fi
 
 # Deterministic admission-control simulation for one 2 MiB x86 THP. This is
 # not a hardware FPS benchmark: it proves the shipped limits accept the
-# configured 409-hole/0-swapped candidate while retaining explicit bounds
+# configured 128-hole/8-swapped candidate while retaining explicit bounds
 # against candidates that exceed the configured khugepaged limits.
 python3 - "$thp_policy" <<'PY'
 from dataclasses import dataclass
@@ -173,31 +174,31 @@ def eligible(policy: Policy, *, none: int, swap: int) -> bool:
 
 values = tmpfiles_values(Path(sys.argv[1]))
 assert values["/sys/kernel/mm/transparent_hugepage/enabled"] == "madvise"
-assert values["/sys/kernel/mm/transparent_hugepage/defrag"] == "defer+madvise"
+assert values["/sys/kernel/mm/transparent_hugepage/defrag"] == "defer"
 assert values["/sys/kernel/mm/transparent_hugepage/shmem_enabled"] == "advise"
 assert values["/sys/kernel/mm/transparent_hugepage/khugepaged/defrag"] == "0"
 proposed = Policy(
     max_none=int(values["/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_none"]),
     max_swap=int(values["/sys/kernel/mm/transparent_hugepage/khugepaged/max_ptes_swap"]),
 )
-assert proposed == Policy(max_none=409, max_swap=0)
+assert proposed == Policy(max_none=128, max_swap=8)
 
 legacy = Policy(max_none=64, max_swap=0)
 assert eligible(legacy, none=64, swap=0)
-assert eligible(proposed, none=409, swap=0)
-assert not eligible(legacy, none=409, swap=0)
-assert eligible(proposed, none=408, swap=0)
+assert eligible(proposed, none=128, swap=8)
+assert not eligible(legacy, none=128, swap=0)
+assert eligible(proposed, none=127, swap=0)
 assert not eligible(legacy, none=0, swap=16)
-assert eligible(proposed, none=0, swap=0)
-assert not eligible(proposed, none=410, swap=0)
-assert not eligible(proposed, none=0, swap=1)
+assert eligible(proposed, none=0, swap=8)
+assert not eligible(proposed, none=129, swap=0)
+assert not eligible(proposed, none=0, swap=9)
 
 legacy_zero_fill = legacy.max_none * PAGE_SIZE
 proposed_zero_fill = proposed.max_none * PAGE_SIZE
 legacy_swap_bytes = legacy.max_swap * PAGE_SIZE
 proposed_swap_bytes = proposed.max_swap * PAGE_SIZE
-assert proposed_zero_fill - legacy_zero_fill == 1_413_120
-assert proposed_swap_bytes - legacy_swap_bytes == 0
+assert proposed_zero_fill - legacy_zero_fill == 262_144
+assert proposed_swap_bytes - legacy_swap_bytes == 32_768
 
 print(
     "THP admission simulation passed: zero-fill cap "

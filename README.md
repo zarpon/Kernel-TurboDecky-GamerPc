@@ -271,7 +271,7 @@ os serviços que o ativam são desativados persistentemente. Consulte
 [SWAP.md](SWAP.md) para comportamento, requisitos e verificação.
 
 O tuning usa `vm.vfs_cache_pressure=100`, `vm.dirty_background_ratio=2` e
-`vm.dirty_ratio=10`. Os defaults próprios do LRU Marie são preservados.
+`vm.dirty_ratio=5`. Os defaults próprios do LRU Marie são preservados.
 
 ## Ferramentas NAP
 
