@@ -99,7 +99,7 @@ Maintainer: TurboDecky GamerPc <noreply@localhost>
 Depends: clang, llvm, lld, make, procps, udev, python3, util-linux, coreutils, btrfs-progs, systemd
 Recommends: grub2-common
 Description: Runtime, boot and external-module defaults for TurboDecky GamerPc
- Sets Marie memory defaults, selects ADIOS, applies the requested Transparent
+ Sets CAST memory defaults, selects ADIOS, applies the requested Transparent
  Hugepage policy, appends performance parameters to GRUB, disables zram and
  migrates swapfiles to /home with 75 percent RAM capacity and LZ4 zswap,
  preserves NAP learning across boots and installs napctl and an offline viewer,

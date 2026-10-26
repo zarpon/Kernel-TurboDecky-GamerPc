@@ -61,7 +61,7 @@ class ZstdCryptoDefaultTests(unittest.TestCase):
     def test_build_runs_before_patching_and_retains_zram_ir(self) -> None:
         invocation = 'python3 "$ROOT/scripts/set-zstd-crypto-default.py" "$KERNELDIR/crypto/zstd.c"'
         self.assertEqual(BUILD.count(invocation), 1)
-        self.assertLess(BUILD.index(invocation), BUILD.index('apply_marie_testing_patch "$MARIE_PATCH"'))
+        self.assertLess(BUILD.index(invocation), BUILD.index('apply_cast_testing_patch "$CAST_PATCH"'))
         self.assertIn("compression-algorithm = lz4 zstd", ZRAM)
         self.assertIn("'algo=zstd priority=1'", ZRAM_HELPER)
         self.assertNotIn("ZSTD_DEF_LEVEL", ZRAM + ZRAM_HELPER)

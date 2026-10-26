@@ -21,7 +21,7 @@ python3 -m py_compile \
   "$ROOT/scripts/normalize-cpu-optimizations-generic.py" \
   "$ROOT/scripts/apply-zen-interactive.py"
 python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
-python3 -m py_compile "$ROOT/scripts/port-marie-folio-7.3.py" "$ROOT/tests/test_marie_73_port.py"
+python3 -m py_compile "$ROOT/scripts/port-lru-cast-latest.py"
 python3 -m unittest -v \
   "$ROOT/tests/test_latest_stable_identity.py" \
   "$ROOT/tests/test_virtualbox_host_compat.py" \
@@ -29,8 +29,8 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
-  "$ROOT/tests/test_marie_version_reporting.py" \
-  "$ROOT/tests/test_marie_73_port.py" \
+  "$ROOT/tests/test_cast_version_reporting.py" \
+  "$ROOT/tests/test_cast_policy.py" \
   "$ROOT/tests/test_bore_port.py" \
   "$ROOT/tests/test_bore_stable_port.py" \
   "$ROOT/tests/test_bore_stable_finalizer.py" \
@@ -71,9 +71,9 @@ grep -Fq 'drivers/gpu/drm/amd/amdgpu/amdgpu.ko' "$ROOT/scripts/apply-validation-
 ! grep -Fq 'fallback_refs' "$ROOT/config/patch-sources.json"
 ! grep -Fq 'local_fallback_patch' "$ROOT/config/patch-sources.json"
 ! grep -Fq 'local_fallback_metadata' "$ROOT/config/patch-sources.json"
-test ! -e "$ROOT/patches/fallback/lru_marie.patch"
-test ! -e "$ROOT/patches/fallback/lru_marie.json"
-! grep -Fq 'MARIE_FALLBACK_' "$ROOT/scripts/build-kernelnote-core.sh"
+test ! -e "$ROOT/patches/fallback/lru_cast.patch"
+test ! -e "$ROOT/patches/fallback/lru_cast.json"
+! grep -Fq 'CAST_FALLBACK_' "$ROOT/scripts/build-kernelnote-core.sh"
 ! grep -Fq 'using maintained local fallback' "$ROOT/scripts/build-kernelnote-core.sh"
 grep -Fq 'historical patch fallback is forbidden' "$ROOT/scripts/resolve-patch-sources-base.py"
 grep -Fq 'patch-lock.json' "$ROOT/scripts/apply-dynamic-patch-sources.py"

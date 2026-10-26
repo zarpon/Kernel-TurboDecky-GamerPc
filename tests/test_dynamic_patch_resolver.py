@@ -67,8 +67,8 @@ class ResolverTests(unittest.TestCase):
             init_repo(
                 repo,
                 {
-                    "patches/stable/0001-linux7.1-lru_marie-0.7.9.patch": patch("lru_marie 0.7.9"),
-                    "patches/testing/0001-linux7.1-lru_marie-0.8.0.patch": patch("lru_marie 0.8.0"),
+                    "patches/stable/0001-linux7.1-lru_cast-0.7.9.patch": patch("lru_cast 0.7.9"),
+                    "patches/testing/0001-linux7.1-lru_cast-0.8.0.patch": patch("lru_cast 0.8.0"),
                     "patches/stable/0001-linux6.19.3-nap-v0.6.0.patch": patch("nap 0.6.0"),
                     "patches/stable/0001-linux6.18.3-nap-v0.9.0.patch": patch("nap 0.9.0"),
                 },
@@ -78,15 +78,15 @@ class ResolverTests(unittest.TestCase):
             manifest = {
                 "schema": 1,
                 "components": {
-                    "marie": {
+                    "cast": {
                         "kind": "git_patch",
                         "repo": str(repo),
                         "ref": "main",
-                        "exact_globs": ["patches/stable/*linux{series}*lru_marie*.patch", "patches/testing/*linux{series}*lru_marie*.patch"],
-                        "fallback_globs": ["patches/*/*lru_marie*.patch"],
+                        "exact_globs": ["patches/stable/*linux{series}*lru_cast*.patch", "patches/testing/*linux{series}*lru_cast*.patch"],
+                        "fallback_globs": ["patches/*/*lru_cast*.patch"],
                         "require_exact_series": False,
-                        "output": "marie.patch",
-                        "project_version_regex": r"lru_marie-([0-9.]+)",
+                        "output": "cast.patch",
+                        "project_version_regex": r"lru_cast-([0-9.]+)",
                     },
                     "nap": {
                         "kind": "git_patch",
@@ -116,19 +116,19 @@ class ResolverTests(unittest.TestCase):
                 "--kernel-series", "7.1",
             )
             lock = json.loads((output / "patch-lock.json").read_text())
-            self.assertIn("0.8.0", lock["components"]["marie"]["path"])
+            self.assertIn("0.8.0", lock["components"]["cast"]["path"])
             self.assertIn("6.18.3", lock["components"]["nap"]["path"])
             self.assertEqual(lock["components"]["nap"]["project_version"], "0.9.0")
             self.assertEqual(lock["components"]["nap"]["selection"], "fallback")
             self.assertEqual((output / "files/fixed.patch").read_text(), raw.read_text())
 
-            record = lock["components"]["marie"]
+            record = lock["components"]["cast"]
             clone = tmp / "consumer"
             run("git", "init", "-q", str(clone))
             run("git", "-C", str(clone), "remote", "add", "origin", str(output / record["repo_dir"]))
             run("git", "-C", str(clone), "fetch", "--depth=1", "origin", record.get("snapshot_commit", record["commit"]))
             shown = run("git", "-C", str(clone), "show", f"FETCH_HEAD:{record['path']}").stdout
-            self.assertIn("lru_marie 0.8.0", shown)
+            self.assertIn("lru_cast 0.8.0", shown)
 
     def test_latest_release_outranks_kernel_distance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -245,26 +245,26 @@ class ResolverTests(unittest.TestCase):
             self.assertEqual(record["project_version"], "1.1")
             self.assertEqual(record["selection"], "fallback")
 
-    def test_same_numeric_upstream_version_prefers_native_over_foreign_r2(self) -> None:
+    def test_newer_foreign_r2_beats_older_native_release(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp = Path(tmpdir)
             repo = tmp / "repo"
             init_repo(repo, {
-                "patches/testing/0001-linux6.18.22-lru_marie-0.12.0.patch": patch("Marie native"),
-                "patches/testing/0001-linux7.3-rc1-lru_marie-0.12.0r2.patch": patch("Marie r2 foreign"),
+                "patches/testing/0001-linux6.18.22-lru_cast-0.12.0.patch": patch("CAST native"),
+                "patches/testing/0001-linux7.3-rc1-lru_cast-0.12.0r2.patch": patch("CAST r2 foreign"),
             })
             manifest = {
                 "schema": 1,
                 "components": {
-                    "marie": {
+                    "cast": {
                         "kind": "git_patch",
                         "repo": str(repo),
                         "ref": "main",
-                        "exact_globs": ["patches/testing/*linux{series}*lru_marie*.patch"],
-                        "fallback_globs": ["patches/testing/*lru_marie*.patch"],
+                        "exact_globs": ["patches/testing/*linux{series}*lru_cast*.patch"],
+                        "fallback_globs": ["patches/testing/*lru_cast*.patch"],
                         "require_exact_series": False,
-                        "output": "marie.patch",
-                        "project_version_regex": r"lru_marie-([0-9]+(?:\.[0-9]+)*(?:r[0-9]+)?)",
+                        "output": "cast.patch",
+                        "project_version_regex": r"lru_cast-([0-9]+(?:\.[0-9]+)*(?:r[0-9]+)?)",
                     }
                 },
             }
@@ -276,16 +276,16 @@ class ResolverTests(unittest.TestCase):
                 "--manifest", str(path), "--output-dir", str(output),
                 "--kernel-version", "6.18.53", "--kernel-series", "6.18",
             )
-            record = json.loads((output / "patch-lock.json").read_text())["components"]["marie"]
-            self.assertIn("linux6.18.22-lru_marie-0.12.0.patch", record["selected_path"])
-            self.assertEqual(record["project_version"], "0.12.0")
-            self.assertEqual(record["selection"], "exact")
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["cast"]
+            self.assertIn("linux7.3-rc1-lru_cast-0.12.0r2.patch", record["selected_path"])
+            self.assertEqual(record["project_version"], "0.12.0r2")
+            self.assertEqual(record["selection"], "fallback")
 
-    def test_latest_marie_100_rc1_uses_native_73_testing_patch(self) -> None:
+    def test_latest_cast_100_rc1_uses_native_73_testing_patch(self) -> None:
         config = json.loads((ROOT / "config/patch-sources.json").read_text())
-        pattern = config["components"]["marie"]["project_version_regex"]
+        pattern = config["components"]["cast"]["project_version_regex"]
         for suffix in ("6.18.22", "7.2-rc1", "7.3-rc7"):
-            path = f"patches/testing/0001-linux{suffix}-lru_marie-1.0.0-rc1.patch"
+            path = f"patches/testing/0001-linux{suffix}-lru_cast-1.0.0-rc1.patch"
             self.assertEqual(resolver_module.project_version(path, pattern), "1.0.0-rc1")
         self.assertLess(resolver_module.upstream_release_key("0.12.0"),
                         resolver_module.upstream_release_key("1.0.0-rc1"))
@@ -293,16 +293,16 @@ class ResolverTests(unittest.TestCase):
             tmp = Path(tmp)
             repo = tmp / "repo"
             init_repo(repo, {
-                "patches/stable/0001-linux7.3-rc7-lru_marie-0.12.0.patch": patch("old stable"),
-                "patches/testing/0001-linux6.18.22-lru_marie-1.0.0-rc1.patch": patch("new foreign"),
-                "patches/testing/0001-linux7.3-rc7-lru_marie-1.0.0-rc1.patch": patch("new native"),
+                "patches/stable/0001-linux7.3-rc7-lru_cast-0.12.0.patch": patch("old stable"),
+                "patches/testing/0001-linux6.18.22-lru_cast-1.0.0-rc1.patch": patch("new foreign"),
+                "patches/testing/0001-linux7.3-rc7-lru_cast-1.0.0-rc1.patch": patch("new native"),
             })
-            src = {"schema": 1, "components": {"marie": {
+            src = {"schema": 1, "components": {"cast": {
                 "kind": "git_patch", "repo": str(repo), "ref": "main",
-                "exact_globs": ["patches/testing/*linux{series}*lru_marie*.patch",
-                                "patches/stable/*linux{series}*lru_marie*.patch"],
-                "fallback_globs": ["patches/*/*lru_marie*.patch"],
-                "require_exact_series": False, "output": "marie.patch",
+                "exact_globs": ["patches/testing/*linux{series}*lru_cast*.patch",
+                                "patches/stable/*linux{series}*lru_cast*.patch"],
+                "fallback_globs": ["patches/*/*lru_cast*.patch"],
+                "require_exact_series": False, "output": "cast.patch",
                 "project_version_regex": pattern,
             }}}
             manifest_path = tmp / "manifest.json"
@@ -311,10 +311,10 @@ class ResolverTests(unittest.TestCase):
             run(sys.executable, str(RESOLVER), "--manifest", str(manifest_path),
                 "--output-dir", str(output), "--kernel-version", "7.3-rc7",
                 "--kernel-series", "7.3")
-            record = json.loads((output / "patch-lock.json").read_text())["components"]["marie"]
+            record = json.loads((output / "patch-lock.json").read_text())["components"]["cast"]
             self.assertEqual(record["project_version"], "1.0.0-rc1")
             self.assertEqual(record["selection"], "exact")
-            self.assertIn("linux7.3-rc7-lru_marie-1.0.0-rc1.patch", record["selected_path"])
+            self.assertIn("linux7.3-rc7-lru_cast-1.0.0-rc1.patch", record["selected_path"])
 
     def test_upstream_release_order_rc_stable_and_post_release(self) -> None:
         key = resolver_module.upstream_release_key
@@ -490,7 +490,7 @@ class RewriterTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             components = {}
-            git_names = {"bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex", "generic_config_fixture"}
+            git_names = {"bore", "bore_sched_ext_coexistence", "cast", "adios", "zram_ir", "poc", "nap", "reflex", "generic_config_fixture"}
             requested = {
                 "clear": "09-clear.patch", "o3": "11-o3.patch", "libbpf_uninitialized": "13-libbpf-uninitialized.patch",
                 "cpu_optimizations": "14-cpu-optimizations.patch", "dkms_clang": "15-dkms-clang.patch",
@@ -544,7 +544,7 @@ class RewriterTests(unittest.TestCase):
                 'GENERIC_CONFIG_URL="old"\nADIOS_URL="old"\n'
                 'BORE_REPO="old"\nBORE_BRANCH="main"\nBORE_COMMIT="old"\nBORE_PATCH_PATH="old"\n'
                 'BORE_SCHED_EXT_REPO="old"\nBORE_SCHED_EXT_COMMIT="old"\nBORE_SCHED_EXT_PATCH_PATH="old"\n'
-                'MARIE_REPO="old"\nMARIE_COMMIT="old"\nMARIE_PATCH_PATH="old"\nMARIE_PATCH="$PATCHDIR/0002-lru-marie-0.7.7-testing-linux7.1.patch"\n'
+                'CAST_REPO="old"\nCAST_COMMIT="old"\nCAST_PATCH_PATH="old"\nCAST_PATCH="$PATCHDIR/0002-lru-cast-0.7.7-testing-linux7.1.patch"\n'
                 'REFLEX_REPO="old"\nREFLEX_COMMIT="old"\nREFLEX_PATCH_PATH="old"\n'
                 'rm -rf "$WORKDIR" "$LOGDIR" "$ARTIFACTS"\nmkdir -p "$PATCHDIR" "$LOGDIR" "$ARTIFACTS"\n'
                 + requested_calls,

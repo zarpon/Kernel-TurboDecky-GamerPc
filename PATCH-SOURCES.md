@@ -7,18 +7,25 @@ pelo workflow.
 ## Política
 
 - a branch mantida pelo desenvolvedor é consultada no início de cada build;
-- patches da mesma série do kernel têm prioridade;
-- entre patches igualmente compatíveis, vence a versão mais nova do projeto;
-- quando não existe patch para a série atual, pode ser escolhida a série anterior
-  mais próxima apenas para componentes que permitem port controlado;
+- a versão mais recente do projeto tem prioridade, incluindo revisões `rN`;
+- dentro dessa versão, a variante da série do kernel trabalhado tem prioridade;
+- se a versão mais recente só existir para outra série, ela é a base do porte
+  controlado; uma variante nativa mais antiga não substitui a versão atual;
 - componentes marcados como `require_exact_series` interrompem o build se não
   houver correspondência exata;
-- commits históricos são usados apenas como fallback quando a branch atual
-  removeu um arquivo ainda necessário;
+- fontes indisponíveis ou portes incompatíveis interrompem o build;
 - correções upstream de commit único permanecem imutáveis, pois não possuem uma
   linha de versões a acompanhar.
 - consultas Git remotas não são interativas e têm limite de tempo; uma origem
   lenta ou indisponível falha de forma explícita em vez de bloquear o build.
+
+## CAST e swappiness
+
+O CAST vem de `firelzrd/lru_cast`, com `CONFIG_LRU_CAST=y` e ativação padrão
+do upstream. A origem é consultada novamente a cada build. A aplicação testa
+os bytes originais antes de adaptar o contexto de includes revisado; mudanças
+desconhecidas interrompem o build para revisão. O pacote não configura
+`vm.swappiness`, preservando o padrão do kernel e configurações externas.
 
 ## BORE atual e coexistência com sched_ext
 
@@ -85,15 +92,15 @@ A política de THP permanece independente do perfil Zen:
 - a configuração e os parâmetros THP já definidos pelo projeto não são
   substituídos, redefinidos nem condicionados por `CONFIG_ZEN_INTERACTIVE`.
 
-## Fallback local do Marie LRU
+## Fallback local do CAST LRU
 
-A versão mais recente e compatível do Marie LRU também é mantida em
-`patches/fallback/lru_marie.patch`, acompanhada por metadados com commit,
+A versão mais recente e compatível do CAST LRU também é mantida em
+`patches/fallback/lru_cast.patch`, acompanhada por metadados com commit,
 caminho, versão, tamanho e SHA-256. O resolvedor usa esses bytes somente quando
 a consulta ao repositório oficial falha; a seleção fica registrada como
 `local-fallback` no `patch-lock.json`.
 
-O workflow `update-marie-fallback.yml` consulta o upstream a cada hora, após
+O workflow `update-cast-fallback.yml` consulta o upstream a cada hora, após
 alterações relevantes na `main` ou por disparo manual. Quando encontra uma
 versão nova, atualiza o patch local, seus metadados e os defaults do script-base.
 Se a branch principal não aceitar escrita direta, ele abre uma pull request de
@@ -126,7 +133,7 @@ selecionados. Eles não dependem de lazy fetch. O lock é copiado para
 ## Componentes versionados
 
 A resolução dinâmica cobre BORE, sua correção de coexistência com `sched_ext`,
-Marie LRU, ADIOS, ZRAM-IR, POC Selector, NAP, REFLEX, o perfil Zen interativo,
+CAST LRU, ADIOS, ZRAM-IR, POC Selector, NAP, REFLEX, o perfil Zen interativo,
 patches TTM/DMEM de VRAM, linux-tkg, CachyOS e OpenWrt. A configuração-base
 é gerada pelo `x86_64_defconfig` da própria árvore Linux-alvo.
 

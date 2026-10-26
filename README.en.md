@@ -51,7 +51,7 @@ verification must be disabled.
   reduce DMA latency.
   This path leaves ATS/PRI/PASID/SVA unconfigured and changes DMA isolation; the
   actual effect depends on hardware and workload, with no guaranteed percentage. There is no runtime amdgpu.iommu_perfopt opt-out.
-- **Memory:** Marie LRU reduces aggressive reclaim and thrashing; ZRAM-IR uses
+- **Memory:** CAST LRU reduces aggressive reclaim and thrashing; ZRAM-IR uses
   LZ4 and ZSTD to retain more useful pages under memory pressure.
 - **VRAM management:** the `dmem` controller and the TTM port prioritize the
   eviction of unprotected buffers and honor `dmem.low` and `dmem.min`. On AMD
@@ -84,7 +84,7 @@ versioned overrides in `config/kernelnote.config`.
 - **Interactive Zen** — the `zen-sauce` branch from the newest compatible Linux
   series is resolved automatically; the current `evdev` and P-State commits
   that complete the profile are also recorded in `patch-lock.json`.
-- **Marie LRU** — [firelzrd/lru_marie](https://github.com/firelzrd/lru_marie): adaptive reclaim for desktop systems.
+- **CAST LRU** — [firelzrd/lru_cast](https://github.com/firelzrd/lru_cast): adaptive reclaim for desktop systems.
 - **ADIOS** — [firelzrd/adios](https://github.com/firelzrd/adios): adaptive, built-in, default I/O scheduler.
 - **ZRAM-IR** — [firelzrd/zram-ir](https://github.com/firelzrd/zram-ir): LZ4 as
   the primary compressor and ZSTD as priority `1` recompressor. The
@@ -275,7 +275,7 @@ Remove those arguments to restore the default, or use
 `systemd.zram=1 zswap.enabled=0`.
 
 Runtime tuning uses `vm.vfs_cache_pressure=100`,
-`vm.dirty_background_ratio=2` and `vm.dirty_ratio=5`. LRU Marie's own defaults
+`vm.dirty_background_ratio=2` and `vm.dirty_ratio=5`. LRU CAST's own defaults
 are preserved.
 
 ## NAP tools

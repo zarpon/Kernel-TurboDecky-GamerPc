@@ -279,6 +279,15 @@ def compatibility_score(target: KernelVersion | None, kernel: KernelVersion) -> 
     return 3, distance_rank
 
 
+def upstream_release_key(value: str | None) -> tuple[int, ...]:
+    match = re.fullmatch(r"v?(\d+(?:\.\d+)*)(?:(-rc|r)(\d+))?", value or "")
+    if not match:
+        raise ResolverError(f"invalid upstream project version: {value!r}")
+    numbers = [int(part) for part in match[1].split('.')]
+    stage = 1 if match[2] == '-rc' else 3 if match[2] == 'r' else 2
+    return tuple((numbers + [0] * 8)[:8] + [stage, int(match[3] or 0)])
+
+
 def candidate_score(path: str, kernel: KernelVersion, version_pattern: str | None) -> tuple[Any, ...]:
     target = extract_kernel_target(path)
     compat_rank, distance_rank = compatibility_score(target, kernel)
@@ -426,6 +435,12 @@ def resolve(
                             base_score = candidate_score(
                                 candidate_path, kernel, spec.get("project_version_regex")
                             )
+                            if spec.get("latest_release_first"):
+                                # Compare the complete project release first, then
+                                # prefer its native kernel variant over a port.
+                                native = int(target is not None and target.series == kernel.series)
+                                version = project_version(candidate_path, spec.get("project_version_regex"))
+                                base_score = (upstream_release_key(version), native, *base_score)
                             score = (*base_score[:-1], -ref_index, candidate_path)
                             options.append(
                                 (

@@ -28,22 +28,22 @@ def replace_once(old: str, new: str) -> None:
     source = source.replace(old, new, 1)
 
 
-def insert_after_marie_variables(block: str) -> None:
+def insert_after_cast_variables(block: str) -> None:
     global source
-    preferred = re.compile(r"^PATCH_MARIE_VERSION=.*$", re.MULTILINE)
-    fallback = re.compile(r"^MARIE_PATCH=.*$", re.MULTILINE)
+    preferred = re.compile(r"^PATCH_CAST_VERSION=.*$", re.MULTILINE)
+    fallback = re.compile(r"^CAST_PATCH=.*$", re.MULTILINE)
     matches = list(preferred.finditer(source))
     if not matches:
         matches = list(fallback.finditer(source))
     if len(matches) != 1:
         raise SystemExit(
-            f"expected exactly one Marie variables anchor, found {len(matches)}"
+            f"expected exactly one CAST variables anchor, found {len(matches)}"
         )
     match = matches[0]
     source = source[: match.end()] + "\n" + block + source[match.end() :]
 
 
-insert_after_marie_variables(
+insert_after_cast_variables(
     '''
 # ZRAM Immediate Recompression: native Linux 7.1 patch.
 ZRAM_IR_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
@@ -272,8 +272,8 @@ apply_bore_patch() {
 )
 
 replace_once(
-    'fetch_marie_testing_patch\n',
-    '''fetch_marie_testing_patch
+    'fetch_cast_testing_patch\n',
+    '''fetch_cast_testing_patch
 fetch_zram_ir_patch
 fetch_poc_patch
 fetch_nap_patch
@@ -281,12 +281,12 @@ fetch_nap_patch
 )
 
 replace_once(
-    '''apply_marie_testing_patch "$MARIE_PATCH"
+    '''apply_cast_testing_patch "$CAST_PATCH"
 apply_bore_patch "$BORE_PATCH"
 apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-current.patch"
 ''',
-    '''apply_marie_testing_patch "$MARIE_PATCH"
+    '''apply_cast_testing_patch "$CAST_PATCH"
 apply_bore_patch "$BORE_PATCH"
 apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_poc_patch "$POC_PATCH"
@@ -377,8 +377,8 @@ assert_disabled_or_absent GDB_SCRIPTS
 )
 
 replace_once(
-    'scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-thinlto"\n',
-    'scripts/config --set-str LOCALVERSION "-kn-marie-bore-poc-nap-rfx-adios-zir-lto"\n'
+    'scripts/config --set-str LOCALVERSION "-kernelnote-cast-bore-adios-thinlto"\n',
+    'scripts/config --set-str LOCALVERSION "-kn-cast-bore-poc-nap-rfx-adios-zir-lto"\n'
 )
 
 replace_once(

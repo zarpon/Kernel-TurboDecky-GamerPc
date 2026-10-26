@@ -16,14 +16,14 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 
 def insert_requested_series_variable(text: str) -> str:
-    preferred = re.compile(r"^PATCH_MARIE_VERSION=.*$", re.MULTILINE)
-    fallback = re.compile(r"^MARIE_PATCH=.*$", re.MULTILINE)
+    preferred = re.compile(r"^PATCH_CAST_VERSION=.*$", re.MULTILINE)
+    fallback = re.compile(r"^CAST_PATCH=.*$", re.MULTILINE)
     matches = list(preferred.finditer(text))
     if not matches:
         matches = list(fallback.finditer(text))
     if len(matches) != 1:
         raise SystemExit(
-            f"requested series variables: expected one Marie variables anchor, "
+            f"requested series variables: expected one CAST variables anchor, "
             f"found {len(matches)}"
         )
     match = matches[0]

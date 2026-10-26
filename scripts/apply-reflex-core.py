@@ -15,15 +15,15 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-def insert_after_marie_variables(text: str, block: str) -> str:
-    preferred = re.compile(r"^PATCH_MARIE_VERSION=.*$", re.MULTILINE)
-    fallback = re.compile(r"^MARIE_PATCH=.*$", re.MULTILINE)
+def insert_after_cast_variables(text: str, block: str) -> str:
+    preferred = re.compile(r"^PATCH_CAST_VERSION=.*$", re.MULTILINE)
+    fallback = re.compile(r"^CAST_PATCH=.*$", re.MULTILINE)
     matches = list(preferred.finditer(text))
     if not matches:
         matches = list(fallback.finditer(text))
     if len(matches) != 1:
         raise SystemExit(
-            f"REFLEX variables: expected one Marie variables anchor, found {len(matches)}"
+            f"REFLEX variables: expected one CAST variables anchor, found {len(matches)}"
         )
     match = matches[0]
     return text[: match.end()] + "\n" + block + text[match.end() :]
@@ -34,7 +34,7 @@ def patch_core(path: Path) -> None:
     if "# REFLEX CPUFreq dynamic bootstrap" in source:
         return
 
-    source = insert_after_marie_variables(
+    source = insert_after_cast_variables(
         source,
         '''
 # REFLEX CPUFreq dynamic bootstrap. Every source identity is supplied by the authenticated patch lock.
@@ -173,8 +173,8 @@ apply_bore_patch() {
 
     source = replace_once(
         source,
-        'fetch_marie_testing_patch\n',
-        'fetch_marie_testing_patch\nfetch_reflex_patch\n',
+        'fetch_cast_testing_patch\n',
+        'fetch_cast_testing_patch\nfetch_reflex_patch\n',
         "REFLEX fetch call",
     )
 
@@ -233,7 +233,7 @@ assert_config "CONFIG_CPU_MITIGATIONS=y"
 
 def patch_wrapper(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
-    expected = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
+    expected = '-kn-cast-bore-poc-nap-rfx-adios-zir-lto'
     if expected not in source:
         raise SystemExit("REFLEX local version anchor is missing from build wrapper")
 

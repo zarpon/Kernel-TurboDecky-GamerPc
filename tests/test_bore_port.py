@@ -46,7 +46,7 @@ class BoreLinuxPortTests(unittest.TestCase):
         self.assertIn("include/linux/sched/bore.h", function)
         wrapper = WRAPPER.read_text(encoding="utf-8")
         shared_anchor = (
-            'apply_marie_testing_patch "$MARIE_PATCH"\n'
+            'apply_cast_testing_patch "$CAST_PATCH"\n'
             'apply_bore_patch "$BORE_PATCH"\n'
             'apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"\n'
             'apply_adios_patch "$PATCHDIR/0003-adios-current.patch"\n'

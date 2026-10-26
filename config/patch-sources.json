@@ -146,25 +146,26 @@
         "https://dev.gentoo.org/~alicef/genpatches/trunk/{series}/2990_libbpf-v2-workaround-Wmaybe-uninitialized-false-pos.patch"
       ]
     },
-    "marie": {
+    "cast": {
       "exact_globs": [
-        "patches/stable/*linux{series}*lru_marie*.patch",
-        "patches/testing/*linux{series}*lru_marie*.patch"
+        "patches/*-{series}-lru_cast-*.patch",
+        "patches/*-{series}.*-lru_cast-*.patch",
+        "patches/*-{series}-rc*-lru_cast-*.patch"
       ],
       "fallback_globs": [
-        "patches/stable/*lru_marie*.patch",
-        "patches/testing/*lru_marie*.patch"
+        "patches/*-lru_cast-*.patch"
       ],
       "kind": "git_patch",
-      "output": "02-lru-marie.patch",
-      "project_version_regex": "lru[_-]marie[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:-rc[0-9]+|r[0-9]+)?)",
+      "output": "02-lru-cast.patch",
+      "project_version_regex": "lru[_-]cast[-_]?v?([0-9]+(?:\\.[0-9]+)+(?:-rc[0-9]+|r[0-9]+)?)",
       "ref": "main",
-      "repo": "https://github.com/firelzrd/lru_marie.git",
+      "repo": "https://github.com/firelzrd/lru_cast.git",
       "require_exact_series": false,
       "required_markers": [
-        "LRU_MARIE",
-        "lru_marie"
-      ]
+        "LRU_CAST",
+        "lru_cast"
+      ],
+      "latest_release_first": true
     },
     "minstrel_downgrade": {
       "exact_globs": [
