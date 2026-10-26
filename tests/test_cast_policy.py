@@ -46,10 +46,18 @@ class CastPolicyTests(unittest.TestCase):
                                        'patches/0001-7.3-rc7-lru_cast-v0.3.0.patch'])
         self.assertIn('7.2-rc1', record['selected_path'])
 
-    def test_newer_revision_also_beats_old_native(self):
+    def test_newer_foreign_revision_beats_old_native(self):
         record = self.resolve_fixture(['patches/0001-7.2-rc1-lru_cast-v0.3.0.patch',
                                        'patches/0001-7.3-rc7-lru_cast-v0.3.0r2.patch'])
         self.assertEqual(record['project_version'], '0.3.0r2')
+        self.assertEqual(record['selection'], 'fallback')
+        self.assertIn('7.3-rc7', record['selected_path'])
+
+    def test_foreign_release_used_when_no_native_exists(self):
+        record = self.resolve_fixture(['patches/0001-7.3-rc7-lru_cast-v0.3.0r2.patch',
+                                       'patches/0001-7.1-rc1-lru_cast-v0.3.0.patch'])
+        self.assertEqual(record['project_version'], '0.3.0r2')
+        self.assertEqual(record['selection'], 'fallback')
 
     def test_kernel_default_and_no_swappiness_override(self):
         self.assertIn('CONFIG_LRU_CAST=y', (ROOT / 'config/kernelnote.config').read_text())

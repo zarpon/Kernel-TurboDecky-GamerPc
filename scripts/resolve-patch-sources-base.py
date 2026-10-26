@@ -436,8 +436,8 @@ def resolve(
                                 candidate_path, kernel, spec.get("project_version_regex")
                             )
                             if spec.get("latest_release_first"):
-                                # Compare the complete project release first, then
-                                # prefer its native kernel variant over a port.
+                                # Pick the latest full upstream release (including rN),
+                                # preferring its native kernel variant when available.
                                 native = int(target is not None and target.series == kernel.series)
                                 version = project_version(candidate_path, spec.get("project_version_regex"))
                                 base_score = (upstream_release_key(version), native, *base_score)
