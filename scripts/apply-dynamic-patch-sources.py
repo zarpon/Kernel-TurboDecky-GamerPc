@@ -168,7 +168,7 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
 
     text = replace_assignment(text, "ADIOS_URL", file_url(component(lock, "adios")))
 
-    for prefix, name in (("BORE", "bore"), ("MARIE", "marie"), ("REFLEX", "reflex")):
+    for prefix, name in (("BORE", "bore"), ("CAST", "cast"), ("REFLEX", "reflex")):
         record = component(lock, name)
         text = replace_assignment(text, f"{prefix}_REPO", repo_value(record))
         if f"{prefix}_COMMIT=" in text:
@@ -191,27 +191,27 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
             text = replace_assignment(text, variable, value)
 
     versions = {
-        "MARIE": project_version(component(lock, "marie"), "marie"),
+        "CAST": project_version(component(lock, "cast"), "cast"),
         "REFLEX": project_version(component(lock, "reflex"), "reflex"),
     }
-    if "PATCH_MARIE_VERSION=" in text:
-        text = replace_assignment(text, "PATCH_MARIE_VERSION", versions["MARIE"])
+    if "PATCH_CAST_VERSION=" in text:
+        text = replace_assignment(text, "PATCH_CAST_VERSION", versions["CAST"])
     else:
-        marie_patch = re.compile(r'^(MARIE_PATCH=.*)$', re.MULTILINE)
-        matches = list(marie_patch.finditer(text))
+        cast_patch = re.compile(r'^(CAST_PATCH=.*)$', re.MULTILINE)
+        matches = list(cast_patch.finditer(text))
         if len(matches) != 1:
             raise RewriteError(
-                f"PATCH_MARIE_VERSION: expected one MARIE_PATCH anchor, found {len(matches)}"
+                f"PATCH_CAST_VERSION: expected one CAST_PATCH anchor, found {len(matches)}"
             )
-        text = marie_patch.sub(
-            rf'\1\nPATCH_MARIE_VERSION="{versions["MARIE"]}"',
+        text = cast_patch.sub(
+            rf'\1\nPATCH_CAST_VERSION="{versions["CAST"]}"',
             text,
             count=1,
         )
     if "PATCH_REFLEX_VERSION=" in text:
         text = replace_assignment(text, "PATCH_REFLEX_VERSION", versions["REFLEX"])
     else:
-        anchor = f'PATCH_MARIE_VERSION="{versions["MARIE"]}"\n'
+        anchor = f'PATCH_CAST_VERSION="{versions["CAST"]}"\n'
         text = replace_once(
             text,
             anchor,
@@ -220,10 +220,10 @@ def patch_core(text: str, lock: dict[str, Any]) -> str:
         )
 
     replacements = {
-        'grep -Fq \'Subject: [PATCH] linux7.1-rc5-lru_marie-0.7.7\' "$MARIE_PATCH"':
-            'grep -Fq \'lru_marie\' "$MARIE_PATCH"',
-        "grep -Fq '0.7.7' mm/lru_marie/version.h":
-            '[[ "$PATCH_MARIE_VERSION" == "unknown" ]] || grep -Fq "$PATCH_MARIE_VERSION" mm/lru_marie/version.h',
+        'grep -Fq \'Subject: [PATCH] linux7.1-rc5-lru_cast-0.7.7\' "$CAST_PATCH"':
+            'grep -Fq \'lru_cast\' "$CAST_PATCH"',
+        "grep -Fq '0.7.7' mm/lru_cast/version.h":
+            '[[ "$PATCH_CAST_VERSION" == "unknown" ]] || grep -Fq "$PATCH_CAST_VERSION" mm/lru_cast/version.h',
         'grep -Fq \'Subject: [PATCH] linux7.1-reflex-v0.3.1\' "$REFLEX_PATCH"':
             'grep -Fq \'reflex\' "$REFLEX_PATCH"',
         "grep -Fq '#define CPUFREQ_REFLEX_VERSION  \"0.3.1\"' drivers/cpufreq/cpufreq_reflex.c":
@@ -281,7 +281,7 @@ def validate_lock(lock: dict[str, Any]) -> None:
     if lock.get("schema") != 1:
         raise RewriteError("unsupported patch lock schema")
     required = {
-        "bore", "bore_sched_ext_coexistence", "marie", "adios", "zram_ir", "poc", "nap", "reflex",
+        "bore", "bore_sched_ext_coexistence", "cast", "adios", "zram_ir", "poc", "nap", "reflex",
         *REQUESTED.keys(),
     }
     missing = sorted(required - set(lock.get("components", {})))

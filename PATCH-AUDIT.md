@@ -10,7 +10,7 @@ os scripts de geração do `Kernel-TurboDecky-GamerPc`.
 | --- | --- | --- |
 | BORE | `bore` | Fonte oficial mais nova da série exata, materializada e bloqueada por commit/caminho/SHA-256/tamanho; aplicação sem fuzz exige `patch --dry-run` na árvore real |
 | BORE `sched-ext` coexistence fix | `bore_sched_ext_coexistence` + template revisado | Coberto por port derivado: copia o helper upstream bloqueado, preserva somente o contexto Linux 7.1 revisado e falha fechada se a estrutura mudar |
-| Marie LRU | `marie` | Coberto por resolução dinâmica da versão upstream mais nova; ausência da fonte upstream aborta o build, sem fallback local |
+| CAST LRU | `cast` | Coberto por resolução dinâmica da versão upstream mais nova; ausência da fonte upstream aborta o build, sem fallback local |
 | ZRAM-IR 1.2 | `zram_ir` | Coberto por fonte compatível de Linux 7.1 |
 | POC Selector | `poc` | Coberto por resolução dinâmica da versão upstream mais nova e port controlado quando necessário |
 | NAP 0.5.0 | `nap` | Coberto por port controlado da fonte estável compatível |

@@ -149,12 +149,12 @@ def patch_wrapper(path: Path) -> None:
     # anchor synchronized with that generated state.
     source = replace_once(
         source,
-        '-kernelnote-marie-bore-adios-thinlto',
-        '-kernelnote-marie-bore-adios-fulllto',
+        '-kernelnote-cast-bore-adios-thinlto',
+        '-kernelnote-cast-bore-adios-fulllto',
         "Full LTO integration-wrapper localversion anchor",
     )
 
-    old_local = '-kn-marie-bore-poc-nap-rfx-adios-zir-lto'
+    old_local = '-kn-cast-bore-poc-nap-rfx-adios-zir-lto'
     source = replace_once(source, old_local, "", "generic TurboDecky localversion")
 
     emitted = '''kernel_release="$("${MAKE[@]}" -s kernelrelease)"

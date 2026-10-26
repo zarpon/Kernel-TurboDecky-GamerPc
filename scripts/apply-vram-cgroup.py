@@ -28,17 +28,17 @@ def main() -> None:
     injection = r"""
 # TurboDecky VRAM/DMEM integration
 replace_once(
-    'scripts/config --enable LRU_MARIE\n',
+    'scripts/config --enable LRU_CAST\n',
     '''scripts/config --enable CGROUPS
 scripts/config --enable CGROUP_DMEM
-scripts/config --enable LRU_MARIE
+scripts/config --enable LRU_CAST
 '''
 )
 
 replace_once(
-    'assert_config "CONFIG_LRU_MARIE=y"\n',
+    'assert_config "CONFIG_LRU_CAST=y"\n',
     '''assert_config "CONFIG_CGROUP_DMEM=y"
-assert_config "CONFIG_LRU_MARIE=y"
+assert_config "CONFIG_LRU_CAST=y"
 '''
 )
 

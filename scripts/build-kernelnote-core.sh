@@ -8,7 +8,7 @@ LOGDIR="$ROOT/logs"
 ARTIFACTS="$ROOT/artifacts"
 PATCHDIR="$WORKDIR/patches"
 KERNELDIR="$WORKDIR/linux"
-MARIEDIR="$WORKDIR/lru_marie"
+CASTDIR="$WORKDIR/lru_cast"
 JOBS="${JOBS:-$(nproc --all)}"
 MAKE=(make LLVM=1 LLVM_IAS=1)
 
@@ -37,12 +37,12 @@ BORE_SCHED_EXT_UPSTREAM_PATCH="$PATCHDIR/0002-bore-sched-ext-upstream.patch"
 BORE_SCHED_EXT_PATCH="$PATCHDIR/01-bore-sched-ext-current-port.patch"
 BORE_SCHED_EXT_PORT_UPSTREAM_SHA256="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 
-# Marie is fetched from the authenticated current-upstream lock. Only the exact locked patch blob is materialized.
-MARIE_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
-MARIE_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
-MARIE_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
-MARIE_PATCH="$PATCHDIR/02-lru-marie.patch"
-PATCH_MARIE_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+# CAST is fetched from the authenticated current-upstream lock. Only the exact locked patch blob is materialized.
+CAST_REPO="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+CAST_COMMIT="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+CAST_PATCH_PATH="__DYNAMIC_PATCH_LOCK_REQUIRED__"
+CAST_PATCH="$PATCHDIR/02-lru-cast.patch"
+PATCH_CAST_VERSION="__DYNAMIC_PATCH_LOCK_REQUIRED__"
 
 # Append the canonical TurboDecky built-in arguments.
 # CMDLINE_OVERRIDE stays disabled so bootloader parameters
@@ -73,28 +73,28 @@ download() {
   sha256sum "$output" | tee -a "$LOGDIR/downloads.sha256"
 }
 
-fetch_marie_testing_patch() {
-  echo "==> Fetching current locked Marie LRU $PATCH_MARIE_VERSION testing source locally"
-  rm -rf "$MARIEDIR"
-  git init --quiet "$MARIEDIR"
-  git -C "$MARIEDIR" remote add origin "$MARIE_REPO"
-  git -C "$MARIEDIR" config remote.origin.promisor true
-  git -C "$MARIEDIR" config remote.origin.partialclonefilter blob:none
-  git -C "$MARIEDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$MARIE_COMMIT" 2>&1 | tee "$LOGDIR/02-lru-marie-fetch.log"
-  git -C "$MARIEDIR" show "FETCH_HEAD:$MARIE_PATCH_PATH" > "$MARIE_PATCH"
-  test -s "$MARIE_PATCH"
-  grep -Fq 'lru_marie' "$MARIE_PATCH"
-  grep -Fq 'LRU_MARIE' "$MARIE_PATCH"
+fetch_cast_testing_patch() {
+  echo "==> Fetching current locked CAST LRU $PATCH_CAST_VERSION source locally"
+  rm -rf "$CASTDIR"
+  git init --quiet "$CASTDIR"
+  git -C "$CASTDIR" remote add origin "$CAST_REPO"
+  git -C "$CASTDIR" config remote.origin.promisor true
+  git -C "$CASTDIR" config remote.origin.partialclonefilter blob:none
+  git -C "$CASTDIR" fetch --no-tags --depth=1 --filter=blob:none origin "$CAST_COMMIT" 2>&1 | tee "$LOGDIR/02-lru-cast-fetch.log"
+  git -C "$CASTDIR" show "FETCH_HEAD:$CAST_PATCH_PATH" > "$CAST_PATCH"
+  test -s "$CAST_PATCH"
+  grep -Fq 'lru_cast' "$CAST_PATCH"
+  grep -Fq 'LRU_CAST' "$CAST_PATCH"
 
   {
-    echo "Marie source policy: current upstream testing release only"
-    echo "Repository: firelzrd/lru_marie"
-    echo "Commit: $MARIE_COMMIT"
-    echo "Version: $PATCH_MARIE_VERSION"
-    echo "Path: $MARIE_PATCH_PATH"
-    echo "SHA256: $(sha256sum "$MARIE_PATCH" | awk '{print $1}')"
+    echo "CAST source policy: latest upstream release, native variant first within that release"
+    echo "Repository: firelzrd/lru_cast"
+    echo "Commit: $CAST_COMMIT"
+    echo "Version: $PATCH_CAST_VERSION"
+    echo "Path: $CAST_PATCH_PATH"
+    echo "SHA256: $(sha256sum "$CAST_PATCH" | awk '{print $1}')"
     echo "Acquisition: authenticated current-upstream lock; no local fallback"
-  } | tee "$LOGDIR/02-lru-marie-provenance.txt"
+  } | tee "$LOGDIR/02-lru-cast-provenance.txt"
 }
 fetch_bore_source() {
   local upstream_sha256
@@ -209,70 +209,17 @@ for name in sys.argv[1:]:
 PY
 }
 
-apply_marie_testing_patch() {
-  local file="$1" status=0
-
-  echo "==> Applying Marie LRU $PATCH_MARIE_VERSION upstream testing patch"
-  python3 "$ROOT/scripts/port-lru-marie-latest.py" "$file" "$KERNELDIR/mm/folio.c" \
-    | tee "$LOGDIR/02-lru-marie-compatibility-port.log"
-  if patch --batch --forward --strip=1 --dry-run < "$file" \
-      > "$LOGDIR/02-lru-marie.dry-run.log" 2>&1; then
-    patch --batch --forward --strip=1 < "$file" \
-      | tee "$LOGDIR/02-lru-marie.apply.log"
-  else
-    cat "$LOGDIR/02-lru-marie.dry-run.log"
-    if [[ "$PATCH_MARIE_VERSION" == "0.12.0r2" &&
-          "$KERNEL_VERSION" =~ ^7\.3(-rc[0-9]+|\.[0-9]+)?$ ]]; then
-      # The original current upstream patch remains SHA-locked.
-      local reviewed_port="$PATCHDIR/02-lru-marie-7.3-port.patch"
-      python3 "$ROOT/scripts/port-marie-folio-7.3.py" \
-        "$file" "$reviewed_port" "$KERNELDIR" "$KERNEL_VERSION"
-      sha256sum "$file" "$reviewed_port" | tee "$LOGDIR/02-lru-marie-port.sha256"
-      if ! patch --batch --forward --strip=1 --dry-run < "$reviewed_port" \
-          > "$LOGDIR/02-lru-marie-port.dry-run.log" 2>&1; then
-        cat "$LOGDIR/02-lru-marie-port.dry-run.log"
-        echo "Marie reviewed Linux 7.3 port does not apply; refusing fuzz fallback" >&2
-        return 1
-      fi
-      patch --batch --forward --strip=1 < "$reviewed_port" \
-        | tee "$LOGDIR/02-lru-marie.apply.log"
-    else
-    echo "==> Retrying Marie with maximum safe patch fuzz"
-    set +e
-    patch --batch --forward --fuzz=3 --strip=1 < "$file" \
-      > "$LOGDIR/02-lru-marie.fuzz-apply.log" 2>&1
-    status=$?
-    set -e
-    cat "$LOGDIR/02-lru-marie.fuzz-apply.log"
-
-    if ((status != 0)) || find "$KERNELDIR" -name '*.rej' -print -quit | grep -q .; then
-      {
-        echo "==> Unresolved Marie port rejects"
-        find "$KERNELDIR" -name '*.rej' -printf '%P\n' | sort
-        echo
-        for reject in $(find "$KERNELDIR" -name '*.rej' -type f | sort); do
-          echo "### ${reject#$KERNELDIR/}"
-          cat "$reject"
-        done
-      } | tee "$LOGDIR/02-lru-marie-port-rejects.log"
-      return 1
-    fi
-    fi
-  fi
-
-  find "$KERNELDIR" \( -name '*.rej' -o -name '*.orig' \) -delete
-
-  if ! git diff --check > "$LOGDIR/02-lru-marie-diff-check.log" 2>&1; then
-    cat "$LOGDIR/02-lru-marie-diff-check.log"
-    echo "==> Normalizing whitespace introduced by patch offsets"
-    normalize_changed_whitespace
-    git diff --check | tee "$LOGDIR/02-lru-marie-diff-check-after-fix.log"
-  fi
-
-  grep -Fq "$PATCH_MARIE_VERSION" mm/lru_marie/version.h
-  grep -Fq 'config LRU_MARIE' mm/Kconfig
-  grep -Fq 'CONFIG_LRU_MARIE' include/linux/lru_marie.h
-  echo "==> Marie LRU $PATCH_MARIE_VERSION testing patch applied successfully"
+apply_cast_testing_patch() {
+  local file="$1" prepared="$PATCHDIR/02-lru-cast-prepared.patch"
+  echo "==> Applying CAST LRU $PATCH_CAST_VERSION (latest locked upstream release)"
+  python3 "$ROOT/scripts/port-lru-cast-latest.py" "$file" "$prepared" "$KERNELDIR" \
+    | tee "$LOGDIR/02-lru-cast-compatibility-port.log"
+  git apply --recount --check "$prepared"
+  git apply --recount "$prepared"
+  grep -Fq "$PATCH_CAST_VERSION" mm/lru_cast/version.h
+  grep -Fq 'config LRU_CAST' mm/Kconfig
+  grep -Fq 'CONFIG_LRU_CAST' include/linux/lru_cast.h
+  echo "==> CAST LRU $PATCH_CAST_VERSION applied successfully"
 }
 
 report_bore_rejects() {
@@ -356,7 +303,7 @@ apply_adios_patch() {
     return 0
   fi
 
-  # ADIOS and Marie both carry the same setlocalversion identity hunk in
+  # ADIOS and CAST both carry the same setlocalversion identity hunk in
   # current upstream releases. Accept that reject only when the ADIOS hunk is
   # provably already present; any real content mismatch still fails closed.
   if [[ -f "$KERNELDIR/scripts/setlocalversion.rej" ]]; then
@@ -479,7 +426,7 @@ echo "==> Cloning current upstream Linux source tag $KERNEL_TAG"
 git clone --no-checkout --depth 1 --single-branch --no-tags --branch "$KERNEL_TAG" "$KERNEL_REPO" "$KERNELDIR"
 git -C "$KERNELDIR" checkout --force --detach "$KERNEL_TAG"
 
-fetch_marie_testing_patch
+fetch_cast_testing_patch
 fetch_bore_source
 fetch_bore_sched_ext_source
 download "$ADIOS_URL" "$PATCHDIR/0003-adios-current.patch"
@@ -489,7 +436,7 @@ cd "$KERNELDIR"
 # The ZSTD default used by the kernel Crypto API is independent of ZRAM-IR.
 # Fail closed if upstream changes its currently expected default of level 3.
 python3 "$ROOT/scripts/set-zstd-crypto-default.py" "$KERNELDIR/crypto/zstd.c"
-apply_marie_testing_patch "$MARIE_PATCH"
+apply_cast_testing_patch "$CAST_PATCH"
 apply_bore_patch "$BORE_PATCH"
 apply_bore_sched_ext_coexistence_fix "$BORE_SCHED_EXT_PATCH"
 apply_adios_patch "$PATCHDIR/0003-adios-current.patch"
@@ -512,7 +459,7 @@ scripts/config --enable SCHED_BORE
 scripts/config --set-val MIN_BASE_SLICE_NS 2000000
 
 # Memory and I/O policy for responsive desktop and gaming workloads.
-scripts/config --enable LRU_MARIE
+scripts/config --enable LRU_CAST
 scripts/config --enable LRU_GEN
 scripts/config --enable LRU_GEN_ENABLED
 scripts/config --enable MQ_IOSCHED_ADIOS
@@ -542,7 +489,7 @@ scripts/config --enable LTO_CLANG_THIN
 
 # Reproducible generic AMD64 build. Avoid distro certificate paths and
 # optional Rust toolchain coupling in the hosted build environment.
-scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-thinlto"
+scripts/config --set-str LOCALVERSION "-kernelnote-cast-bore-adios-thinlto"
 scripts/config --disable LOCALVERSION_AUTO
 scripts/config --set-str SYSTEM_TRUSTED_KEYS ""
 scripts/config --set-str SYSTEM_REVOCATION_KEYS ""
@@ -577,7 +524,7 @@ assert_config "CONFIG_AS_IS_LLVM=y"
 assert_config "CONFIG_LTO=y"
 assert_config "CONFIG_LTO_CLANG=y"
 assert_config "CONFIG_LTO_CLANG_THIN=y"
-assert_config "CONFIG_LRU_MARIE=y"
+assert_config "CONFIG_LRU_CAST=y"
 assert_config "CONFIG_ZSWAP=y"
 assert_config "CONFIG_ZSWAP_DEFAULT_ON=y"
 assert_config "CONFIG_ZSWAP_SHRINKER_DEFAULT_ON=y"

@@ -11,7 +11,7 @@ from pathlib import Path
 
 PATCH_NAMES = {
     'bore': 'BORE', 'bore_sched_ext_coexistence': 'BORE sched_ext coexistence',
-    'lru_marie': 'LRU Marie', 'nap': 'NAP', 'poc_selector': 'POC Selector',
+    'lru_cast': 'LRU CAST', 'nap': 'NAP', 'poc_selector': 'POC Selector',
     'reflex': 'REFLEX', 'adios': 'ADIOS', 'zram_ir': 'ZRAM-IR',
 }
 TOPICS = (

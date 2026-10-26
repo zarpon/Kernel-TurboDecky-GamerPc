@@ -51,7 +51,7 @@ ou a verificação deve ser desativada.
   dispositivos elegíveis usando um domínio DMA identity; o caminho otimizado do
   IOMMU pode reduzir a latência de DMA. Esse caminho não configura ATS/PRI/PASID/SVA e altera
   o isolamento de DMA; o efeito depende do hardware e da carga, sem percentual garantido. Não há opção amdgpu.iommu_perfopt para desativá-lo em tempo de execução.
-- **Memória:** Marie LRU reduz reclaim agressivo e thrashing; ZRAM-IR usa LZ4
+- **Memória:** CAST LRU reduz reclaim agressivo e thrashing; ZRAM-IR usa LZ4
   e ZSTD para manter mais páginas úteis sob pressão de memória.
 - **Gerenciamento de VRAM:** o controlador `dmem` e o port TTM priorizam o
   despejo de buffers não protegidos e respeitam `dmem.low` e `dmem.min`. Em
@@ -86,7 +86,7 @@ da própria árvore Linux-alvo e recebe as sobreposições versionadas em
 - **Zen interativo** — a branch `zen-sauce` da série Linux compatível mais nova
   é resolvida automaticamente; os commits atuais de `evdev` e P-State que
   completam o perfil também ficam registrados no `patch-lock.json`.
-- **Marie LRU** — [firelzrd/lru_marie](https://github.com/firelzrd/lru_marie): reclaim adaptativo para desktops.
+- **CAST LRU** — [firelzrd/lru_cast](https://github.com/firelzrd/lru_cast): reclaim adaptativo para desktops.
 - **ADIOS** — [firelzrd/adios](https://github.com/firelzrd/adios): scheduler de I/O adaptativo, embutido e padrão.
 - **ZRAM-IR** — [firelzrd/zram-ir](https://github.com/firelzrd/zram-ir): LZ4
   primário e ZSTD como recompressor de prioridade `1`. O pacote
@@ -271,7 +271,7 @@ os serviços que o ativam são desativados persistentemente. Consulte
 [SWAP.md](SWAP.md) para comportamento, requisitos e verificação.
 
 O tuning usa `vm.vfs_cache_pressure=100`, `vm.dirty_background_ratio=2` e
-`vm.dirty_ratio=5`. Os defaults próprios do LRU Marie são preservados.
+`vm.dirty_ratio=5`. Os defaults próprios do LRU CAST são preservados.
 
 ## Ferramentas NAP
 

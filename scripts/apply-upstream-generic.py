@@ -176,7 +176,7 @@ assert_config "CONFIG_LTO_CLANG=y"
 assert_config "CONFIG_LTO_CLANG_FULL=y"
 '''
     source = replace_once(source, full_lto_assert_anchor, full_lto_assert_block, "Clang Full LTO post-olddefconfig assertions")
-    source = replace_once(source, 'scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-thinlto"', 'scripts/config --set-str LOCALVERSION "-kernelnote-marie-bore-adios-fulllto"', "Full LTO localversion marker")
+    source = replace_once(source, 'scripts/config --set-str LOCALVERSION "-kernelnote-cast-bore-adios-thinlto"', 'scripts/config --set-str LOCALVERSION "-kernelnote-cast-bore-adios-fulllto"', "Full LTO localversion marker")
     source = replace_once(source, 'echo "==> Building complete Clang ThinLTO Debian packages with $JOBS parallel jobs"', 'echo "==> Building complete Clang Full LTO Debian packages with $JOBS parallel jobs"', "Full LTO package build description")
     source = replace_once(source, 'echo "==> Validating built-in kernel and Clang ThinLTO link with $JOBS parallel jobs"', 'echo "==> Validating built-in kernel and Clang Full LTO link with $JOBS parallel jobs"', "Full LTO validation build description")
 
