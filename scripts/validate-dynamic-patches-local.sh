@@ -16,6 +16,7 @@ python3 -m py_compile \
   "$ROOT/scripts/apply-zarpon-generic-name.py" \
   "$ROOT/scripts/apply-latest-stable-series.py" \
   "$ROOT/scripts/fix-nap-kernel-api.py" \
+  "$ROOT/scripts/set-zstd-crypto-default.py" \
   "$ROOT/scripts/finalize-bore-stable-port.py" \
   "$ROOT/scripts/normalize-cpu-optimizations-generic.py" \
   "$ROOT/scripts/apply-zen-interactive.py"
@@ -37,6 +38,7 @@ python3 -m unittest -v \
   "$ROOT/tests/test_cpu_optimizations_72_port.py" \
   "$ROOT/tests/test_cpu_optimizations_generic_normalization.py" \
   "$ROOT/tests/test_manual_workflow_contract.py" \
+  "$ROOT/tests/test_zstd_crypto_default.py" \
   "$ROOT/tests/test_nap_kernel_api.py" \
   "$ROOT/tests/test_zen_interactive_rewriter.py"
 bash "$ROOT/tests/test_runtime_tuning.sh"
