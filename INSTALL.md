@@ -69,7 +69,7 @@ política antes de usar o kernel em máquinas expostas ou de produção.
 
 ## Zswap e swapfile após a instalação
 
-O pacote configura LZ4 zswap e cria um swapfile de 150% da RAM na partição
+O pacote configura ZSTD zswap com pool de 35% e cria um swapfile de 75% da RAM na partição
 que contém `/home`. ZRAM e seus serviços são desativados persistentemente.
 Consulte [SWAP.md](SWAP.md) para requisitos, tratamento de falhas e
 verificação após reiniciar.

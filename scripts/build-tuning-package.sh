@@ -101,7 +101,7 @@ Recommends: grub2-common
 Description: Runtime, boot and external-module defaults for TurboDecky GamerPc
  Sets CAST memory defaults, selects ADIOS, applies the requested Transparent
  Hugepage policy, appends performance parameters to GRUB, disables zram and
- migrates swapfiles to /home with 75 percent RAM capacity and LZ4 zswap,
+ migrates swapfiles to /home with 75 percent RAM capacity and ZSTD zswap,
  preserves NAP learning across boots and installs napctl and an offline viewer,
  and installs the LLVM toolchain required to compile VirtualBox,
  DKMS and other external modules against this Clang kernel.

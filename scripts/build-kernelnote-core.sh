@@ -52,6 +52,8 @@ KERNEL_DEFAULT_CMDLINE=(
   "nowatchdog"
   "intel_pstate=passive"
   "amd_pstate=passive"
+  "zswap.compressor=zstd"
+  "zswap.max_pool_percent=35"
 )
 
 case "$MODE" in
@@ -467,12 +469,13 @@ scripts/config --enable MQ_IOSCHED_DEFAULT_ADIOS
 scripts/config --enable ZSWAP
 scripts/config --enable ZSWAP_DEFAULT_ON
 scripts/config --enable ZSWAP_SHRINKER_DEFAULT_ON
-for compressor in DEFLATE LZO 842 LZ4HC ZSTD; do
+for compressor in DEFLATE LZO 842 LZ4HC LZ4; do
   scripts/config --disable "ZSWAP_COMPRESSOR_DEFAULT_$compressor"
 done
-scripts/config --enable ZSWAP_COMPRESSOR_DEFAULT_LZ4
+scripts/config --enable ZSWAP_COMPRESSOR_DEFAULT_ZSTD
 scripts/config --enable ZSMALLOC
 scripts/config --enable CRYPTO_LZ4
+scripts/config --enable CRYPTO_ZSTD
 scripts/config --module BLK_DEV_ZRAM
 
 # REFLEX is an external CPUFreq governor. Keep both vendor P-State drivers
@@ -528,9 +531,10 @@ assert_config "CONFIG_LRU_CAST=y"
 assert_config "CONFIG_ZSWAP=y"
 assert_config "CONFIG_ZSWAP_DEFAULT_ON=y"
 assert_config "CONFIG_ZSWAP_SHRINKER_DEFAULT_ON=y"
-assert_config "CONFIG_ZSWAP_COMPRESSOR_DEFAULT_LZ4=y"
+assert_config "CONFIG_ZSWAP_COMPRESSOR_DEFAULT_ZSTD=y"
 assert_config "CONFIG_ZSMALLOC=y"
 assert_config "CONFIG_CRYPTO_LZ4=y"
+assert_config "CONFIG_CRYPTO_ZSTD=y"
 assert_config "CONFIG_MQ_IOSCHED_ADIOS=y"
 assert_config "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y"
 assert_config "CONFIG_X86_INTEL_PSTATE=y"
@@ -542,6 +546,8 @@ assert_cmdline_token "mitigations=off"
 assert_cmdline_token "nowatchdog"
 assert_cmdline_token "intel_pstate=passive"
 assert_cmdline_token "amd_pstate=passive"
+assert_cmdline_token "zswap.compressor=zstd"
+assert_cmdline_token "zswap.max_pool_percent=35"
 
 if [[ "$MODE" == "validate" ]]; then
   assert_config "CONFIG_DEBUG_INFO_NONE=y"
