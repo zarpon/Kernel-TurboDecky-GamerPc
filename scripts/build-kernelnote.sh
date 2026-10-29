@@ -78,6 +78,8 @@ replace_once(
   "nowatchdog"
   "intel_pstate=passive"
   "amd_pstate=passive"
+  "zswap.compressor=zstd"
+  "zswap.max_pool_percent=35"
 )
 ''',
     '''KERNEL_DEFAULT_CMDLINE=(
@@ -85,6 +87,8 @@ replace_once(
   "nowatchdog"
   "intel_pstate=passive"
   "amd_pstate=passive"
+  "zswap.compressor=zstd"
+  "zswap.max_pool_percent=35"
   "cpuidle.governor=nap"
 )
 '''
