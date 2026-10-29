@@ -77,13 +77,13 @@ class ManualWorkflowContractTests(unittest.TestCase):
     def test_wrapper_retains_zswap_parameters_during_nap_injection(self) -> None:
         wrapper = (ROOT / "scripts/build-kernelnote.sh").read_text(encoding="utf-8")
         source_tokens = (
-            '  "amd_pstate=passive"\\n'
-            '  "zswap.compressor=zstd"\\n'
-            '  "zswap.max_pool_percent=35"\\n'
+            '  "amd_pstate=passive"\n'
+            '  "zswap.compressor=zstd"\n'
+            '  "zswap.max_pool_percent=35"\n'
         )
         self.assertEqual(wrapper.count(source_tokens), 2)
         self.assertIn(source_tokens, BUILD_CORE)
-        self.assertIn(source_tokens + '  "cpuidle.governor=nap"\\n', wrapper)
+        self.assertIn(source_tokens + '  "cpuidle.governor=nap"\n', wrapper)
 
     def test_main_dispatcher_uses_the_current_manual_input_contract(self) -> None:
         self.assertIn("gh workflow run validate-kernel.yml", DISPATCHER)
