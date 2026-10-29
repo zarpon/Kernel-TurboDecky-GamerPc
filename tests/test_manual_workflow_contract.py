@@ -57,6 +57,23 @@ class ManualWorkflowContractTests(unittest.TestCase):
         self.assertIn("github.ref_name == 'integration/bore-7.1'", release_step)
         self.assertNotIn("env.BUILD_MODE == 'package'", release_step)
 
+    def test_every_successful_build_creates_a_distinct_complete_release(self) -> None:
+        release_step = WORKFLOW.split("      - name: Publish GitHub release", 1)[1].split(
+            "      - name: Upload validation logs", 1
+        )[0]
+        self.assertIn(
+            'tag="${KERNEL_RELEASE_NAME}-${short_sha}-run${GITHUB_RUN_ID}-attempt${GITHUB_RUN_ATTEMPT}"',
+            release_step,
+        )
+        self.assertIn('release_title="${KERNEL_RELEASE_NAME} — build #${GITHUB_RUN_NUMBER}', release_step)
+        self.assertIn('git push origin "refs/tags/${tag}"', release_step)
+        self.assertIn('gh release create "$tag" --repo "$GITHUB_REPOSITORY"', release_step)
+        self.assertIn('--notes-file logs/release-notes.md --verify-tag --draft', release_step)
+        self.assertIn('gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "${assets[@]}"', release_step)
+        self.assertIn('gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false', release_step)
+        self.assertNotIn('gh release view "$tag"', release_step)
+        self.assertNotIn('--clobber', release_step)
+
     def test_main_dispatcher_uses_the_current_manual_input_contract(self) -> None:
         self.assertIn("gh workflow run validate-kernel.yml", DISPATCHER)
         self.assertIn("--field publish_release=true", DISPATCHER)
