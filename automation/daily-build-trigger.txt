@@ -1,5 +1,5 @@
 Daily full kernel build trigger.
 
-Last requested build: 2026-10-19T05:43:33-03:00
+Last requested build: 2026-10-30T06:37:29.686-03:00
 Source: scheduled-build recovery after no 00:17 dispatcher run appeared within the normal delay window
 Recovery contract: push to main triggers release-on-main.yml, which dispatches validate-kernel.yml with publish_release=true
