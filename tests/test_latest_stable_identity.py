@@ -56,6 +56,8 @@ class LatestUpstreamIdentityTest(unittest.TestCase):
                 resolver.urllib.request,
                 "urlopen",
                 return_value=FakeResponse(raw),
+            ), mock.patch.object(
+                resolver, "reconcile_mainline_tag", side_effect=lambda release: (release, [])
             ), mock.patch("sys.stdout", new=io.StringIO()):
                 resolver.main()
 
@@ -207,6 +209,41 @@ class LatestUpstreamIdentityTest(unittest.TestCase):
             }
         )
         self.assertEqual(selected["moniker"], "stable")
+
+    def test_github_rc_wins_when_kernel_org_lags(self) -> None:
+        baseline = {"version": "7.3.1", "moniker": "stable",
+                    "source": "https://kernel.org/linux-7.3.1.tar.xz"}
+        calls = []
+        def fake_github(url):
+            calls.append(url)
+            if "/matching-refs/tags/v7.4" in url:
+                return [{"ref": "refs/tags/v7.4-rc1",
+                         "object": {"type": "tag", "sha": "a" * 40}}]
+            if "/git/tags/" in url:
+                return {"tag": "v7.4-rc1", "object": {"type": "commit", "sha": "b" * 40},
+                        "tagger": {"date": "2026-11-01T21:26:31Z"}}
+            return []
+        with mock.patch.object(resolver, "_github_json", side_effect=fake_github):
+            chosen, refs = resolver.reconcile_mainline_tag(baseline)
+        self.assertEqual(chosen["version"], "7.4-rc1")
+        self.assertEqual(chosen["_github_commit"], "b" * 40)
+        self.assertEqual(chosen["_github_ref_sha"], "a" * 40)
+        self.assertEqual(chosen["moniker"], "mainline")
+        self.assertTrue(any(item["version"] == "7.4-rc1" for item in refs))
+        self.assertEqual(len(calls), 4)
+
+    def test_unverifiable_newer_tag_fails_closed(self) -> None:
+        def fake_github(url):
+            if "/matching-refs/tags/v7.4" in url:
+                return [{"ref": "refs/tags/v7.4-rc2",
+                         "object": {"type": "tag", "sha": "a" * 40}}]
+            if "/git/tags/" in url:
+                return {"tag": "v7.4-rc2",
+                        "object": {"type": "blob", "sha": "b" * 40}}
+            return []
+        with mock.patch.object(resolver, "_github_json", side_effect=fake_github):
+            with self.assertRaisesRegex(SystemExit, "unverifiable"):
+                resolver.reconcile_mainline_tag({"version": "7.3.1"})
 
 
 if __name__ == "__main__":

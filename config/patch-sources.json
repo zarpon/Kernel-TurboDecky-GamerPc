@@ -46,13 +46,16 @@
         "patches/stable/0001-linux{series}*-bore-*.patch",
         "patches/stable/linux-{series}-bore/0001-linux{series}*-bore-*.patch"
       ],
-      "fallback_globs": [],
+      "fallback_globs": [
+        "patches/stable/*bore-*.patch",
+        "patches/testing/*bore-*.patch"
+      ],
       "kind": "git_patch",
       "output": "01-bore.patch",
       "project_version_regex": "bore[-_]?([0-9]+(?:\\.[0-9]+)+(?:-rc[0-9]+|r[0-9]+)?)",
       "ref": "main",
       "repo": "https://github.com/firelzrd/bore-scheduler.git",
-      "require_exact_series": true,
+      "require_exact_series": false,
       "required_markers": [
         "kernel/sched/bore.c",
         "SCHED_BORE_VERSION",

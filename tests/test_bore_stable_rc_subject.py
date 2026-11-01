@@ -84,6 +84,23 @@ class BoreStableRcSubjectTests(unittest.TestCase):
             ):
                 finalizer.load_locked_bore(lock_path, "7.2")
 
+    def test_reviewed_futex_adapter_only_changes_one_preimage(self) -> None:
+        source = "Subject: [PATCH] test\n \t\tif (!timeout || timeout->task)\n"
+        adapted = finalizer._rewrite_linux74_futex_context(source)
+        self.assertIn("hrtimer_sleeper_task_get(timeout)", adapted)
+        self.assertNotIn("timeout->task", adapted)
+        with self.assertRaisesRegex(finalizer.FinalizeError, "preimage differs"):
+            finalizer._rewrite_linux74_futex_context(adapted)
+
+    def test_cross_series_bore_requires_exact_reviewed_sha(self) -> None:
+        record = {"selection": "fallback", "kernel_target": "7.3-rc2",
+                  "project_version": "7.0.0", "sha256": "0" * 64,
+                  "selected_path": "patches/stable/0001-linux7.3-rc2-bore-7.0.0.patch"}
+        self.assertFalse(finalizer._reviewed_linux74_bore(record, "7.4-rc1"))
+        record["sha256"] = finalizer.LINUX_74_BORE_BASE_SHA256
+        self.assertTrue(finalizer._reviewed_linux74_bore(record, "7.4-rc1"))
+        self.assertFalse(finalizer._reviewed_linux74_bore(record, "7.4-rc2"))
+
 
 if __name__ == "__main__":
     unittest.main()

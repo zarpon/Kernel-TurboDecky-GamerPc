@@ -26,6 +26,7 @@ class UpstreamKernelRepositoryTests(unittest.TestCase):
             )
             text = generated.read_text(encoding="utf-8")
             self.assertIn("Cloned kernel version mismatch:", text)
+            self.assertIn("GitHub mainline commit mismatch:", text)
             self.assertIn('actual_kernel_version="$(make -s -C "$KERNELDIR" kernelversion)"', text)
             policy = 'KERNEL_REPO=' + text.split('KERNEL_REPO=', 1)[1].split('\nADIOS_URL=', 1)[0]
             subprocess.run(["bash", "-n"], input=policy, text=True, check=True)

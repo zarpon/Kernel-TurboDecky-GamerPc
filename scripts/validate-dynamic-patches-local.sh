@@ -24,6 +24,7 @@ python3 -m json.tool "$ROOT/config/patch-sources.json" >/dev/null
 python3 -m py_compile "$ROOT/scripts/port-lru-cast-latest.py"
 python3 -m unittest -v \
   "$ROOT/tests/test_latest_stable_identity.py" \
+  "$ROOT/tests/test_upstream_kernel_repository.py" \
   "$ROOT/tests/test_virtualbox_host_compat.py" \
   "$ROOT/tests/test_external_module_toolchain.py" \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
@@ -33,6 +34,7 @@ python3 -m unittest -v \
   "$ROOT/tests/test_cast_policy.py" \
   "$ROOT/tests/test_bore_port.py" \
   "$ROOT/tests/test_bore_stable_port.py" \
+  "$ROOT/tests/test_bore_stable_rc_subject.py" \
   "$ROOT/tests/test_bore_stable_finalizer.py" \
   "$ROOT/tests/test_validation_modules.py" \
   "$ROOT/tests/test_cpu_optimizations_72_port.py" \

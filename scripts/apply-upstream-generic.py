@@ -69,6 +69,13 @@ if [[ "$actual_kernel_version" != "$expected_kernel_version" ]]; then
   echo "Cloned kernel version mismatch: $actual_kernel_version != $KERNEL_VERSION (canonical expected $expected_kernel_version)" >&2
   exit 1
 fi
+if [[ -n "${KERNEL_UPSTREAM_COMMIT:-}" ]]; then
+  actual_commit="$(git -C "$KERNELDIR" rev-parse HEAD)"
+  if [[ "$actual_commit" != "$KERNEL_UPSTREAM_COMMIT" ]]; then
+    echo "GitHub mainline commit mismatch: $actual_commit != $KERNEL_UPSTREAM_COMMIT" >&2
+    exit 1
+  fi
+fi
 {
   echo "Policy: kernel.org newest upstream release including RCs"
   echo "Resolved version: $KERNEL_VERSION"

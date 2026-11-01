@@ -57,6 +57,31 @@ def _bore_subject_match(text: str, source_target: str, version: str) -> re.Match
     return matches[0]
 
 
+# Reviewed one-off bridge: BORE 7.0.0 native 7.3-rc2 -> Linux 7.4-rc1 only.
+# Any other kernel release, upstream byte change or unknown patch must fail closed.
+LINUX_74_BORE_BASE_SHA256 = "0de0f56c2e3db14b4bb2797aa0362a623d4b7e39643add1da65f91a1cedcdcfd"
+
+
+def _reviewed_linux74_bore(record, kernel_version: str) -> bool:
+    return (
+        kernel_version == "7.4-rc1"
+        and record.get("selection") == "fallback"
+        and record.get("kernel_target") == "7.3-rc2"
+        and record.get("project_version") == "7.0.0"
+        and record.get("sha256") == LINUX_74_BORE_BASE_SHA256
+        and record.get("selected_path") == "patches/stable/0001-linux7.3-rc2-bore-7.0.0.patch"
+    )
+
+
+def _rewrite_linux74_futex_context(source: str) -> str:
+    # Kernel 7.4 changed this hunk's preimage; preserve all BORE additions.
+    old = "\t\tif (!timeout || timeout->task)"
+    new = "\t\tif (!timeout || hrtimer_sleeper_task_get(timeout))"
+    if source.count(old) != 1 or new in source:
+        raise _base.FinalizeError("Linux 7.4 futex preimage differs from reviewed BORE adapter")
+    return source.replace(old, new, 1)
+
+
 def load_locked_bore(lock_path: Path, kernel_version: str):
     lock, record = _base.load_lock_record(lock_path, "bore")
     if record.get("kind") != "git_patch":
@@ -66,14 +91,15 @@ def load_locked_bore(lock_path: Path, kernel_version: str):
         raise _base.FinalizeError(
             f"BORE lock kernel mismatch: {locked_kernel!r} != {kernel_version!r}"
         )
-    if record.get("selection") != "exact":
+    reviewed_74 = _reviewed_linux74_bore(record, kernel_version)
+    if record.get("selection") != "exact" and not reviewed_74:
         raise _base.FinalizeError(
             "the latest upstream kernel has no exact BORE source; refuse to reuse an older reviewed port"
         )
     source_target = str(record.get("kernel_target", ""))
     source_version = _base.version_tuple(source_target, "locked BORE kernel target")
     target_version = _base.version_tuple(kernel_version, "Linux version for BORE")
-    if source_version[:2] != target_version[:2] or target_version < source_version:
+    if (source_version[:2] != target_version[:2] or target_version < source_version) and not reviewed_74:
         raise _base.FinalizeError(
             f"BORE target mismatch: {source_target!r} is not a compatible same-series source for {kernel_version!r}"
         )
@@ -102,9 +128,10 @@ def materialize_bore_patchlevel_port(lock_path, record, upstream_patch, kernel_v
     source_target = str(record.get("kernel_target", ""))
     source_version = _base.version_tuple(source_target, "locked BORE kernel target")
     target_version = _base.version_tuple(kernel_version, "Linux version for BORE")
+    reviewed_74 = _reviewed_linux74_bore(record, kernel_version)
     if source_target == kernel_version:
         return None
-    if source_version[:2] != target_version[:2] or target_version < source_version:
+    if (source_version[:2] != target_version[:2] or target_version < source_version) and not reviewed_74:
         raise _base.FinalizeError(
             f"BORE target mismatch: {source_target!r} is not a compatible same-series source for {kernel_version!r}"
         )
@@ -119,13 +146,22 @@ def materialize_bore_patchlevel_port(lock_path, record, upstream_patch, kernel_v
     source_subject = subject_match.group(0)
     target_subject = f"Subject: [PATCH] linux{kernel_version}-bore-{project_version}"
     port = source_text[: subject_match.start()] + target_subject + source_text[subject_match.end() :]
-    if port.replace(target_subject, source_subject, 1) != source_text:
+    if reviewed_74:
+        port = _rewrite_linux74_futex_context(port)
+    restored = port.replace(target_subject, source_subject, 1)
+    if reviewed_74:
+        restored = restored.replace(
+            "\t\tif (!timeout || hrtimer_sleeper_task_get(timeout))",
+            "\t\tif (!timeout || timeout->task)", 1
+        )
+    if restored != source_text:
         raise _base.FinalizeError("generated BORE patch-level port changed content outside its subject")
     output = f"files/01-bore-linux{kernel_version}-patchlevel-port.patch"
     data = port.encode("utf-8")
     _base.write_port(lock_path, output, data)
     port_record = {
-        "adapter": "same-series-bore-patchlevel-metadata",
+        "adapter": ("linux7.4-rc1-bore7.0.0-futex-context"
+                    if reviewed_74 else "same-series-bore-patchlevel-metadata"),
         "kernel_target": kernel_version,
         "source_kernel_target": source_target,
         "output": output,
@@ -152,7 +188,9 @@ _semantic_sched_ext_target = False
 
 def _is_linux_73_target(kernel_version: str) -> bool:
     match = _RC_VERSION_RE.fullmatch(kernel_version)
-    return bool(match and match.group(1) == "7" and match.group(2) == "3")
+    return bool(match and match.group(1) == "7" and (
+        match.group(2) == "3" or kernel_version == "7.4-rc1"
+    ))
 
 
 def _replace_port_function_semantic(template: str, upstream: str) -> str:
