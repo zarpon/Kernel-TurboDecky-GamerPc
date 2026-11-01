@@ -64,7 +64,13 @@ class BoreLinuxPortTests(unittest.TestCase):
         bore = manifest["bore"]
         self.assertEqual(bore["repo"], "https://github.com/firelzrd/bore-scheduler.git")
         self.assertEqual(bore["ref"], "main")
-        self.assertTrue(bore["require_exact_series"])
+        self.assertFalse(bore["require_exact_series"])
+        self.assertEqual(bore["fallback_globs"], [
+            "patches/stable/*bore-*.patch", "patches/testing/*bore-*.patch"
+        ])
+        finalizer = FINALIZER.read_text(encoding="utf-8")
+        self.assertIn("LINUX_74_BORE_BASE_SHA256", finalizer)
+        self.assertIn("_reviewed_linux74_bore", finalizer)
         self.assertEqual(bore["output"], "01-bore.patch")
         self.assertEqual(
             bore["exact_globs"],
