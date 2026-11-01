@@ -34,7 +34,13 @@ def main() -> None:
     source = replace_once(
         source,
         'KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"\n',
-        'KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"\n',
+        '''KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git"
+# Maintenance point releases live in stable/linux.git, not torvalds/linux.git.
+# Keep the exact resolved tag and fail closed rather than downgrading.
+if [[ "$KERNEL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  KERNEL_REPO="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+fi
+''',
         "upstream repository",
     )
     source = replace_once(
