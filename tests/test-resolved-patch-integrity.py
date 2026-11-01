@@ -105,4 +105,30 @@ with tempfile.TemporaryDirectory() as tmp:
     else:
         raise AssertionError("escaping output path was accepted")
 
+    # Positive, narrowly pinned fallback contract: no generic cross-series bypass.
+    source_record = lock["components"].pop("test")
+    lock["components"]["bore"] = source_record
+    source_record["output"] = "files/01-test.patch"
+    source_record["selection"] = "fallback"
+    source_record["kernel_target"] = "7.3-rc2"
+    source_record["project_version"] = "7.0.0"
+    source_record["selected_path"] = "patches/stable/0001-linux7.3-rc2-bore-7.0.0.patch"
+    lock["kernel"]["version"] = "7.4-rc1"
+    source_record["compatibility_port"]["adapter"] = "linux7.4-rc1-bore7.0.0-futex-context"
+    source_record["compatibility_port"]["kernel_target"] = "7.4-rc1"
+    source_record["compatibility_port"]["source_kernel_target"] = "7.3-rc2"
+    module.REVIEWED_BORE_74_SOURCE_SHA = hashlib.sha256(data).hexdigest()
+    lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    assert module.validate_lock(lock_path) == 2
+
+    source_record["compatibility_port"]["adapter"] = "unreviewed-cross-series"
+    lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    try:
+        module.validate_lock(lock_path)
+    except module.IntegrityError:
+        pass
+    else:
+        raise AssertionError("unreviewed cross-series adapter was accepted")
+
+
 print("Resolved patch integrity regression tests passed")

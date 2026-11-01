@@ -58,6 +58,27 @@ def validate_materialized_output(root: Path, name: str, record: dict[str, Any]) 
         raise IntegrityError(f"{name}: materialized size {len(data)} != lock {size}")
 
 
+# Explicitly reviewed BORE 7.4-rc1 source; all other fallback ports remain forbidden.
+REVIEWED_BORE_74_SOURCE_SHA = "0de0f56c2e3db14b4bb2797aa0362a623d4b7e39643add1da65f91a1cedcdcfd"
+
+
+def reviewed_bore74_fallback(name: str, record: dict[str, Any],
+                             port: dict[str, Any], lock: dict[str, Any]) -> bool:
+    return (
+        name == "bore"
+        and lock.get("kernel", {}).get("version") == "7.4-rc1"
+        and record.get("selection") == "fallback"
+        and record.get("kernel_target") == "7.3-rc2"
+        and record.get("project_version") == "7.0.0"
+        and record.get("selected_path") == "patches/stable/0001-linux7.3-rc2-bore-7.0.0.patch"
+        and record.get("sha256") == REVIEWED_BORE_74_SOURCE_SHA
+        and port.get("adapter") == "linux7.4-rc1-bore7.0.0-futex-context"
+        and port.get("kernel_target") == "7.4-rc1"
+        and port.get("source_kernel_target") == "7.3-rc2"
+        and port.get("source_sha256") == REVIEWED_BORE_74_SOURCE_SHA
+    )
+
+
 def validate_lock(lock_path: Path) -> int:
     lock = load_lock(lock_path)
     root = lock_path.parent
@@ -86,7 +107,7 @@ def validate_lock(lock_path: Path) -> int:
             continue
         if kind != "git_patch" or not isinstance(compatibility_port, dict):
             raise IntegrityError(f"{name}: invalid compatibility port record")
-        if raw.get("selection") != "exact":
+        if raw.get("selection") != "exact" and not reviewed_bore74_fallback(name, raw, compatibility_port, lock):
             raise IntegrityError(
                 f"{name}: compatibility port requires an exact upstream selection"
             )
