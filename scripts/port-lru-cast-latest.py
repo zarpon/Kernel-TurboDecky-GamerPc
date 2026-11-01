@@ -36,7 +36,7 @@ def replace_exactly_once(text: str, old: str, new: str, label: str) -> str:
 
 def port_linux74_rc1(source: bytes, tree: Path, patch: str) -> str:
     if hashlib.sha256(source).hexdigest() != CAST_74_BASE_SHA256:
-        raise RuntimeError("CAST 7.4-rc1 upstream SHA differs from reviewed v0.2.9")
+        raise RuntimeError("latest CAST requires a reviewed kernel API port: CAST 7.4-rc1 upstream SHA differs from reviewed v0.2.9")
     commit = subprocess.run(
         ["git", "-C", str(tree), "rev-parse", "HEAD"],
         check=True, capture_output=True, text=True,
