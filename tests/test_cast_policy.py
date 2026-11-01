@@ -99,5 +99,44 @@ class CastPolicyTests(unittest.TestCase):
             self.assertEqual(subprocess.run(['git', '-C', str(tree), 'apply', '--recount', '--check', str(output)], capture_output=True).returncode, 0)
 
 
+    def test_linux74_port_is_immutable_and_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            (tree / "mm").mkdir()
+            files = {
+                "mm/migrate.c": "folio_migrate_lru_refs(newfolio, folio);\n",
+                "mm/swap.h": "void __swap_writeout(struct swap_io_ctx *ctx, struct folio *folio);\n",
+                "mm/page_io.c": (
+                    "void __swap_writeout(struct swap_io_ctx *ctx, struct folio *folio)\n"
+                    "bio_associate_blkg_from_folio(bio, bio_first_folio_all(bio));\n"
+                    "folio_test_dropbehind(bvec_folio(&sio->bvecs[p]))\n"
+                ),
+                "mm/huge_memory.c": "new_folio->swap.val = folio->swap.val + i;\n",
+            }
+            for name, body in files.items():
+                (tree / name).write_text(body)
+            upstream = b"locked 7.3 CAST sample"
+            with self.assertRaisesRegex(RuntimeError, "upstream SHA differs"):
+                port.port_linux74_rc1(upstream, tree, "inert")
+            with mock.patch.object(port, "CAST_74_BASE_SHA256", port.hashlib.sha256(upstream).hexdigest()):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    # A real Git commit is mandatory; the fixture lacks a .git directory.
+                    port.port_linux74_rc1(upstream, tree, "inert")
+
+    def test_linux74_adapter_preserves_exact_context_and_rejects_drift(self):
+        source = (ROOT / "scripts/port-lru-cast-latest.py").read_text(encoding="utf-8")
+        self.assertIn('KERNEL_VERSION") == "7.4-rc1"', source)
+        self.assertIn('LINUX_74_RC1_COMMIT', source)
+        self.assertIn('CAST_74_BASE_SHA256', source)
+        self.assertIn("apply\", \"--recount\", \"--check\"", source)
+        self.assertIn('bio_set_flag(bio, BIO_COMPLETE_IN_TASK)', source)
+        self.assertIn('__cast_swap_writeout', source)
+        self.assertIn('folio_migrate_lru_refs(newfolio, folio)', source)
+        with self.assertRaisesRegex(RuntimeError, "reviewed preimage"):
+            port.replace_exactly_once("unrelated", "not here", "new", "test")
+
+
+
+
 if __name__ == '__main__':
     unittest.main()
