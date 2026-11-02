@@ -173,7 +173,11 @@ def prepare(source: Path, output: Path, tree: Path) -> str:
     else:
         detail = direct.stderr
     if os.environ.get("KERNEL_VERSION") == "7.4-rc1":
-        prepared = port_linux74_rc1(data, tree, output.read_text(encoding="utf-8"))
+        try:
+            prepared = port_linux74_rc1(data, tree, output.read_text(encoding="utf-8"))
+        except (RuntimeError, subprocess.CalledProcessError):
+            output.unlink(missing_ok=True)
+            raise
         output.write_text(prepared, encoding="utf-8", newline="\n")
         reviewed = subprocess.run(
             ["git", "-C", str(tree), "apply", "--recount", "--check", str(output.resolve())],
