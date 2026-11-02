@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
+"""Regression coverage for stable-only Linux source identity selection."""
 from __future__ import annotations
-
 import importlib.util
 import io
 import json
@@ -13,237 +13,110 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts/resolve-latest-stable.py"
-SPEC = importlib.util.spec_from_file_location("resolve_latest_upstream", MODULE_PATH)
+SPEC = importlib.util.spec_from_file_location("resolve_latest_stable", MODULE_PATH)
 assert SPEC and SPEC.loader
 resolver = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(resolver)
 
 
 class FakeResponse:
-    def __init__(self, payload: bytes) -> None:
+    def __init__(self, payload: bytes):
         self.payload = payload
-
-    def __enter__(self) -> "FakeResponse":
+    def __enter__(self):
         return self
-
-    def __exit__(self, *args: object) -> None:
+    def __exit__(self, *args):
         return None
-
-    def read(self) -> bytes:
+    def read(self):
         return self.payload
 
 
-class LatestUpstreamIdentityTest(unittest.TestCase):
-    def run_payload(
-        self, payload: dict
-    ) -> tuple[dict[str, str], dict[str, str]]:
-        raw = json.dumps(payload).encode()
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            env_file = root / "github-env"
-            output_file = root / "github-output"
-            log_dir = root / "logs"
-            argv = [
-                str(MODULE_PATH),
-                "--github-env",
-                str(env_file),
-                "--github-output",
-                str(output_file),
-                "--log-dir",
-                str(log_dir),
-            ]
-            with mock.patch.object(sys, "argv", argv), mock.patch.object(
-                resolver.urllib.request,
-                "urlopen",
-                return_value=FakeResponse(raw),
-            ), mock.patch.object(
-                resolver, "reconcile_mainline_tag", side_effect=lambda release: (release, [])
-            ), mock.patch("sys.stdout", new=io.StringIO()):
-                resolver.main()
+def release(version: str, moniker: str = "stable", *, eol: bool = False,
+            source: bool = True) -> dict:
+    return {"version": version, "moniker": moniker, "iseol": eol,
+            "source": f"https://example.invalid/linux-{version}.tar.xz" if source else "",
+            "gitweb": f"https://example.invalid/v{version}",
+            "released": {"isodate": "2026-10-31"}}
 
-            env = dict(
-                line.split("=", 1)
-                for line in env_file.read_text(encoding="utf-8").splitlines()
-            )
-            outputs = dict(
-                line.split("=", 1)
-                for line in output_file.read_text(encoding="utf-8").splitlines()
-            )
+
+class LatestStableIdentityTest(unittest.TestCase):
+    def run_payload(self, payload: dict) -> tuple[dict[str, str], dict[str, str]]:
+        raw = json.dumps(payload).encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env_file, output_file, log_dir = root / "env", root / "output", root / "logs"
+            argv = [str(MODULE_PATH), "--github-env", str(env_file),
+                    "--github-output", str(output_file), "--log-dir", str(log_dir)]
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(
+                resolver.urllib.request, "urlopen", return_value=FakeResponse(raw)
+            ) as urlopen, mock.patch("sys.stdout", new=io.StringIO()):
+                resolver.main()
+                urlopen.assert_called_once()
+            env = dict(line.split("=", 1) for line in env_file.read_text().splitlines())
+            outputs = dict(line.split("=", 1) for line in output_file.read_text().splitlines())
             self.assertTrue((log_dir / "latest-upstream-kernel.txt").is_file())
+            policy = json.loads((log_dir / "torvalds-linux-tag-reconciliation.json").read_text())
+            self.assertEqual(policy["policy"], "stable-only")
+            self.assertEqual(policy["refs"], [])
+            self.assertEqual(policy["selected"], env["KERNEL_VERSION"])
         return env, outputs
 
-    def run_resolver(
-        self, version: str, moniker: str
-    ) -> tuple[dict[str, str], dict[str, str]]:
-        return self.run_payload(
-            {
-                "latest_stable": {"version": version},
-                "releases": [
-                    {
-                        "moniker": moniker,
-                        "version": version,
-                        "iseol": False,
-                        "source": f"https://example.invalid/linux-{version}.tar.xz",
-                        "gitweb": f"https://example.invalid/v{version}",
-                        "released": {"isodate": "2026-08-16"},
-                    }
-                ],
-            }
-        )
-
-    def assert_identity(self, version: str, moniker: str) -> None:
-        env, outputs = self.run_resolver(version, moniker)
-        expected_release = f"{version}.turbodecky"
-        expected_publish = f"linux.{expected_release}"
-        expected_series = ".".join(version.split("-")[0].split(".")[:2])
+    def assert_identity(self, version: str) -> None:
+        env, outputs = self.run_payload({"releases": [release(version)]})
+        kernel_release = f"{version}.turbodecky"
+        publish_name = f"linux.{kernel_release}"
         self.assertEqual(env["KERNEL_VERSION"], version)
-        self.assertEqual(env["KERNEL_SERIES"], expected_series)
+        self.assertEqual(env["KERNEL_SERIES"], ".".join(version.split(".")[:2]))
         self.assertEqual(env["KERNEL_TAG"], f"v{version}")
-        self.assertEqual(env["KERNEL_RELEASE_NAME"], expected_release)
-        self.assertEqual(env["KERNEL_PUBLISH_NAME"], expected_publish)
-        self.assertEqual(env["KERNEL_ARTIFACT_NAME"], f"{expected_publish}-debs")
-        self.assertEqual(outputs["kernel_release"], expected_release)
-        self.assertEqual(outputs["series"], expected_series)
+        self.assertEqual(env["KERNEL_RELEASE_NAME"], kernel_release)
+        self.assertEqual(env["KERNEL_PUBLISH_NAME"], publish_name)
+        self.assertEqual(env["KERNEL_ARTIFACT_NAME"], f"{publish_name}-debs")
+        self.assertEqual(outputs["kernel_release"], kernel_release)
+        self.assertEqual(outputs["series"], env["KERNEL_SERIES"])
+        self.assertEqual(env["KERNEL_UPSTREAM_COMMIT"], "")
+        self.assertEqual(env["KERNEL_UPSTREAM_TAG_SHA"], "")
         self.assertNotIn(".release", "\n".join([*env.values(), *outputs.values()]))
-        subprocess.run(
-            ["dpkg", "--validate-version", env["KERNEL_RELEASE_NAME"]],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        subprocess.run(["dpkg", "--validate-version", kernel_release],
+                       check=True, capture_output=True, text=True)
 
-    def test_patchlevel_stable_release(self) -> None:
-        self.assert_identity("7.2.6", "stable")
+    def test_patchlevel_stable(self):
+        self.assert_identity("7.2.6")
+    def test_two_component_final_stable(self):
+        self.assert_identity("7.3")
+    def test_future_patchlevel_stable(self):
+        self.assert_identity("8.0.1")
 
-    def test_two_component_final_mainline_release(self) -> None:
-        self.assert_identity("7.3", "mainline")
-
-    def test_release_candidate_identity(self) -> None:
-        self.assert_identity("7.3-rc3", "mainline")
-
-    def test_future_patchlevel_release(self) -> None:
-        self.assert_identity("8.0.1", "stable")
-
-    def test_newer_release_candidate_beats_older_stable_series(self) -> None:
-        payload = {
-            "latest_stable": {"version": "7.2.6"},
-            "releases": [
-                {
-                    "moniker": "stable",
-                    "version": "7.2.6",
-                    "iseol": False,
-                    "source": "https://example.invalid/linux-7.2.6.tar.xz",
-                },
-                {
-                    "moniker": "mainline",
-                    "version": "7.3-rc3",
-                    "iseol": False,
-                    "source": "https://example.invalid/linux-7.3-rc3.tar.xz",
-                },
-            ],
-        }
-        env, _ = self.run_payload(payload)
-        self.assertEqual(env["KERNEL_VERSION"], "7.3-rc3")
-        self.assertEqual(env["KERNEL_SERIES"], "7.3")
-
-    def test_newer_rc_number_wins_within_same_series(self) -> None:
-        selected = resolver.select_latest_release(
-            {
-                "releases": [
-                    {
-                        "moniker": "mainline",
-                        "version": "7.3-rc2",
-                        "iseol": False,
-                        "source": "https://example.invalid/rc2.tar.xz",
-                    },
-                    {
-                        "moniker": "mainline",
-                        "version": "7.3-rc3",
-                        "iseol": False,
-                        "source": "https://example.invalid/rc3.tar.xz",
-                    },
-                ]
-            }
-        )
-        self.assertEqual(selected["version"], "7.3-rc3")
-
-    def test_final_release_beats_rc_of_same_series(self) -> None:
-        selected = resolver.select_latest_release(
-            {
-                "releases": [
-                    {
-                        "moniker": "mainline",
-                        "version": "8.1-rc7",
-                        "iseol": False,
-                        "source": "https://example.invalid/rc.tar.xz",
-                    },
-                    {
-                        "moniker": "mainline",
-                        "version": "8.1",
-                        "iseol": False,
-                        "source": "https://example.invalid/final.tar.xz",
-                    },
-                ]
-            }
-        )
-        self.assertEqual(selected["version"], "8.1")
-
-    def test_stable_record_wins_equal_version_transition(self) -> None:
-        selected = resolver.select_latest_release(
-            {
-                "releases": [
-                    {
-                        "moniker": "mainline",
-                        "version": "8.1",
-                        "iseol": False,
-                        "source": "https://example.invalid/mainline.tar.xz",
-                    },
-                    {
-                        "moniker": "stable",
-                        "version": "8.1",
-                        "iseol": False,
-                        "source": "https://example.invalid/stable.tar.xz",
-                    },
-                ]
-            }
-        )
-        self.assertEqual(selected["moniker"], "stable")
-
-    def test_github_rc_wins_when_kernel_org_lags(self) -> None:
-        baseline = {"version": "7.3.1", "moniker": "stable",
-                    "source": "https://kernel.org/linux-7.3.1.tar.xz"}
-        calls = []
-        def fake_github(url):
-            calls.append(url)
-            if "/matching-refs/tags/v7.4" in url:
-                return [{"ref": "refs/tags/v7.4-rc1",
-                         "object": {"type": "tag", "sha": "a" * 40}}]
-            if "/git/tags/" in url:
-                return {"tag": "v7.4-rc1", "object": {"type": "commit", "sha": "b" * 40},
-                        "tagger": {"date": "2026-11-01T21:26:31Z"}}
-            return []
-        with mock.patch.object(resolver, "_github_json", side_effect=fake_github):
-            chosen, refs = resolver.reconcile_mainline_tag(baseline)
-        self.assertEqual(chosen["version"], "7.4-rc1")
-        self.assertEqual(chosen["_github_commit"], "b" * 40)
-        self.assertEqual(chosen["_github_ref_sha"], "a" * 40)
-        self.assertEqual(chosen["moniker"], "mainline")
-        self.assertTrue(any(item["version"] == "7.4-rc1" for item in refs))
-        self.assertEqual(len(calls), 4)
-
-    def test_unverifiable_newer_tag_fails_closed(self) -> None:
-        def fake_github(url):
-            if "/matching-refs/tags/v7.4" in url:
-                return [{"ref": "refs/tags/v7.4-rc2",
-                         "object": {"type": "tag", "sha": "a" * 40}}]
-            if "/git/tags/" in url:
-                return {"tag": "v7.4-rc2",
-                        "object": {"type": "blob", "sha": "b" * 40}}
-            return []
-        with mock.patch.object(resolver, "_github_json", side_effect=fake_github):
-            with self.assertRaisesRegex(SystemExit, "unverifiable"):
-                resolver.reconcile_mainline_tag({"version": "7.3.1"})
+    def test_rc_never_overrides_stable(self):
+        env, _ = self.run_payload({"releases": [release("7.3.1"),
+                                     release("7.4-rc1", "mainline")]})
+        self.assertEqual(env["KERNEL_VERSION"], "7.3.1")
+    def test_mainline_final_never_overrides_stable_channel(self):
+        env, _ = self.run_payload({"releases": [release("7.2.7"),
+                                     release("7.3", "mainline")]})
+        self.assertEqual(env["KERNEL_VERSION"], "7.2.7")
+    def test_rc_only_fails_closed(self):
+        with self.assertRaisesRegex(SystemExit, "stable final release"):
+            resolver.select_latest_release({"releases": [release("7.4-rc1", "mainline")]})
+    def test_rc_mislabeled_as_stable_is_rejected(self):
+        with self.assertRaisesRegex(SystemExit, "stable final release"):
+            resolver.select_latest_release({"releases": [release("7.3.1-rc2", "stable")]})
+    def test_no_source_or_eol_fails_closed(self):
+        with self.assertRaisesRegex(SystemExit, "stable final release"):
+            resolver.select_latest_release({"releases": [release("7.3.1", source=False),
+                                                        release("7.3.2", eol=True)]})
+    def test_stable_patchlevel_and_series_ordering(self):
+        chosen = resolver.select_latest_release({"releases": [
+            release(v) for v in ["7.2.19", "7.3.1", "7.2.21", "7.3.3", "7.3.2"]]})
+        self.assertEqual(chosen["version"], "7.3.3")
+    def test_stable_record_wins_equal_version_transition(self):
+        chosen = resolver.select_latest_release({"releases": [
+            release("7.3", "mainline"), release("7.3", "stable")]})
+        self.assertEqual(chosen["moniker"], "stable")
+    def test_mixed_invalid_release_records(self):
+        chosen = resolver.select_latest_release({"releases": [
+            release("7.3.1"), release("7.4-rc3", "mainline"),
+            release("8.0", "mainline"), release("8.1.2", "stable", eol=True),
+            release("8.2.1", "stable", source=False)]})
+        self.assertEqual(chosen["version"], "7.3.1")
 
 
 if __name__ == "__main__":

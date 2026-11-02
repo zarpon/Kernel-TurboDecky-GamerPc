@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure the generated build for the newest kernel.org Linux release, including RCs."""
+"""Configure generated builds for kernel.org final stable releases only."""
 
 from __future__ import annotations
 
@@ -28,6 +28,10 @@ def main() -> None:
 : "${KERNEL_SERIES:?latest upstream series was not resolved}"
 : "${KERNEL_TAG:?latest upstream tag was not resolved}"
 : "${KERNEL_DEB_VERSION:?Debian package version was not resolved}"
+if [[ ! "$KERNEL_VERSION" =~ ^[0-9]+[.][0-9]+([.][0-9]+)?$ ]]; then
+  echo "Refusing non-final Linux version: $KERNEL_VERSION" >&2
+  exit 1
+fi
 ''',
         "dynamic upstream tag",
     )
@@ -77,7 +81,7 @@ if [[ -n "${KERNEL_UPSTREAM_COMMIT:-}" ]]; then
   fi
 fi
 {
-  echo "Policy: kernel.org newest upstream release including RCs"
+  echo "Policy: kernel.org stable final release only; RCs forbidden"
   echo "Resolved version: $KERNEL_VERSION"
   echo "Resolved series: $KERNEL_SERIES"
   echo "Source tag: $KERNEL_TAG"

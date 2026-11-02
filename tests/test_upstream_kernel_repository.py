@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the kernel.org mainline/stable repository policy in generated builds."""
+"""Check final-only upstream kernel source repository policy."""
 
 import os
 from pathlib import Path
@@ -25,6 +25,7 @@ class UpstreamKernelRepositoryTests(unittest.TestCase):
                 cwd=ROOT,
             )
             text = generated.read_text(encoding="utf-8")
+            self.assertIn("Refusing non-final Linux version:", text)
             self.assertIn("Cloned kernel version mismatch:", text)
             self.assertIn("GitHub mainline commit mismatch:", text)
             self.assertIn('actual_kernel_version="$(make -s -C "$KERNELDIR" kernelversion)"', text)
@@ -32,8 +33,6 @@ class UpstreamKernelRepositoryTests(unittest.TestCase):
             subprocess.run(["bash", "-n"], input=policy, text=True, check=True)
             for version, owner in (
                 ("7.3", "torvalds"),
-                ("7.4-rc1", "torvalds"),
-                ("7.4-rc12", "torvalds"),
                 ("7.3.1", "stable"),
                 ("7.3.10", "stable"),
             ):
