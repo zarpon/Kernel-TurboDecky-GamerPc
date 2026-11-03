@@ -182,14 +182,14 @@ class MigrationTests(unittest.TestCase):
         self.assertFalse(any(c == ("swapoff", old_user) for c in self.m.calls))
         self.assertFalse(any(c == ("swapoff", old_root) for c in self.m.calls))
 
-    def test_obsolete_managed_150_percent_swapfile_is_replaced_and_deleted(self):
+    def test_obsolete_managed_75_percent_swapfile_is_replaced_and_deleted(self):
         old = "/home/.gaming-swap/swapfile"
-        self.m.make_swap(old, 8192 * 1024 * 3 // 2)
+        self.m.make_swap(old, 8192 * 1024 * 3 // 4)
         self.install()
         new = next(n for n, kind in self.m.swaps.items()
                    if kind == "file" and n.startswith("/home/.gaming-swap/"))
         self.assertNotEqual(new, old)
-        self.assertEqual(self.m.path(new).stat().st_size, 8192 * 1024 * 3 // 4)
+        self.assertEqual(self.m.path(new).stat().st_size, 8192 * 1024 * 3 // 2)
         self.assertFalse(self.m.path(old).exists())
 
     def test_failed_physical_deletion_is_fatal(self):
@@ -251,7 +251,7 @@ class MigrationTests(unittest.TestCase):
     def test_replacement_active_before_drain_and_persistent_after_boot(self):
         self.install()
         target = "/home/.gaming-swap/swapfile"
-        self.assertEqual(self.m.path(target).stat().st_size, 8192 * 1024 * 3 // 4)
+        self.assertEqual(self.m.path(target).stat().st_size, 8192 * 1024 * 3 // 2)
         self.assertEqual(self.m.path(target).stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.m.path("/home/.gaming-swap").stat().st_mode & 0o777, 0o700)
         calls = self.m.calls
@@ -350,6 +350,8 @@ class MigrationTests(unittest.TestCase):
         name = next(n for n, k in self.m.swaps.items() if k == "file")
         self.assertTrue(name.startswith("/home/.gaming-swap/swapfile-"))
         self.assertEqual(self.m.path(name).stat().st_size % 4096, 0)
+        self.assertEqual(self.m.path(name).stat().st_size,
+                         ((12289 * 1024 * 3 + 2 * 4096 - 1) // (2 * 4096)) * 4096)
         self.assertFalse(self.m.path("/home/.gaming-swap/swapfile").exists())
 
     def test_swapon_failure_preserves_original_swap_and_settings(self):
