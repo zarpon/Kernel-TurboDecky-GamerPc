@@ -215,9 +215,16 @@ TURBODECKY_ARTIFACTS="$sandbox/artifacts" \
   TURBODECKY_TUNING_PKGROOT="$sandbox/pkgroot" \
   NAP_TOOLS_TEST_OFFLINE=1 \
   "$root/scripts/build-tuning-package.sh"
-deb="$sandbox/artifacts/turbodecky-tuning_1.5.1_all.deb"
+# Read the version actually built; a tuning version bump must not break
+# package validation or silently downgrade the required 150% RAM policy.
+tuning_version="$(sed -n 's/^TUNING_VERSION="\([^"]*\)"$/\1/p' "$root/scripts/build-tuning-package.sh")"
+[[ "$tuning_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+  || fail "invalid tuning package version in build-tuning-package.sh"
+dpkg --compare-versions "$tuning_version" ge 1.5.2 \
+  || fail "tuning package version must be at least 1.5.2"
+deb="$sandbox/artifacts/turbodecky-tuning_${tuning_version}_all.deb"
 [[ -s "$deb" ]] || fail "tuning package was not built"
-[[ "$(dpkg-deb -f "$deb" Version)" == "1.5.1" ]] || fail "unexpected tuning package version"
+[[ "$(dpkg-deb -f "$deb" Version)" == "$tuning_version" ]] || fail "unexpected tuning package version"
 
 for payload in \
   './usr/bin/napctl' \
@@ -247,6 +254,8 @@ grep -Fq 'systemd-tmpfiles --create /usr/lib/tmpfiles.d/99-turbodecky-thp.conf' 
 
 package_root="$sandbox/package-root"
 dpkg-deb -x "$deb" "$package_root"
+cmp -s "$root/packaging/configure-gaming-swap" "$package_root/usr/lib/gaming-swap/configure" \
+  || fail "package does not contain the expected swap configurator"
 cmp -s "$runtime_policy" "$package_root/etc/sysctl.d/99-turbodecky.conf" \
   || fail "package does not contain the expected sysctl policy"
 cmp -s "$thp_policy" "$package_root/usr/lib/tmpfiles.d/99-turbodecky-thp.conf" \
