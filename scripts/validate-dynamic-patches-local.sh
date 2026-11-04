@@ -93,7 +93,10 @@ grep -Fq 'turbodecky-snapshot' "$ROOT/scripts/apply-dynamic-patch-sources.py"
 grep -Fq 'kvm.enable_virt_at_load=0' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_INTEL=m' "$ROOT/config/kernelnote.config"
 grep -Fq 'CONFIG_KVM_AMD=m' "$ROOT/config/kernelnote.config"
-grep -Fq 'TUNING_VERSION="1.5.1"' "$ROOT/scripts/build-tuning-package.sh"
+# Require the supported tuning version without pinning this check to an obsolete release.
+tuning_version="$(sed -n 's/^TUNING_VERSION="\([^"]*\)"$/\1/p' "$ROOT/scripts/build-tuning-package.sh")"
+[[ "$tuning_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+dpkg --compare-versions "$tuning_version" ge 1.5.2
 grep -Fq 'Version: ${TUNING_VERSION}' "$ROOT/scripts/build-tuning-package.sh"
 grep -Fq 'Depends: clang, llvm, lld, make' "$ROOT/scripts/build-tuning-package.sh"
 if grep -RIn --binary-files=without-match \
