@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS="${TURBODECKY_ARTIFACTS:-$ROOT/artifacts}"
 PKGROOT="${TURBODECKY_TUNING_PKGROOT:-$ROOT/work/turbodecky-tuning}"
-TUNING_VERSION="1.5.1"
+TUNING_VERSION="1.5.2"
 
 nap_tools="$ROOT/.resolved-nap-tools"
 nap_require_resolved=(--require-resolved)
