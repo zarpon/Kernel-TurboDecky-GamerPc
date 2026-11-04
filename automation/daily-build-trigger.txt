@@ -6,3 +6,7 @@ Recovery contract: push to main triggers release-on-main.yml, which dispatches v
 
 Manual build request: 2026-11-01 (America/Sao_Paulo).
 Purpose: test latest upstream Linux release including v7.4-rc1; retain all mandatory patch integrity gates and publish_release=true through release-on-main.yml.
+
+Manual recovery requested: 2026-11-04 (America/Sao_Paulo).
+Reason: daily full kernel build absent from current main runs; user explicitly requested immediate build.
+Trigger: push to main runs release-on-main.yml -> validate-kernel.yml, publish_release=true.
