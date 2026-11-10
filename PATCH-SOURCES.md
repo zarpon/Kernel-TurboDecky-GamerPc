@@ -58,6 +58,12 @@ necessários ou se o template revisado mudar de estrutura. O port materializado
 `patch --dry-run` antes da aplicação. A compilação cobre `bore.o`, `fair.o`,
 `core.o` e `build_utility.o` com `CONFIG_SCHED_BORE=y`.
 
+### Porte revisado BORE 7.0.1r2 para Linux 7.3.3
+
+A publicação upstream de 09/11/2026 elevou a revisão `7.0.1` para `7.0.1r2` nos patches Linux 7.2, alterando apenas metadados e removendo os diffs de `localversion` e `scripts/setlocalversion`, sem mudar os demais 14 arquivos funcionais. O patch oficial Linux 7.3-rc2 `7.0.1` já contém somente esses 14 arquivos. Por isso, exclusivamente para o kernel **7.3.3**, o resolvedor pode usar esta variante nativa semanticamente equivalente, aprovada pelo workflow de compilação de 08/11/2026. Não se trata de rebaixamento da versão-base; a revisão r2 é autenticada separadamente e preservada no lock.
+
+A exceção falha fechada se qualquer fonte upstream mudar. SHA256 da variante Linux 7.3: `59349771e5cde001b5456b29b9d302f5dca9cdbe60beb43d1161a85b21c1a82d`; SHA256 da revisão 7.2 r2: `2139a85722763041400ed609c27e598e4242cfe11342fe9b983d79fc515dc91d`. O campo `latest_reviewed_revision` registra commit, ref, caminhos, hashes e justificativa. O finalizador BORE mantém o porte de metadados, dry-run, integridade e compilação; revisões futuras ou novas versões do kernel exigem revalidação.
+
 ## BORE e POC Selector
 
 O POC Selector continua sendo aplicado após BORE. A validação local confirma

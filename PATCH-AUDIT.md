@@ -45,6 +45,10 @@ sem alvo compatível. Os repositórios DKMS `ryzen_smu`, `xone`, `xpad-noone` e
 `xpadneo` também não são patches da árvore Linux; continuam fora do patchset
 genérico do GamerPC.
 
+## Revisão BORE 7.0.1r2 (Linux 7.3.3, 2026-11-10)
+
+A revisão r2 oficial Linux 7.2 removeu somente duas seções de `localversion` / `scripts/setlocalversion` e alterou metadados. O patch nativo Linux 7.3 7.0.1 já omite essas seções e teve compilação/validação completas aprovadas para Linux 7.3.3 no workflow 42471046266. O resolvedor prioriza a última revisão r2 somente com ambos SHA256 autenticados, seleciona a variante nativa semanticamente equivalente, preserva a revisão r2 no lock `latest_reviewed_revision` e interrompe a compilação se qualquer SHA ou seleção mudar. A revisão ou alvo posteriores exigem novo porte.
+
 ## Política de atualização
 
 Nenhum patch novo deste PR é um arquivo estático versionado. O resolver Zen

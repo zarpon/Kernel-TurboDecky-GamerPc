@@ -581,5 +581,66 @@ class RewriterTests(unittest.TestCase):
             self.assertFalse((tmp / bore["repo_dir"] / ".git/objects/info/alternates").exists())
 
 
+class Bore73ReviewedEquivalenceTests(unittest.TestCase):
+    def test_reviewed_native_beats_r2_only_at_exact_kernel(self) -> None:
+        kernel = resolver_module.base.KernelVersion.parse("7.3.3")
+        config = json.loads((ROOT / "config/patch-sources.json").read_text(encoding="utf-8"))
+        pattern = config["components"]["bore"]["project_version_regex"]
+        native = resolver_module.BORE_73_EQUIVALENT_NATIVE_PATH
+        r2 = resolver_module.BORE_73_LATEST_R2_PATH
+        r3 = r2.replace("7.0.1r2", "7.0.1r3")
+        score = resolver_module.latest_first_candidate_score
+        self.assertGreater(score(native, kernel, pattern), score(r2, kernel, pattern))
+        self.assertGreater(score(r3, kernel, pattern), score(native, kernel, pattern))
+        newer_kernel = resolver_module.base.KernelVersion.parse("7.3.4")
+        self.assertGreater(score(r2, newer_kernel, pattern), score(native, newer_kernel, pattern))
+
+    def make_record(self) -> dict:
+        return {
+            "kind": "git_patch", "selection": "exact",
+            "kernel_target": "7.3-rc2", "project_version": "7.0.1",
+            "selected_path": resolver_module.BORE_73_EQUIVALENT_NATIVE_PATH,
+            "sha256": resolver_module.BORE_73_EQUIVALENT_NATIVE_SHA256,
+            "repo": "https://github.com/firelzrd/bore-scheduler.git",
+            "ref": "main", "commit": "a" * 40, "repo_dir": "repos/bore",
+        }
+
+    def test_reviewed_latest_revision_is_locked(self) -> None:
+        kernel = resolver_module.base.KernelVersion.parse("7.3.3")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            lock = {"kernel": {"version": "7.3.3"}, "components": {"bore": self.make_record()}}
+            with (
+                mock.patch.object(resolver_module.base, "read_git_blob", return_value=(
+                    b"fixture-r2", resolver_module.BORE_73_LATEST_R2_PATH
+                )),
+                mock.patch.object(resolver_module.hashlib, "sha256") as digest,
+            ):
+                digest.return_value.hexdigest.return_value = resolver_module.BORE_73_LATEST_R2_SHA256
+                resolver_module.audit_reviewed_bore_73_equivalence(lock, root, kernel)
+            record = lock["components"]["bore"]
+            self.assertEqual(record["latest_reviewed_revision"]["version"], "7.0.1r2")
+            self.assertEqual(json.loads((root / "patch-lock.json").read_text()), lock)
+
+    def test_native_and_latest_sha_changes_fail_closed(self) -> None:
+        kernel = resolver_module.base.KernelVersion.parse("7.3.3")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = self.make_record()
+            record["sha256"] = "0" * 64
+            with self.assertRaisesRegex(resolver_module.base.ResolverError, "native source changed"):
+                resolver_module.audit_reviewed_bore_73_equivalence(
+                    {"components": {"bore": record}}, root, kernel
+                )
+            record["sha256"] = resolver_module.BORE_73_EQUIVALENT_NATIVE_SHA256
+            with mock.patch.object(resolver_module.base, "read_git_blob", return_value=(
+                b"tampered", resolver_module.BORE_73_LATEST_R2_PATH
+            )):
+                with self.assertRaisesRegex(resolver_module.base.ResolverError, "upstream source changed"):
+                    resolver_module.audit_reviewed_bore_73_equivalence(
+                        {"components": {"bore": record}}, root, kernel
+                    )
+
+
 if __name__ == "__main__":
     unittest.main()

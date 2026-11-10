@@ -16,6 +16,11 @@ HERE = Path(__file__).resolve().parent
 BASE_PATH = HERE / "resolve-patch-sources-base.py"
 PORT_PATH = HERE.parent / "patches" / "ports" / "zram-ir-1.3-linux7.2.patch"
 ZRAM_PORT_VERSION = "1.3"
+BORE_73_EQUIVALENT_NATIVE_PATH = "patches/testing/0001-linux7.3-rc2-bore-7.0.1.patch"
+BORE_73_EQUIVALENT_NATIVE_SHA256 = "59349771e5cde001b5456b29b9d302f5dca9cdbe60beb43d1161a85b21c1a82d"
+BORE_73_LATEST_R2_PATH = "patches/testing/0001-linux7.2-rc1-bore-7.0.1r2.patch"
+BORE_73_LATEST_R2_SHA256 = "2139a85722763041400ed609c27e598e4242cfe11342fe9b983d79fc515dc91d"
+
 ZRAM_PORT_UPSTREAM_SHA256 = "1620f45f0fbab1173c8693a2afc0ada37920c78fdde2d0cbff6afe28545128f4"
 
 spec = importlib.util.spec_from_file_location("turbodecky_patch_resolver_base", BASE_PATH)
@@ -120,6 +125,11 @@ def latest_first_candidate_score(
             f"versioned component candidate has no project version: {path}"
         )
     release = upstream_release_key(version)
+    # Upstream 7.0.1r2 removes only localversion/setlocalversion from
+    # Linux 7.2; the authenticated 7.3 native variant already omits them.
+    # Both upstream byte hashes must match before this exception can build.
+    if kernel.text == "7.3.3" and path == BORE_73_EQUIVALENT_NATIVE_PATH:
+        release = upstream_release_key("7.0.1r2")
     native_series = int(target is not None and target.series == kernel.series)
     return (
         release,         # Latest complete release, including RC/rN revisions
@@ -200,6 +210,47 @@ def port_zram_ir_if_needed(
     )
 
 
+def audit_reviewed_bore_73_equivalence(
+    lock: dict[str, Any], output_dir: Path, kernel: Any,
+) -> None:
+    """Prove a locked r2 source exists before selecting its native 7.3 equivalent."""
+    if kernel.text != "7.3.3":
+        return
+    record = lock["components"]["bore"]
+    if record.get("selected_path") != BORE_73_EQUIVALENT_NATIVE_PATH:
+        return
+    if (
+        record.get("selection") != "exact"
+        or record.get("project_version") != "7.0.1"
+        or record.get("kernel_target") != "7.3-rc2"
+        or record.get("sha256") != BORE_73_EQUIVALENT_NATIVE_SHA256
+    ):
+        raise base.ResolverError("reviewed BORE 7.3 native source changed; re-review required")
+    repo_dir = (output_dir / str(record["repo_dir"])).resolve()
+    latest, actual_path = base.read_git_blob(
+        repo_dir, str(record["commit"]), BORE_73_LATEST_R2_PATH,
+    )
+    if (
+        actual_path != BORE_73_LATEST_R2_PATH
+        or hashlib.sha256(latest).hexdigest() != BORE_73_LATEST_R2_SHA256
+    ):
+        raise base.ResolverError("reviewed BORE 7.0.1r2 upstream source changed; re-review required")
+    record["latest_reviewed_revision"] = {
+        "version": "7.0.1r2",
+        "repo": str(record["repo"]),
+        "ref": str(record["ref"]),
+        "commit": str(record["commit"]),
+        "selected_path": BORE_73_LATEST_R2_PATH,
+        "sha256": BORE_73_LATEST_R2_SHA256,
+        "native_path": BORE_73_EQUIVALENT_NATIVE_PATH,
+        "native_sha256": BORE_73_EQUIVALENT_NATIVE_SHA256,
+        "basis": "r2-removes-only-localversion-and-setlocalversion; native-7.3-already-excludes-both",
+    }
+    (output_dir / "patch-lock.json").write_text(
+        json.dumps(lock, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, required=True)
@@ -228,6 +279,7 @@ def main() -> None:
             args.kernel_series,
             manifest_root=args.manifest.resolve().parent,
         )
+        audit_reviewed_bore_73_equivalence(lock, args.output_dir.resolve(), kernel)
         port_zram_ir_if_needed(lock, args.output_dir.resolve(), kernel, args.kernel_series)
     except base.ResolverError as exc:
         raise SystemExit(f"patch source resolution failed: {exc}") from exc

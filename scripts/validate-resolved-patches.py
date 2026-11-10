@@ -79,6 +79,29 @@ def reviewed_bore74_fallback(name: str, record: dict[str, Any],
     )
 
 
+def validate_bore_73_revision(lock: dict[str, Any], name: str, record: dict[str, Any]) -> None:
+    """Reject missing or altered metadata for the reviewed BORE r2 equivalence."""
+    if not (
+        name == "bore"
+        and lock.get("kernel", {}).get("version") == "7.3.3"
+        and record.get("selected_path") == "patches/testing/0001-linux7.3-rc2-bore-7.0.1.patch"
+    ):
+        return
+    expected = {
+        "version": "7.0.1r2",
+        "repo": record.get("repo"),
+        "ref": record.get("ref"),
+        "commit": record.get("upstream_commit", record.get("commit")),
+        "selected_path": "patches/testing/0001-linux7.2-rc1-bore-7.0.1r2.patch",
+        "sha256": "2139a85722763041400ed609c27e598e4242cfe11342fe9b983d79fc515dc91d",
+        "native_path": "patches/testing/0001-linux7.3-rc2-bore-7.0.1.patch",
+        "native_sha256": "59349771e5cde001b5456b29b9d302f5dca9cdbe60beb43d1161a85b21c1a82d",
+        "basis": "r2-removes-only-localversion-and-setlocalversion; native-7.3-already-excludes-both",
+    }
+    if record.get("sha256") != expected["native_sha256"] or record.get("latest_reviewed_revision") != expected:
+        raise IntegrityError("BORE 7.3.3 r2-equivalence provenance is missing or changed")
+
+
 def validate_lock(lock_path: Path) -> int:
     lock = load_lock(lock_path)
     root = lock_path.parent
@@ -87,6 +110,7 @@ def validate_lock(lock_path: Path) -> int:
         if not isinstance(raw, dict):
             raise IntegrityError(f"{name}: lock record must be an object")
         validate_materialized_output(root, name, raw)
+        validate_bore_73_revision(lock, name, raw)
 
         kind = raw.get("kind")
         if kind in {"git_patch", "git_file"}:
