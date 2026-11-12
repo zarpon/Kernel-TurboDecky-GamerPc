@@ -83,7 +83,7 @@ def validate_bore_73_revision(lock: dict[str, Any], name: str, record: dict[str,
     """Reject missing or altered metadata for the reviewed BORE r2 equivalence."""
     if not (
         name == "bore"
-        and lock.get("kernel", {}).get("version") == "7.3.3"
+        and lock.get("kernel", {}).get("version") in ("7.3.3", "7.3.4")
         and record.get("selected_path") == "patches/testing/0001-linux7.3-rc2-bore-7.0.1.patch"
     ):
         return

@@ -582,7 +582,7 @@ class RewriterTests(unittest.TestCase):
 
 
 class Bore73ReviewedEquivalenceTests(unittest.TestCase):
-    def test_reviewed_native_beats_r2_only_at_exact_kernel(self) -> None:
+    def test_reviewed_native_beats_r2_at_reviewed_73_patchlevels(self) -> None:
         kernel = resolver_module.base.KernelVersion.parse("7.3.3")
         config = json.loads((ROOT / "config/patch-sources.json").read_text(encoding="utf-8"))
         pattern = config["components"]["bore"]["project_version_regex"]
@@ -593,7 +593,10 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
         self.assertGreater(score(native, kernel, pattern), score(r2, kernel, pattern))
         self.assertGreater(score(r3, kernel, pattern), score(native, kernel, pattern))
         newer_kernel = resolver_module.base.KernelVersion.parse("7.3.4")
-        self.assertGreater(score(r2, newer_kernel, pattern), score(native, newer_kernel, pattern))
+        self.assertGreater(score(native, newer_kernel, pattern), score(r2, newer_kernel, pattern))
+        self.assertGreater(score(r3, newer_kernel, pattern), score(native, newer_kernel, pattern))
+        unreviewed_kernel = resolver_module.base.KernelVersion.parse("7.3.5")
+        self.assertGreater(score(r2, unreviewed_kernel, pattern), score(native, unreviewed_kernel, pattern))
 
     def make_record(self) -> dict:
         return {

@@ -128,7 +128,7 @@ def latest_first_candidate_score(
     # Upstream 7.0.1r2 removes only localversion/setlocalversion from
     # Linux 7.2; the authenticated 7.3 native variant already omits them.
     # Both upstream byte hashes must match before this exception can build.
-    if kernel.text == "7.3.3" and path == BORE_73_EQUIVALENT_NATIVE_PATH:
+    if kernel.text in ("7.3.3", "7.3.4") and path == BORE_73_EQUIVALENT_NATIVE_PATH:
         release = upstream_release_key("7.0.1r2")
     native_series = int(target is not None and target.series == kernel.series)
     return (
@@ -214,7 +214,7 @@ def audit_reviewed_bore_73_equivalence(
     lock: dict[str, Any], output_dir: Path, kernel: Any,
 ) -> None:
     """Prove a locked r2 source exists before selecting its native 7.3 equivalent."""
-    if kernel.text != "7.3.3":
+    if kernel.text not in ("7.3.3", "7.3.4"):
         return
     record = lock["components"]["bore"]
     if record.get("selected_path") != BORE_73_EQUIVALENT_NATIVE_PATH:
