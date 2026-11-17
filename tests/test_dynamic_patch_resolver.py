@@ -595,7 +595,10 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
         newer_kernel = resolver_module.base.KernelVersion.parse("7.3.4")
         self.assertGreater(score(native, newer_kernel, pattern), score(r2, newer_kernel, pattern))
         self.assertGreater(score(r3, newer_kernel, pattern), score(native, newer_kernel, pattern))
-        unreviewed_kernel = resolver_module.base.KernelVersion.parse("7.3.5")
+        reviewed_735 = resolver_module.base.KernelVersion.parse("7.3.5")
+        self.assertGreater(score(native, reviewed_735, pattern), score(r2, reviewed_735, pattern))
+        self.assertGreater(score(r3, reviewed_735, pattern), score(native, reviewed_735, pattern))
+        unreviewed_kernel = resolver_module.base.KernelVersion.parse("7.3.6")
         self.assertGreater(score(r2, unreviewed_kernel, pattern), score(native, unreviewed_kernel, pattern))
 
     def make_record(self) -> dict:
@@ -609,24 +612,25 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
         }
 
     def test_reviewed_latest_revision_is_locked(self) -> None:
-        kernel = resolver_module.base.KernelVersion.parse("7.3.3")
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            lock = {"kernel": {"version": "7.3.3"}, "components": {"bore": self.make_record()}}
-            with (
-                mock.patch.object(resolver_module.base, "read_git_blob", return_value=(
-                    b"fixture-r2", resolver_module.BORE_73_LATEST_R2_PATH
-                )),
-                mock.patch.object(resolver_module.hashlib, "sha256") as digest,
-            ):
-                digest.return_value.hexdigest.return_value = resolver_module.BORE_73_LATEST_R2_SHA256
-                resolver_module.audit_reviewed_bore_73_equivalence(lock, root, kernel)
-            record = lock["components"]["bore"]
-            self.assertEqual(record["latest_reviewed_revision"]["version"], "7.0.1r2")
-            self.assertEqual(json.loads((root / "patch-lock.json").read_text()), lock)
+        for version in ("7.3.3", "7.3.4", "7.3.5"):
+            kernel = resolver_module.base.KernelVersion.parse(version)
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                lock = {"kernel": {"version": version}, "components": {"bore": self.make_record()}}
+                with (
+                    mock.patch.object(resolver_module.base, "read_git_blob", return_value=(
+                        b"fixture-r2", resolver_module.BORE_73_LATEST_R2_PATH
+                    )),
+                    mock.patch.object(resolver_module.hashlib, "sha256") as digest,
+                ):
+                    digest.return_value.hexdigest.return_value = resolver_module.BORE_73_LATEST_R2_SHA256
+                    resolver_module.audit_reviewed_bore_73_equivalence(lock, root, kernel)
+                record = lock["components"]["bore"]
+                self.assertEqual(record["latest_reviewed_revision"]["version"], "7.0.1r2")
+                self.assertEqual(json.loads((root / "patch-lock.json").read_text()), lock)
 
     def test_native_and_latest_sha_changes_fail_closed(self) -> None:
-        kernel = resolver_module.base.KernelVersion.parse("7.3.3")
+        kernel = resolver_module.base.KernelVersion.parse("7.3.5")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             record = self.make_record()
@@ -643,6 +647,32 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
                     resolver_module.audit_reviewed_bore_73_equivalence(
                         {"components": {"bore": record}}, root, kernel
                     )
+
+    def test_reviewed_735_validator_requires_equivalence_metadata(self) -> None:
+        path = ROOT / "scripts/validate-resolved-patches.py"
+        spec = importlib.util.spec_from_file_location("validate_bore_735_lock", path)
+        assert spec and spec.loader
+        validator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(validator)
+        record = self.make_record()
+        lock = {"kernel": {"version": "7.3.5"}, "components": {"bore": record}}
+        with self.assertRaises(validator.IntegrityError):
+            validator.validate_bore_73_revision(lock, "bore", record)
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                mock.patch.object(resolver_module.base, "read_git_blob", return_value=(
+                    b"fixture-r2", resolver_module.BORE_73_LATEST_R2_PATH
+                )),
+                mock.patch.object(resolver_module.hashlib, "sha256") as digest,
+            ):
+                digest.return_value.hexdigest.return_value = resolver_module.BORE_73_LATEST_R2_SHA256
+                resolver_module.audit_reviewed_bore_73_equivalence(
+                    lock, Path(directory), resolver_module.base.KernelVersion.parse("7.3.5")
+                )
+        validator.validate_bore_73_revision(lock, "bore", record)
+        record["latest_reviewed_revision"]["sha256"] = "0" * 64
+        with self.assertRaises(validator.IntegrityError):
+            validator.validate_bore_73_revision(lock, "bore", record)
 
 
 if __name__ == "__main__":
