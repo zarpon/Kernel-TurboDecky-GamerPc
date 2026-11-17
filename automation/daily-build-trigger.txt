@@ -10,3 +10,9 @@ Purpose: test latest upstream Linux release including v7.4-rc1; retain all manda
 Manual recovery requested: 2026-11-04 (America/Sao_Paulo).
 Reason: daily full kernel build absent from current main runs; user explicitly requested immediate build.
 Trigger: push to main runs release-on-main.yml -> validate-kernel.yml, publish_release=true.
+
+Manual corrective build request: 2026-11-17 (America/Sao_Paulo).
+Reason: supersede failed CAST 0.2.10 with current official CAST 0.2.11, native variant for Linux 7.3.
+Verified upstream: firelzrd/lru_cast commit fe915da367146a0477b4ea24961f66e2fa487ee9; patches/0001-7.3-rc7-lru_cast-v0.2.11.patch; Git blob 752e5fdac3f31a2b28424c948d803f5f1d4b18cf.
+Dynamic resolver selects latest authenticated release, native variant first, records immutable commit and SHA256; CI must validate actual application and compilation before release. Preserve all mandatory checks.
+Trigger: release-on-main.yml -> validate-kernel.yml, publish_release=true.
