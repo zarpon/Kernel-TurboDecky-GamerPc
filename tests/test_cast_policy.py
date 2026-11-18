@@ -99,6 +99,25 @@ class CastPolicyTests(unittest.TestCase):
             self.assertEqual(subprocess.run(['git', '-C', str(tree), 'apply', '--recount', '--check', str(output)], capture_output=True).returncode, 0)
 
 
+    def test_linux735_port_preserves_stable_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            (tree / "mm").mkdir()
+            raw = b"reviewed CAST fixture"
+            original = "\n".join(old for _, old, _ in port.CAST_735_CONTEXTS)
+            for name, _, new in port.CAST_735_CONTEXTS:
+                (tree / name).write_text("\n".join(line[1:] for line in new.split("\n") if line.startswith(" ")))
+            with self.assertRaisesRegex(RuntimeError, "upstream SHA differs"):
+                port.port_linux735(raw, tree, original)
+            with mock.patch.object(port, "CAST_735_SHA256", port.hashlib.sha256(raw).hexdigest()):
+                result = port.port_linux735(raw, tree, original)
+                self.assertIn("pte_present(pteval)", result)
+                self.assertIn("bool young = false;", result)
+                self.assertIn("Release invalidate_lock", result)
+                (tree / "mm/rmap.c").write_text("drift")
+                with self.assertRaisesRegex(RuntimeError, "source preimage changed"):
+                    port.port_linux735(raw, tree, original)
+
     def test_linux74_port_is_immutable_and_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             tree = Path(directory)

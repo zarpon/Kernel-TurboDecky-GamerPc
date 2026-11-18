@@ -136,6 +136,27 @@ def port_linux74_rc1(source: bytes, tree: Path, patch: str) -> str:
     return patch
 
 
+
+CAST_735_SHA256 = "0246c40040b6c65d41d3820a9f72d28592b37959f1204cb032e7a8148f2dc90c"
+CAST_735_CONTEXTS = (
+    ("mm/filemap.c", " \t * re-find the vma and come back and find our hopefully still populated\n \t * page.\n \t */", " \t * With fpin set, the fault lock was already dropped. Otherwise it is\n \t * still held. Release invalidate_lock before dropping either protection.\n \t */"),
+    ("mm/rmap.c", " \t\tif (lru_gen_enabled() && !lru_gen_switching() && pvmw.pte) {\n \t\t\tif (lru_gen_look_around(&pvmw, nr))\n \t\t\t\treferenced++;\n+\t\t} else if (lru_cast_enabled() && pvmw.pte) {\n+\t\t\tif (lru_cast_look_around(&pvmw))\n+\t\t\t\treferenced++;\n \t\t} else if (pvmw.pte) {\n \t\t\tif (clear_flush_young_ptes_notify(vma, address, pvmw.pte, nr))\n \t\t\t\treferenced++;", " \t\tif (lru_gen_enabled() && !lru_gen_switching() && pvmw.pte &&\n \t\t    pte_present(pteval)) {\n \t\t\tif (lru_gen_look_around(&pvmw, nr))\n \t\t\t\treferenced++;\n+\t\t} else if (lru_cast_enabled() && pvmw.pte && pte_present(pteval)) {\n+\t\t\tif (lru_cast_look_around(&pvmw))\n+\t\t\t\treferenced++;\n \t\t} else if (pvmw.pte) {\n \t\t\tbool young = false;\n "),
+)
+
+
+def port_linux735(source: bytes, tree: Path, patch: str) -> str:
+    if hashlib.sha256(source).hexdigest() != CAST_735_SHA256:
+        raise RuntimeError("CAST 7.3.5 upstream SHA differs from reviewed v0.2.11")
+    for name, old, new in CAST_735_CONTEXTS:
+        # Preserve the stable fault-lock ordering and non-present PTE path.
+        preimage = "\n".join(line[1:] for line in new.split("\n") if line.startswith(" "))
+        if (tree / name).read_text(encoding="utf-8").count(preimage) != 1:
+            raise RuntimeError(f"CAST 7.3.5 source preimage changed: {name}")
+        if patch.count(old) != 1:
+            raise RuntimeError(f"CAST 7.3.5 patch preimage changed: {name}")
+        patch = patch.replace(old, new, 1)
+    return patch
+
 def prepare(source: Path, output: Path, tree: Path) -> str:
     data = source.read_bytes()
     output.write_bytes(data)
@@ -172,6 +193,20 @@ def prepare(source: Path, output: Path, tree: Path) -> str:
         detail = result.stderr
     else:
         detail = direct.stderr
+    if os.environ.get("KERNEL_VERSION") == "7.3.5" and hashlib.sha256(data).hexdigest() == CAST_735_SHA256:
+        try:
+            prepared = port_linux735(data, tree, output.read_text(encoding="utf-8"))
+            output.write_text(prepared, encoding="utf-8", newline="\n")
+            reviewed = subprocess.run(
+                ["git", "-C", str(tree), "apply", "--recount", "--check", str(output.resolve())],
+                text=True, capture_output=True,
+            )
+            if reviewed.returncode == 0:
+                return "reviewed-locked-cast-7.3.5-v0.2.11"
+            detail = reviewed.stderr
+        except RuntimeError:
+            output.unlink(missing_ok=True)
+            raise
     if os.environ.get("KERNEL_VERSION") == "7.4-rc1":
         try:
             prepared = port_linux74_rc1(data, tree, output.read_text(encoding="utf-8"))
