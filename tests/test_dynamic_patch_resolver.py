@@ -598,7 +598,10 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
         reviewed_735 = resolver_module.base.KernelVersion.parse("7.3.5")
         self.assertGreater(score(native, reviewed_735, pattern), score(r2, reviewed_735, pattern))
         self.assertGreater(score(r3, reviewed_735, pattern), score(native, reviewed_735, pattern))
-        unreviewed_kernel = resolver_module.base.KernelVersion.parse("7.3.6")
+        reviewed_736 = resolver_module.base.KernelVersion.parse("7.3.6")
+        self.assertGreater(score(native, reviewed_736, pattern), score(r2, reviewed_736, pattern))
+        self.assertGreater(score(r3, reviewed_736, pattern), score(native, reviewed_736, pattern))
+        unreviewed_kernel = resolver_module.base.KernelVersion.parse("7.3.7")
         self.assertGreater(score(r2, unreviewed_kernel, pattern), score(native, unreviewed_kernel, pattern))
 
     def make_record(self) -> dict:
@@ -612,7 +615,7 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
         }
 
     def test_reviewed_latest_revision_is_locked(self) -> None:
-        for version in ("7.3.3", "7.3.4", "7.3.5"):
+        for version in ("7.3.3", "7.3.4", "7.3.5", "7.3.6"):
             kernel = resolver_module.base.KernelVersion.parse(version)
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
@@ -648,14 +651,14 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
                         {"components": {"bore": record}}, root, kernel
                     )
 
-    def test_reviewed_735_validator_requires_equivalence_metadata(self) -> None:
+    def test_reviewed_736_validator_requires_equivalence_metadata(self) -> None:
         path = ROOT / "scripts/validate-resolved-patches.py"
-        spec = importlib.util.spec_from_file_location("validate_bore_735_lock", path)
+        spec = importlib.util.spec_from_file_location("validate_bore_736_lock", path)
         assert spec and spec.loader
         validator = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(validator)
         record = self.make_record()
-        lock = {"kernel": {"version": "7.3.5"}, "components": {"bore": record}}
+        lock = {"kernel": {"version": "7.3.6"}, "components": {"bore": record}}
         with self.assertRaises(validator.IntegrityError):
             validator.validate_bore_73_revision(lock, "bore", record)
         with tempfile.TemporaryDirectory() as directory:
@@ -667,7 +670,7 @@ class Bore73ReviewedEquivalenceTests(unittest.TestCase):
             ):
                 digest.return_value.hexdigest.return_value = resolver_module.BORE_73_LATEST_R2_SHA256
                 resolver_module.audit_reviewed_bore_73_equivalence(
-                    lock, Path(directory), resolver_module.base.KernelVersion.parse("7.3.5")
+                    lock, Path(directory), resolver_module.base.KernelVersion.parse("7.3.6")
                 )
         validator.validate_bore_73_revision(lock, "bore", record)
         record["latest_reviewed_revision"]["sha256"] = "0" * 64

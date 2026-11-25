@@ -83,7 +83,7 @@ def validate_bore_73_revision(lock: dict[str, Any], name: str, record: dict[str,
     """Reject missing or altered metadata for the reviewed BORE r2 equivalence."""
     if not (
         name == "bore"
-        and lock.get("kernel", {}).get("version") in ("7.3.3", "7.3.4", "7.3.5")
+        and lock.get("kernel", {}).get("version") in ("7.3.3", "7.3.4", "7.3.5", "7.3.6")
         and record.get("selected_path") == "patches/testing/0001-linux7.3-rc2-bore-7.0.1.patch"
     ):
         return
@@ -99,7 +99,7 @@ def validate_bore_73_revision(lock: dict[str, Any], name: str, record: dict[str,
         "basis": "r2-removes-only-localversion-and-setlocalversion; native-7.3-already-excludes-both",
     }
     if record.get("sha256") != expected["native_sha256"] or record.get("latest_reviewed_revision") != expected:
-        raise IntegrityError("BORE 7.3.3 r2-equivalence provenance is missing or changed")
+        raise IntegrityError("BORE 7.3 r2-equivalence provenance is missing or changed")
 
 
 def validate_lock(lock_path: Path) -> int:
