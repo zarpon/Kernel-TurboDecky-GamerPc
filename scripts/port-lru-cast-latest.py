@@ -157,6 +157,35 @@ def port_linux735(source: bytes, tree: Path, patch: str) -> str:
         patch = patch.replace(old, new, 1)
     return patch
 
+
+# Reviewed CAST 0.3.0 port: official linux7.3-rc7 -> Linux v7.3.6.
+# Upstream firelzrd/lru_cast c2aed944f2b7ca9fdf6ab549eccdf5b5f4f64812
+# Target gregkh/linux tag v7.3.6 commit 1a0388846138eda9f6eb4258ff227a223afc2f52
+CAST_736_SHA256 = "962359849dfbe6a7a67120cbeb2137d583e3d620b3e40f0bf4f4f161fc17010c"
+CAST_736_CONTEXTS = (
+    ("mm/filemap.c", " \t * re-find the vma and come back and find our hopefully still populated\n \t * page.\n \t */", " \t * With fpin set, the fault lock was already dropped. Otherwise it is\n \t * still held. Release invalidate_lock before dropping either protection.\n \t */"),
+    ("mm/rmap.c", " \t\tif (lru_gen_enabled() && !lru_gen_switching() && pvmw.pte) {\n \t\t\tif (lru_gen_look_around(&pvmw, nr))\n \t\t\t\treferenced++;\n+\t\t} else if (lru_cast_enabled() && pvmw.pte) {\n+\t\t\tif (lru_cast_look_around(&pvmw))\n+\t\t\t\treferenced++;\n \t\t} else if (pvmw.pte) {\n \t\t\tif (clear_flush_young_ptes_notify(vma, address, pvmw.pte, nr))\n \t\t\t\treferenced++;\n", " \t\tif (lru_gen_enabled() && !lru_gen_switching() && pvmw.pte &&\n \t\t    pte_present(pteval)) {\n \t\t\tif (lru_gen_look_around(&pvmw, nr))\n \t\t\t\treferenced++;\n+\t\t} else if (lru_cast_enabled() && pvmw.pte && pte_present(pteval)) {\n+\t\t\tif (lru_cast_look_around(&pvmw))\n+\t\t\t\treferenced++;\n \t\t} else if (pvmw.pte) {\n \t\t\tbool young = false;\n"),
+)
+
+
+def port_linux736(source: bytes, tree: Path, patch: str) -> str:
+    if hashlib.sha256(source).hexdigest() != CAST_736_SHA256:
+        raise RuntimeError("CAST 7.3.6 upstream source SHA differs from reviewed v0.3.0")
+    makefile = (tree / "Makefile").read_text(encoding="utf-8")
+    for key, number in (("VERSION", 7), ("PATCHLEVEL", 3), ("SUBLEVEL", 6)):
+        if not re.search(rf"^{key}\s*=\s*{number}\s*$", makefile, re.MULTILINE):
+            raise RuntimeError(f"CAST 7.3.6 source version mismatch: {key}")
+    for name, old, new in CAST_736_CONTEXTS:
+        target = (tree / name).read_text(encoding="utf-8")
+        preimage = "\n".join(line[1:] for line in new.split("\n") if line.startswith(" "))
+        if target.count(preimage) != 1:
+            raise RuntimeError(f"CAST 7.3.6 source preimage changed: {name}")
+        if patch.count(old) != 1:
+            raise RuntimeError(f"CAST 7.3.6 official patch preimage changed: {name}")
+        patch = patch.replace(old, new, 1)
+    return patch
+
+
 def prepare(source: Path, output: Path, tree: Path) -> str:
     data = source.read_bytes()
     output.write_bytes(data)
@@ -207,6 +236,21 @@ def prepare(source: Path, output: Path, tree: Path) -> str:
         except RuntimeError:
             output.unlink(missing_ok=True)
             raise
+    if os.environ.get("KERNEL_VERSION") == "7.3.6":
+        try:
+            prepared = port_linux736(data, tree, output.read_text(encoding="utf-8"))
+            output.write_text(prepared, encoding="utf-8", newline="\n")
+            reviewed = subprocess.run(
+                ["git", "-C", str(tree), "apply", "--recount", "--check", str(output.resolve())],
+                text=True, capture_output=True,
+            )
+            if reviewed.returncode == 0:
+                return "reviewed-locked-cast-7.3.6-v0.3.0"
+            detail = reviewed.stderr
+        except (RuntimeError, OSError):
+            output.unlink(missing_ok=True)
+            raise
+
     if os.environ.get("KERNEL_VERSION") == "7.4-rc1":
         try:
             prepared = port_linux74_rc1(data, tree, output.read_text(encoding="utf-8"))
