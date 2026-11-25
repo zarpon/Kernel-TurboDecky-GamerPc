@@ -118,6 +118,36 @@ class CastPolicyTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "source preimage changed"):
                     port.port_linux735(raw, tree, original)
 
+
+    def test_linux736_port_immutability_and_semantics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tree = Path(directory)
+            (tree / "mm").mkdir()
+            (tree / "Makefile").write_text("VERSION = 7\nPATCHLEVEL = 3\nSUBLEVEL = 6\n")
+            original = "\n".join(old for _name, old, _new in port.CAST_736_CONTEXTS)
+            for name, _old, new in port.CAST_736_CONTEXTS:
+                preimage = "\n".join(line[1:] for line in new.split("\n") if line.startswith(" "))
+                (tree / name).write_text(preimage + "\n")
+            sample = b"official-v0.3.0-fixture"
+            with self.assertRaisesRegex(RuntimeError, "source SHA differs"):
+                port.port_linux736(sample, tree, original)
+            with mock.patch.object(port, "CAST_736_SHA256", port.hashlib.sha256(sample).hexdigest()):
+                adapted = port.port_linux736(sample, tree, original)
+                self.assertIn("pte_present(pteval)", adapted)
+                self.assertIn("bool young = false", adapted)
+                self.assertIn("Release invalidate_lock", adapted)
+                self.assertIn("lru_cast_look_around", adapted)
+                (tree / "mm/rmap.c").write_text("drift")
+                with self.assertRaisesRegex(RuntimeError, "source preimage changed"):
+                    port.port_linux736(sample, tree, original)
+                preimage = "\n".join(line[1:] for line in port.CAST_736_CONTEXTS[1][2].split("\n") if line.startswith(" "))
+                (tree / "mm/rmap.c").write_text(preimage)
+                with self.assertRaisesRegex(RuntimeError, "official patch preimage changed"):
+                    port.port_linux736(sample, tree, original.replace("lru_cast_look_around", "tampered_look_around"))
+                (tree / "Makefile").write_text("VERSION = 7\nPATCHLEVEL = 3\nSUBLEVEL = 7\n")
+                with self.assertRaisesRegex(RuntimeError, "source version mismatch"):
+                    port.port_linux736(sample, tree, original)
+
     def test_linux74_port_is_immutable_and_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:
             tree = Path(directory)
