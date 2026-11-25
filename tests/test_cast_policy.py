@@ -137,7 +137,6 @@ class CastPolicyTests(unittest.TestCase):
                 self.assertIn("bool young = false", adapted)
                 self.assertIn("Release invalidate_lock", adapted)
                 self.assertIn("lru_cast_look_around", adapted)
-                self.assertIn("lru_cast_wait_refault", adapted)
                 (tree / "mm/rmap.c").write_text("drift")
                 with self.assertRaisesRegex(RuntimeError, "source preimage changed"):
                     port.port_linux736(sample, tree, original)

@@ -170,7 +170,7 @@ CAST_736_CONTEXTS = (
 
 def port_linux736(source: bytes, tree: Path, patch: str) -> str:
     if hashlib.sha256(source).hexdigest() != CAST_736_SHA256:
-        raise RuntimeError("CAST 7.3.6 upstream source SHA differs from reviewed v0.3.0")
+        raise RuntimeError("latest CAST requires a reviewed kernel API port: CAST 7.3.6 upstream source SHA differs from reviewed v0.3.0")
     makefile = (tree / "Makefile").read_text(encoding="utf-8")
     for key, number in (("VERSION", 7), ("PATCHLEVEL", 3), ("SUBLEVEL", 6)):
         if not re.search(rf"^{key}\s*=\s*{number}\s*$", makefile, re.MULTILINE):
