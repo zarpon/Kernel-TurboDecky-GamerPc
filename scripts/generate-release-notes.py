@@ -106,8 +106,11 @@ def patch_table(lock: dict) -> list[str]:
         lines.append(f'| **{clean(name)}** | `{clean(version)}` | `{clean(target)}` | {clean(method)} |')
         details += [f'**{clean(name)}**', f'- Origem: `{clean(data.get("repo") or data.get("url") or "local")}`',
                     f'- Arquivo: `{clean(data.get("selected_path") or data.get("path") or data.get("output") or "unknown")}`',
-                    f'- Commit fixado: `{clean(data.get("commit") or "não se aplica")}`',
+                    f'- Commit upstream fixado: `{clean(data.get("upstream_commit") or data.get("commit") or "não se aplica")}`',
                     f'- SHA256 exato: `{data["sha256"]}`']
+        snapshot = data.get('snapshot_commit')
+        if snapshot and snapshot != (data.get('upstream_commit') or data.get('commit')):
+            details.append(f'- Snapshot local usado pelo build: `{clean(snapshot)}`')
         port = data.get('compatibility_port')
         if isinstance(port, dict):
             if not re.fullmatch(r'[0-9a-f]{64}', str(port.get('sha256', ''))):
