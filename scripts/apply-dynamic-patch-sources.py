@@ -26,6 +26,7 @@ REQUESTED = {
     "minstrel_downgrade": ("20-minstrel-downgrade.patch", "20-minstrel-downgrade"),
     "ath11k_remapped_ce": ("21-ath11k-remapped-ce.patch", "21-ath11k-remapped-ce"),
     "ath11k_disable_key": ("22-ath11k-disable-key.patch", "22-ath11k-disable-key"),
+    "ath11k_rekey_flags": ("23-ath11k-rekey-flags.patch", "23-ath11k-rekey-flags"),
 }
 
 BORE_FINALIZER_SENTINELS = {

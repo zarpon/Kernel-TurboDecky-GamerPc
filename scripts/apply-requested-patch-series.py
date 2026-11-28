@@ -34,7 +34,37 @@ def insert_requested_series_variable(text: str) -> str:
     )
 
 
+def configure_firmware_info(tree: Path) -> None:
+    """Expose the maintained Gentoo patch's flag to the target Kconfig."""
+    loader = tree / "drivers/base/firmware_loader"
+    source = (loader / "main.c").read_text(encoding="utf-8")
+    if "#ifdef CONFIG_GENTOO_PRINT_FIRMWARE_INFO" not in source or "Loading firmware:" not in source:
+        raise SystemExit("maintained firmware-info patch is not present in the target source")
+    path = loader / "Kconfig"
+    text = path.read_text(encoding="utf-8")
+    definitions = re.findall(r"^config GENTOO_PRINT_FIRMWARE_INFO\s*$", text, re.MULTILINE)
+    if len(definitions) > 1:
+        raise SystemExit("duplicate GENTOO_PRINT_FIRMWARE_INFO Kconfig definitions")
+    if not definitions:
+        if not re.search(r"^config FW_LOADER\s*$", text, re.MULTILINE):
+            raise SystemExit("firmware-loader Kconfig structure changed; review the firmware-info adapter")
+        text = text.rstrip() + '''
+
+config GENTOO_PRINT_FIRMWARE_INFO
+\tbool "Print firmware names while loading"
+\tdepends on FW_LOADER
+\thelp
+\t  Print the firmware filename requested by a driver. The TurboDecky
+\t  configuration enables this diagnostic for the maintained Gentoo patch.
+'''
+        path.write_text(text, encoding="utf-8")
+    print("Firmware information Kconfig definition verified.")
+
+
 def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--configure-firmware-info":
+        configure_firmware_info(Path(sys.argv[2]))
+        return
     if len(sys.argv) != 2:
         raise SystemExit("usage: apply-requested-patch-series.py <build-kernelnote-core.sh>")
 
@@ -136,9 +166,13 @@ fetch_requested_patch_series() {
     "$REQUESTED_SERIES_DIR/21-ath11k-remapped-ce.patch" "21-ath11k-remapped-ce" \
     "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_remapped_ce"
 
-  fetch_candidate_patch "ath11k DISABLE_KEY revert" \
+  fetch_candidate_patch "ath11k upstream group rekey fix" \
     "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key" \
     "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_disable_key"
+
+  fetch_candidate_patch "ath11k corrected rekey key-type comparison" \
+    "$REQUESTED_SERIES_DIR/23-ath11k-rekey-flags.patch" "23-ath11k-rekey-flags" \
+    "__DYNAMIC_PATCH_LOCK_REQUIRED__:ath11k_rekey_flags"
 }
 
 report_requested_rejects() {
@@ -211,6 +245,8 @@ apply_requested_patch_series() {
   apply_requested_patch "Clang DKMS compatibility" "$REQUESTED_SERIES_DIR/15-dkms-clang.patch" "15-dkms-clang"
   apply_requested_patch "Clang Polly support" "$REQUESTED_SERIES_DIR/16-clang-polly.patch" "16-clang-polly"
   apply_requested_patch "Always print firmware file name" "$REQUESTED_SERIES_DIR/17-firmware-name.patch" "17-firmware-name"
+  python3 "$ROOT/scripts/apply-requested-patch-series.py" --configure-firmware-info "$KERNELDIR" \
+    | tee "$LOGDIR/17-firmware-name-kconfig.log"
   apply_requested_patch "mac80211 minstrel fraction fix" "$REQUESTED_SERIES_DIR/18-minstrel-frac.patch" "18-minstrel-frac"
   apply_requested_patch "mac80211 minstrel fluctuation reduction" "$REQUESTED_SERIES_DIR/19-minstrel-fluctuation.patch" "19-minstrel-fluctuation"
   apply_requested_patch "mac80211 minstrel rate downgrade rework" "$REQUESTED_SERIES_DIR/20-minstrel-downgrade.patch" "20-minstrel-downgrade"
@@ -220,7 +256,11 @@ apply_requested_patch_series() {
     echo "ath11k remapped CE port left ATH11K_CE_OFFSET references behind" >&2
     return 1
   fi
-  apply_requested_patch "ath11k DISABLE_KEY revert" "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" "22-ath11k-disable-key"
+  python3 "$ROOT/scripts/apply-ath11k-rekey-fix.py" "$KERNELDIR" \
+    "$REQUESTED_SERIES_DIR/22-ath11k-disable-key.patch" \
+    "$REQUESTED_SERIES_DIR/23-ath11k-rekey-flags.patch" \
+    "$LOGDIR/22-ath11k-disable-key-result.json" \
+    | tee "$LOGDIR/22-ath11k-disable-key-result.txt"
 
   grep -Fq 'config CC_OPTIMIZE_FOR_PERFORMANCE_O3' init/Kconfig
   grep -Fq 'config POLLY_CLANG' init/Kconfig
@@ -267,6 +307,7 @@ scripts/config --enable CC_OPTIMIZE_FOR_PERFORMANCE_O3
 scripts/config --disable MBROADWELL
 scripts/config --enable GENERIC_CPU
 scripts/config --enable POLLY_CLANG
+scripts/config --enable GENTOO_PRINT_FIRMWARE_INFO
 
 # ThinLTO is mandatory for the final kernel. These symbols only survive
 ''',
@@ -278,6 +319,7 @@ scripts/config --enable POLLY_CLANG
         'assert_config "CONFIG_64BIT=y"\n',
         '''assert_config "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE_O3=y"
 assert_config "CONFIG_POLLY_CLANG=y"
+assert_config "CONFIG_GENTOO_PRINT_FIRMWARE_INFO=y"
 assert_disabled_or_absent CC_OPTIMIZE_FOR_PERFORMANCE
 assert_disabled_or_absent CC_OPTIMIZE_FOR_SIZE
 assert_config "CONFIG_GENERIC_CPU=y"

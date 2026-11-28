@@ -12,6 +12,7 @@ python3 -m py_compile \
   "$ROOT/scripts/validate-resolved-patches.py" \
   "$ROOT/scripts/apply-dynamic-patch-sources.py" \
   "$ROOT/scripts/apply-validation-modules.py" \
+  "$ROOT/scripts/apply-ath11k-rekey-fix.py" \
   "$ROOT/scripts/patch-external-module-toolchain.py" \
   "$ROOT/scripts/apply-zarpon-generic-name.py" \
   "$ROOT/scripts/apply-latest-stable-series.py" \
@@ -30,6 +31,8 @@ python3 -m unittest -v \
   "$ROOT/tests/test_dynamic_patch_resolver.py" \
   "$ROOT/tests/test_dynamic_patch_symlinks.py" \
   "$ROOT/tests/test_dynamic_patch_indirections.py" \
+  "$ROOT/tests/test_ath11k_rekey_fix.py" \
+  "$ROOT/tests/test_firmware_info.py" \
   "$ROOT/tests/test_cast_version_reporting.py" \
   "$ROOT/tests/test_cast_policy.py" \
   "$ROOT/tests/test_bore_port.py" \

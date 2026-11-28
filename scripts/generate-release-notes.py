@@ -13,6 +13,8 @@ PATCH_NAMES = {
     'bore': 'BORE', 'bore_sched_ext_coexistence': 'BORE sched_ext coexistence',
     'lru_cast': 'LRU CAST', 'nap': 'NAP', 'poc_selector': 'POC Selector',
     'reflex': 'REFLEX', 'adios': 'ADIOS', 'zram_ir': 'ZRAM-IR',
+    'ath11k_disable_key': 'ath11k: correção upstream de rekey',
+    'ath11k_rekey_flags': 'ath11k: correção da comparação do tipo de chave',
 }
 TOPICS = (
     ('Gráficos e GPU', r'\b(?:drm|amdgpu|radeon|nouveau|i915|xe|gpu)\b'),
@@ -112,8 +114,9 @@ def patch_table(lock: dict) -> list[str]:
                 raise ValueError(f'incomplete port checksum: {key}')
             details += [f'- Adaptação revisada: `{clean(port.get("adapter") or port.get("output") or "port")}`',
                         f'- SHA256 do porte: `{port["sha256"]}`']
-        if data.get('latest_upstream_project_version'):
-            details.append(f'- Revisão global upstream: `{clean(data["latest_upstream_project_version"])}`')
+        latest = data.get('latest_upstream_version') or data.get('latest_upstream_project_version')
+        if latest:
+            details.append(f'- Revisão global upstream: `{clean(latest)}`')
         details.append('')
     return lines + ['', '<details>', '<summary>Fontes, commits e checksums completos dos patches</summary>', ''] + details + ['</details>']
 
