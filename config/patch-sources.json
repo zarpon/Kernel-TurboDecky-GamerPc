@@ -2,12 +2,14 @@
   "components": {
     "adios": {
       "exact_globs": [
-        "patches/stable/*linux{kernel_version}*ADIOS*.patch",
-        "patches/stable/*linux{series}*ADIOS*.patch"
+        "patches/stable/*{kernel_version}*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/stable/*{series}*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/testing/*{kernel_version}*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/testing/*{series}*[Aa][Dd][Ii][Oo][Ss]*.patch"
       ],
       "fallback_globs": [
-        "patches/stable/*ADIOS*.patch",
-        "patches/testing/*ADIOS*.patch"
+        "patches/stable/*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/testing/*[Aa][Dd][Ii][Oo][Ss]*.patch"
       ],
       "kind": "git_patch",
       "output": "03-adios.patch",
@@ -24,9 +26,13 @@
     "ath11k_disable_key": {
       "kind": "http_patch",
       "output": "22-ath11k-disable-key.patch",
+      "required_markers": [
+        "97acb0259cc9cbfbd7ab689e25684f3d8ce10e26",
+        "ath11k_set_group_keys",
+        "reinstall_group_keys"
+      ],
       "urls": [
-        "https://git.codelinaro.org/clo/qsdk/oss/system/feeds/wlan-open/-/raw/win.wlan_host_opensource.3.0.r24/patches/ath11k/350-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch",
-        "https://git.infobricfleet.com/gtu/openwrt/-/raw/95341cc9c560ff371c06db2a8221d19bb62d0c30/package/kernel/mac80211/patches/ath11k/940-ath11k-Revert-clear-the-keys-properly-when-DISABLE_K.patch"
+        "https://github.com/torvalds/linux/commit/97acb0259cc9cbfbd7ab689e25684f3d8ce10e26.patch"
       ]
     },
     "ath11k_remapped_ce": {
@@ -39,6 +45,18 @@
       "ref": "main",
       "repo": "https://github.com/openwrt/openwrt.git",
       "require_exact_series": true
+    },
+    "ath11k_rekey_flags": {
+      "kind": "http_patch",
+      "output": "23-ath11k-rekey-flags.patch",
+      "required_markers": [
+        "9c78e747dd4fee6c36fcc926212e20032055cf9d",
+        "flags == WMI_KEY_PAIRWISE",
+        "flags == WMI_KEY_GROUP"
+      ],
+      "urls": [
+        "https://github.com/torvalds/linux/commit/9c78e747dd4fee6c36fcc926212e20032055cf9d.patch"
+      ]
     },
     "bore": {
       "exact_globs": [
@@ -137,8 +155,13 @@
     "firmware_name": {
       "kind": "http_patch",
       "output": "17-firmware-name.patch",
+      "required_markers": [
+        "drivers/base/firmware_loader/main.c",
+        "CONFIG_GENTOO_PRINT_FIRMWARE_INFO",
+        "Loading firmware:"
+      ],
       "urls": [
-        "https://732852.bugs.gentoo.org/attachment.cgi?id=649432"
+        "https://dev.gentoo.org/~mpagano/genpatches/trunk/{series}/3000_Support-printing-firmware-info.patch"
       ]
     },
     "libbpf_uninitialized": {

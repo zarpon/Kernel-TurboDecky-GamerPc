@@ -18,6 +18,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -40,6 +41,8 @@ TOTAL_RESOLVE_TIMEOUT = 600
 MAX_HISTORY_DEPTH = 2048
 REMOTE_FETCH_RETRIES = 3
 REMOTE_RETRY_DELAY_SECONDS = 3
+MAX_PROMISOR_RECOVERIES = 8
+HTTP_BLOB_TIMEOUT = 30
 REMOTE_LOW_SPEED_LIMIT = "1024"
 REMOTE_LOW_SPEED_TIME = "120"
 _RESOLVE_DEADLINE: float | None = None
@@ -53,6 +56,16 @@ TRANSIENT_REMOTE_MARKERS = (
     "the remote end hung up unexpectedly",
     "curl 18",
     "curl 28",
+    "command timed out after",
+    "curl: (6)",
+    "curl: (7)",
+    "curl: (18)",
+    "curl: (28)",
+    "requested url returned error: 429",
+    "requested url returned error: 500",
+    "requested url returned error: 502",
+    "requested url returned error: 503",
+    "requested url returned error: 504",
 )
 
 COMPATIBILITY_SPECS = (
@@ -73,6 +86,10 @@ COMPATIBILITY_SPECS = (
 
 class ResolveError(RuntimeError):
     pass
+
+
+class InsufficientHistory(ResolveError):
+    """The selected branch needs a deeper fetch, not a transport retry."""
 
 
 class ProfileResolution(NamedTuple):
@@ -111,6 +128,8 @@ def run(
     print(f"==> Zen resolver: {command} (timeout {effective_timeout}s)", flush=True)
     started = time.monotonic()
     env = os.environ.copy()
+    # Only the API recovery helper consumes this token, through a private file.
+    env.pop("ZEN_GITHUB_TOKEN", None)
     env.setdefault("GIT_TERMINAL_PROMPT", "0")
     # The resolver deliberately uses a blob-less partial clone. A later
     # ``git show`` can therefore download a small promisor blob on demand.
@@ -177,7 +196,7 @@ def select_compatible_ref(kernel_series: str | None = None) -> tuple[str, str, s
     """
     target = kernel_series or requested_kernel_series()
     target_key = series_key(target)
-    raw_refs = run(
+    raw_refs = run_remote(
         ["git", "ls-remote", "--heads", REPO, "refs/heads/*/zen-sauce"],
         timeout=FETCH_TIMEOUT,
     )
@@ -294,33 +313,96 @@ def is_transient_remote_error(error: str) -> bool:
     return any(marker in lowered for marker in TRANSIENT_REMOTE_MARKERS)
 
 
-def read_file_at(checkout: Path, commit: str, path: str) -> str:
-    """Read a file from a partial clone, retrying failed lazy blob downloads.
+def recover_promisor_blob(checkout: Path, oid: str) -> None:
+    """Import the exact missing Git blob through GitHub's independent API.
 
-    The commit graph is present after the shallow fetch, but the blob itself is
-    intentionally omitted. ``git show`` consequently performs an HTTP request
-    through the promisor remote. A transient low-speed failure must not make a
-    build fail when the same official source can be downloaded on a retry.
-    Permanent errors (missing paths, invalid commits, and so on) are propagated
-    immediately so real resolver regressions remain visible.
+    The object ID comes from Git's failed promisor request, not from a mutable
+    branch or a historical fallback. Verify the complete Git blob hash before
+    writing anything to the object database. The next log/diff/show then reads
+    the same object locally.
     """
-    command = ["git", "show", f"{commit}:{path}"]
-    for attempt in range(1, REMOTE_FETCH_RETRIES + 1):
+    repository = re.fullmatch(
+        r"https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)",
+        REPO.removesuffix(".git"),
+    )
+    if not repository or not re.fullmatch(r"[0-9a-f]{40}", oid):
+        raise ResolveError("cannot recover a promisor blob from this repository")
+    url = f"https://api.github.com/repos/{repository.group(1)}/git/blobs/{oid}"
+    with tempfile.TemporaryDirectory(prefix="zen-blob-") as directory:
+        destination = Path(directory) / "blob"
+        command = [
+            "curl", "--fail", "--silent", "--show-error",
+            "--connect-timeout", "10", "--max-time", str(HTTP_BLOB_TIMEOUT),
+            "--header", "Accept: application/vnd.github.raw+json",
+            "--output", str(destination),
+        ]
+        token = os.environ.get("ZEN_GITHUB_TOKEN", "")
+        if token:
+            if any(ord(character) < 32 for character in token):
+                raise ResolveError("invalid Zen API credential")
+            headers = Path(directory) / "headers"
+            headers.write_text(f"Authorization: Bearer {token}\n", encoding="utf-8")
+            headers.chmod(0o600)
+            # The logged command contains only the temporary filename.
+            command.extend(["--header", f"@{headers}"])
+        command.append(url)
+        run_remote(command, timeout=HTTP_BLOB_TIMEOUT)
+        content = destination.read_bytes()
+        actual = hashlib.sha1(
+            b"blob " + str(len(content)).encode("ascii") + b"\0" + content
+        ).hexdigest()
+        if actual != oid:
+            raise ResolveError(
+                f"GitHub blob hash mismatch: expected {oid}, received {actual}"
+            )
+        written = run(
+            ["git", "hash-object", "-w", "--", str(destination)], cwd=checkout
+        ).strip()
+        if written != oid:
+            raise ResolveError(f"Git stored an unexpected promisor blob: {written}")
+    print(f"==> Zen resolver: recovered and verified Git blob {oid}", flush=True)
+
+
+def run_remote(
+    args: list[str], *, cwd: Path | None = None, timeout: int = FETCH_TIMEOUT
+) -> str:
+    """Retry the same operation without changing the selected upstream source.
+
+    Distinct successfully recovered blobs do not consume transport retries: a
+    log/diff may need several objects. They have their own small cap, and all
+    operations share the resolver's 600-second deadline.
+    """
+    attempt = 1
+    recovered: set[str] = set()
+    while True:
         try:
-            return run(command, cwd=checkout, timeout=FETCH_TIMEOUT)
+            return run(args, cwd=cwd, timeout=timeout)
         except ResolveError as exc:
-            if attempt == REMOTE_FETCH_RETRIES or not is_transient_remote_error(
-                str(exc)
-            ):
+            if not is_transient_remote_error(str(exc)):
+                raise
+            missing = set(re.findall(
+                r"could not fetch ([0-9a-f]{40}) from promisor remote", str(exc)
+            )) - recovered
+            if cwd is not None and missing:
+                if len(recovered | missing) > MAX_PROMISOR_RECOVERIES:
+                    raise ResolveError("Zen promisor recovery limit exceeded") from exc
+                for oid in sorted(missing):
+                    recover_promisor_blob(cwd, oid)
+                recovered.update(missing)
+                continue
+            if attempt == REMOTE_FETCH_RETRIES:
                 raise
             print(
-                "==> Zen resolver: transient promisor-blob download failure; "
+                "==> Zen resolver: transient remote failure; "
                 f"retrying ({attempt}/{REMOTE_FETCH_RETRIES - 1})",
                 flush=True,
             )
-            time.sleep(REMOTE_RETRY_DELAY_SECONDS)
+            time.sleep(_remaining_timeout(REMOTE_RETRY_DELAY_SECONDS))
+            attempt += 1
 
-    raise AssertionError("unreachable retry loop")
+
+def read_file_at(checkout: Path, commit: str, path: str) -> str:
+    return run_remote(["git", "show", f"{commit}:{path}"], cwd=checkout)
 
 
 def locate_introduction(checkout: Path) -> str | None:
@@ -346,7 +428,7 @@ def locate_introduction(checkout: Path) -> str | None:
         # If the upstream subject changes, fall back to Git's semantic search.
         # Iterating over every historical init/Kconfig blob would turn a
         # blob-less clone into one network request per commit.
-        commits = run(
+        commits = run_remote(
             [
                 "git",
                 "log",
@@ -431,7 +513,7 @@ def discover_compatibility_sources(
     """
     sources: list[dict[str, Any]] = []
     for spec in COMPATIBILITY_SPECS:
-        commits = run(
+        commits = run_remote(
             [
                 "git",
                 "log",
@@ -446,16 +528,22 @@ def discover_compatibility_sources(
             timeout=FETCH_TIMEOUT,
         ).splitlines()
         if not commits:
-            raise ResolveError(
+            raise InsufficientHistory(
                 f"Zen series history has no {spec['name']} compatibility commit"
             )
 
         commit = commits[0].strip()
-        parent = run(
-            ["git", "rev-parse", f"{commit}^"],
-            cwd=checkout,
-        ).strip()
-        patch = run(
+        try:
+            parent = run(
+                ["git", "rev-parse", "--verify", f"{commit}^"], cwd=checkout
+            ).strip()
+        except ResolveError as exc:
+            if "Needed a single revision" not in str(exc):
+                raise
+            raise InsufficientHistory(
+                f"Zen compatibility commit {commit} is at the shallow boundary"
+            ) from exc
+        patch = run_remote(
             [
                 "git",
                 "diff",
@@ -516,7 +604,7 @@ def fetch_profile(checkout: Path) -> ProfileResolution:
     compatibility_sources: list[dict[str, Any]] = []
     while depth <= MAX_HISTORY_DEPTH:
         print(f"==> Zen resolver: fetching {ref} at depth {depth}", flush=True)
-        run(
+        run_remote(
             [
                 "git",
                 "fetch",
@@ -545,7 +633,7 @@ def fetch_profile(checkout: Path) -> ProfileResolution:
                     compatibility_sources = discover_compatibility_sources(
                         checkout, head="FETCH_HEAD"
                     )
-                except ResolveError as exc:
+                except InsufficientHistory as exc:
                     if depth < MAX_HISTORY_DEPTH:
                         print(
                             "==> Zen resolver: compatibility history is outside "
@@ -564,7 +652,7 @@ def fetch_profile(checkout: Path) -> ProfileResolution:
     base = run(["git", "rev-parse", f"{intro}^"], cwd=checkout).strip()
     symbol_files = discover_symbol_files(checkout, intro=intro, head=head)
 
-    full_diff = run(
+    full_diff = run_remote(
         [
             "git",
             "diff",
