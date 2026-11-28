@@ -135,6 +135,8 @@ jobs:
 
       - name: Validate and build kernel
         shell: bash
+        env:
+          ZEN_GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           chmod +x scripts/validate-dynamic-patches-local.sh

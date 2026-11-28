@@ -28,7 +28,7 @@ PORT_SPEC.loader.exec_module(port)
 
 def discover_symbol_files(checkout: Path, *, intro: str, head: str) -> list[str]:
     """Find only paths whose history actually changes the Zen symbol."""
-    paths = resolver.run(
+    paths = resolver.run_remote(
         [
             "git",
             "log",

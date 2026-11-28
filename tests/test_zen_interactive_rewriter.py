@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import importlib.util
+import contextlib
+import hashlib
+import io
 import json
 import os
 import subprocess
@@ -415,6 +418,121 @@ c refs/heads/6.18/zen-sauce
                 resolver.read_file_at(Path("checkout"), "HEAD", "missing")
 
         self.assertEqual(run_mock.call_count, 1)
+
+    def test_resolver_retries_the_same_branch_listing_after_timeout(self) -> None:
+        failure = resolver.ResolveError("command timed out after 180s: git ls-remote")
+        refs = "a refs/heads/7.3/zen-sauce\nb refs/heads/7.2/zen-sauce\n"
+        with mock.patch.object(resolver, "run", side_effect=[failure, refs]) as run_mock:
+            with mock.patch.object(resolver.time, "sleep"):
+                selected = resolver.select_compatible_ref("7.3")
+        self.assertEqual(selected, ("7.3/zen-sauce", "7.3", "exact-series"))
+        self.assertEqual(run_mock.call_args_list[0], run_mock.call_args_list[1])
+
+    def test_resolver_stops_after_bounded_transport_retries(self) -> None:
+        failure = resolver.ResolveError("Operation too slow")
+        with mock.patch.object(resolver, "run", side_effect=failure) as run_mock:
+            with mock.patch.object(resolver.time, "sleep") as sleep_mock:
+                with self.assertRaisesRegex(resolver.ResolveError, "Operation too slow"):
+                    resolver.run_remote(["git", "fetch", "origin", "refs/heads/7.3/zen-sauce"])
+        self.assertEqual(run_mock.call_count, resolver.REMOTE_FETCH_RETRIES)
+        self.assertEqual(sleep_mock.call_count, resolver.REMOTE_FETCH_RETRIES - 1)
+
+    def test_resolver_recovers_multiple_exact_blobs_for_one_history_command(self) -> None:
+        oids = ["1" * 40, "2" * 40]
+        failures = [resolver.ResolveError(
+            f"Operation too slow\nfatal: could not fetch {oid} from promisor remote"
+        ) for oid in oids]
+        command = ["git", "log", "-G", "ZEN_INTERACTIVE", "FETCH_HEAD"]
+        with mock.patch.object(resolver, "run", side_effect=failures + ["current commit\n"]) as run_mock:
+            with mock.patch.object(resolver, "recover_promisor_blob") as recover:
+                self.assertEqual(
+                    resolver.run_remote(command, cwd=Path("checkout")), "current commit\n"
+                )
+        self.assertEqual(recover.call_args_list, [mock.call(Path("checkout"), oid) for oid in oids])
+        self.assertTrue(all(call.args[0] == command for call in run_mock.call_args_list))
+
+    def test_resolver_caps_distinct_promisor_recoveries(self) -> None:
+        failures = [resolver.ResolveError(
+            f"Operation too slow\nfatal: could not fetch {digit * 40} from promisor remote"
+        ) for digit in "123"]
+        with mock.patch.object(resolver, "MAX_PROMISOR_RECOVERIES", 2):
+            with mock.patch.object(resolver, "run", side_effect=failures):
+                with mock.patch.object(resolver, "recover_promisor_blob") as recover:
+                    with self.assertRaisesRegex(resolver.ResolveError, "recovery limit"):
+                        resolver.run_remote(["git", "diff", "base", "head"], cwd=Path("checkout"))
+        self.assertEqual(recover.call_count, 2)
+
+    def test_resolver_verifies_and_imports_blob_without_logging_api_token(self) -> None:
+        content = b"config ZEN_INTERACTIVE\n\tbool \"Tune interactivity\"\n"
+        oid = hashlib.sha1(b"blob " + str(len(content)).encode() + b"\0" + content).hexdigest()
+        token = "zen-test-credential-do-not-log"
+        original_run = resolver.run
+        headers_seen = []
+
+        def fake_download(args, **kwargs):
+            if args[0] != "curl":
+                return original_run(args, **kwargs)
+            self.assertEqual(args[-1], f"https://api.github.com/repos/zen-kernel/zen-kernel/git/blobs/{oid}")
+            self.assertNotIn(token, " ".join(args))
+            headers = Path(next(arg[1:] for arg in args if arg.startswith("@")))
+            self.assertEqual(headers.read_text(), f"Authorization: Bearer {token}\n")
+            self.assertEqual(headers.stat().st_mode & 0o777, 0o600)
+            headers_seen.append(headers)
+            Path(args[args.index("--output") + 1]).write_bytes(content)
+            return ""
+
+        with tempfile.TemporaryDirectory() as directory:
+            checkout = Path(directory)
+            subprocess.run(["git", "init", "--quiet", str(checkout)], check=True)
+            output = io.StringIO()
+            with mock.patch.dict(os.environ, {"ZEN_GITHUB_TOKEN": token}):
+                with mock.patch.object(resolver, "run", side_effect=fake_download):
+                    with contextlib.redirect_stdout(output):
+                        resolver.recover_promisor_blob(checkout, oid)
+            actual = subprocess.check_output(["git", "cat-file", "blob", oid], cwd=checkout)
+        self.assertEqual(actual, content)
+        self.assertNotIn(token, output.getvalue())
+        self.assertFalse(headers_seen[0].exists())
+
+    def test_resolver_rejects_blob_hash_mismatch_before_import(self) -> None:
+        def fake_download(args, **_kwargs):
+            self.assertEqual(args[0], "curl")
+            Path(args[args.index("--output") + 1]).write_bytes(b"wrong blob or error page")
+            return ""
+        with mock.patch.object(resolver, "run", side_effect=fake_download) as run_mock:
+            with self.assertRaisesRegex(resolver.ResolveError, "blob hash mismatch"):
+                resolver.recover_promisor_blob(Path("checkout"), "1" * 40)
+        self.assertEqual(run_mock.call_count, 1)
+
+    def test_resolver_does_not_replace_an_unavailable_blob(self) -> None:
+        failure = resolver.ResolveError("curl: (22) The requested URL returned error: 404")
+        with mock.patch.object(resolver, "run", side_effect=failure) as run_mock:
+            with self.assertRaisesRegex(resolver.ResolveError, "404"):
+                resolver.recover_promisor_blob(Path("checkout"), "1" * 40)
+        self.assertEqual(run_mock.call_count, 1)
+
+    def test_resolver_deepens_only_for_insufficient_history(self) -> None:
+        for error, expected_fetches in [
+            (resolver.ResolveError("Operation too slow"), 1),
+            (resolver.InsufficientHistory("compatibility commit outside depth"), 2),
+        ]:
+            with self.subTest(error=type(error).__name__), tempfile.TemporaryDirectory() as directory:
+                with mock.patch.object(resolver, "MAX_HISTORY_DEPTH", 256), \
+                     mock.patch.object(resolver, "select_compatible_ref", return_value=("7.3/zen-sauce", "7.3", "exact-series")), \
+                     mock.patch.object(resolver, "run", return_value="") as run_mock, \
+                     mock.patch.object(resolver, "locate_introduction", return_value="intro"), \
+                     mock.patch.object(resolver.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)), \
+                     mock.patch.object(resolver, "discover_compatibility_sources", side_effect=error):
+                    with self.assertRaises(type(error)):
+                        resolver.fetch_profile(Path(directory) / "checkout")
+                fetches = [call.args[0] for call in run_mock.call_args_list if call.args[0][1] == "fetch"]
+                self.assertEqual(len(fetches), expected_fetches)
+                self.assertTrue(all(args[-1] == "refs/heads/7.3/zen-sauce" for args in fetches))
+
+    def test_resolver_reports_missing_compatibility_history_explicitly(self) -> None:
+        with mock.patch.object(resolver, "run_remote", return_value=""):
+            with self.assertRaises(resolver.InsufficientHistory):
+                resolver.discover_compatibility_sources(Path("checkout"), head="FETCH_HEAD")
 
 
 if __name__ == "__main__":
