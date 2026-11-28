@@ -105,6 +105,27 @@ def upstream_release_key(version: str) -> tuple[int, ...]:
     return tuple(numbers + [stage, revision])
 
 
+def candidate_release_key(
+    path: str, kernel: Any, version_pattern: str
+) -> tuple[int, ...]:
+    """Use the same authenticated revision equivalence for ranking and the freshness gate."""
+    version = base.project_version(path, version_pattern)
+    if not version:
+        raise base.ResolverError(
+            f"versioned component candidate has no project version: {path}"
+        )
+    release = upstream_release_key(version)
+    # Upstream 7.0.1r2 removes only localversion/setlocalversion from
+    # Linux 7.2; the authenticated 7.3 native variant already omits them.
+    # Both upstream byte hashes must match before this exception can build.
+    if kernel.text in ("7.3.3", "7.3.4", "7.3.5", "7.3.6") and path == BORE_73_EQUIVALENT_NATIVE_PATH:
+        release = upstream_release_key("7.0.1r2")
+    return release
+
+
+base.candidate_release_key = candidate_release_key
+
+
 def latest_first_candidate_score(
     path: str, kernel: Any, version_pattern: str | None
 ) -> tuple[Any, ...]:
@@ -119,17 +140,7 @@ def latest_first_candidate_score(
         else 1 if "/testing/" in f"/{path}"
         else 0
     )
-    version = base.project_version(path, version_pattern)
-    if not version:
-        raise base.ResolverError(
-            f"versioned component candidate has no project version: {path}"
-        )
-    release = upstream_release_key(version)
-    # Upstream 7.0.1r2 removes only localversion/setlocalversion from
-    # Linux 7.2; the authenticated 7.3 native variant already omits them.
-    # Both upstream byte hashes must match before this exception can build.
-    if kernel.text in ("7.3.3", "7.3.4", "7.3.5", "7.3.6") and path == BORE_73_EQUIVALENT_NATIVE_PATH:
-        release = upstream_release_key("7.0.1r2")
+    release = candidate_release_key(path, kernel, version_pattern)
     native_series = int(target is not None and target.series == kernel.series)
     return (
         release,         # Latest complete release, including RC/rN revisions

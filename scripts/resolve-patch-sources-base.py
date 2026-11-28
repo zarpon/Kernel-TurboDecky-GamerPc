@@ -288,6 +288,13 @@ def upstream_release_key(value: str | None) -> tuple[int, ...]:
     return tuple((numbers + [0] * 8)[:8] + [stage, int(match[3] or 0)])
 
 
+def candidate_release_key(
+    path: str, kernel: KernelVersion, version_pattern: str
+) -> tuple[int, ...]:
+    """Return the release supplied by a candidate, before compatibility ranking."""
+    return upstream_release_key(project_version(path, version_pattern))
+
+
 def candidate_score(path: str, kernel: KernelVersion, version_pattern: str | None) -> tuple[Any, ...]:
     target = extract_kernel_target(path)
     compat_rank, distance_rank = compatibility_score(target, kernel)
@@ -396,6 +403,8 @@ def resolve(
                 values = {"kernel_version": kernel.text, "series": series_text}
                 options: list[tuple[tuple[Any, ...], Path, str, str, str, str]] = []
                 ref_errors: list[str] = []
+                version_pattern = spec.get("project_version_regex")
+                discovered_releases: dict[tuple[int, ...], str] = {}
 
                 for ref_index, ref in enumerate(dict.fromkeys(refs)):
                     key = (repo, ref)
@@ -411,11 +420,19 @@ def resolve(
                         continue
 
                     exact = match_paths(paths, spec.get("exact_globs", []), values)
-                    fallback = [] if spec.get("require_exact_series", False) else match_paths(
+                    fallback = match_paths(
                         paths, spec.get("fallback_globs", []), values
                     )
                     for mode, candidates in (("exact", exact), ("fallback", fallback)):
                         for candidate_path in candidates:
+                            # Discover releases before validating their bytes. A broken
+                            # new patch, missing marker or unreadable blob must never
+                            # make an older release appear to be the newest upstream.
+                            if version_pattern:
+                                version = project_version(candidate_path, version_pattern)
+                                discovered_releases[upstream_release_key(version)] = version
+                            if mode == "fallback" and spec.get("require_exact_series", False):
+                                continue
                             target = extract_kernel_target(candidate_path)
                             if compatibility_score(target, kernel)[0] <= 0:
                                 continue
@@ -465,6 +482,18 @@ def resolve(
                     _, repo_path, commit, ref, mode, selected, resolved_path = max(
                         options, key=lambda item: item[0]
                     )
+                    if discovered_releases:
+                        latest_release = max(discovered_releases)
+                        selected_release = candidate_release_key(selected, kernel, version_pattern)
+                        if selected_release < latest_release:
+                            selected_version = project_version(selected, version_pattern)
+                            detail = " | ".join(ref_errors) or "newest release has no allowed native variant"
+                            raise ResolverError(
+                                f"newest upstream release {discovered_releases[latest_release]} "
+                                f"for {component} could not be resolved; refuse downgrade to "
+                                f"{selected_version}: {detail}; port the newest upstream release"
+                            )
+                        record["latest_upstream_version"] = discovered_releases[latest_release]
                     target = extract_kernel_target(selected)
                     if spec.get("require_exact_series", False) and target and target.series != kernel.series:
                         raise ResolverError(

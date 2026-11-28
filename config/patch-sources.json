@@ -2,12 +2,14 @@
   "components": {
     "adios": {
       "exact_globs": [
-        "patches/stable/*linux{kernel_version}*ADIOS*.patch",
-        "patches/stable/*linux{series}*ADIOS*.patch"
+        "patches/stable/*{kernel_version}*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/stable/*{series}*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/testing/*{kernel_version}*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/testing/*{series}*[Aa][Dd][Ii][Oo][Ss]*.patch"
       ],
       "fallback_globs": [
-        "patches/stable/*ADIOS*.patch",
-        "patches/testing/*ADIOS*.patch"
+        "patches/stable/*[Aa][Dd][Ii][Oo][Ss]*.patch",
+        "patches/testing/*[Aa][Dd][Ii][Oo][Ss]*.patch"
       ],
       "kind": "git_patch",
       "output": "03-adios.patch",

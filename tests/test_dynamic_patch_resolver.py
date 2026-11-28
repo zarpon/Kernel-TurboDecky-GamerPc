@@ -51,6 +51,96 @@ def init_repo(path: Path, files: dict[str, str]) -> None:
 
 
 class ResolverTests(unittest.TestCase):
+    def test_real_adios_names_select_latest_release_then_native_variant(self) -> None:
+        upstream_paths = {
+            "patches/stable/0001-linux7.3-rc1-ADIOS-3.3.0r3.patch": patch("ADIOS 3.3.0r3", "adios"),
+            "patches/testing/0001-6.18.3-adios-v4.0.0-rc1.patch": patch("ADIOS 4.0.0-rc1", "adios"),
+        }
+        for native in (False, True):
+            with self.subTest(native=native), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                repo = root / "repo"
+                files = dict(upstream_paths)
+                if native:
+                    files["patches/testing/0001-7.3.6-adios-v4.0.0-rc1.patch"] = patch("ADIOS 4.0.0-rc1", "adios")
+                init_repo(repo, files)
+                spec = json.loads((ROOT / "config/patch-sources.json").read_text())["components"]["adios"]
+                spec.update(repo=str(repo), required_markers=["ADIOS"])
+                lock = resolver_module.resolve({"components": {"adios": spec}}, root / "resolved", resolver_module.KernelVersion.parse("7.3.6"), "7.3")
+                record = lock["components"]["adios"]
+                self.assertEqual(record["project_version"], "4.0.0-rc1")
+                self.assertEqual(record["latest_upstream_version"], "4.0.0-rc1")
+                self.assertEqual(record["selection"], "exact" if native else "fallback")
+                self.assertEqual(record["kernel_target"], "7.3.6" if native else "6.18.3")
+
+    def test_invalid_latest_release_never_silently_downgrades(self) -> None:
+        for invalid in ("not a patch\n", patch("demo 3.0", "wrong_marker"), "missing.patch\n"):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                repo = root / "repo"
+                init_repo(repo, {
+                    "patches/linux7.1-demo-2.0.patch": patch("demo 2.0", "required_marker"),
+                    "patches/linux7.2-demo-3.0.patch": invalid,
+                })
+                manifest = {"components": {"demo": {
+                    "kind": "git_patch", "repo": str(repo), "ref": "main",
+                    "exact_globs": ["patches/linux{series}*-demo-*.patch"],
+                    "fallback_globs": ["patches/*-demo-*.patch"],
+                    "project_version_regex": r"demo-([0-9.]+)",
+                    "required_markers": ["required_marker"], "output": "demo.patch",
+                }}}
+                output = root / "resolved"
+                output.mkdir()
+                previous_lock = output / "patch-lock.json"
+                previous_lock.write_text("previous validated lock\n")
+                with self.assertRaisesRegex(
+                    resolver_module.ResolverError,
+                    "newest upstream release 3.0.*refuse downgrade to 2.0",
+                ):
+                    resolver_module.resolve(manifest, output, resolver_module.KernelVersion.parse("7.1.3"), "7.1")
+                self.assertEqual(previous_lock.read_text(), "previous validated lock\n")
+
+    def test_invalid_native_variant_can_use_same_latest_release_for_port(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            init_repo(repo, {
+                "patches/linux7.1-demo-2.0.patch": patch("demo 2.0", "required_marker"),
+                "patches/linux7.1-demo-3.0.patch": "not a patch\n",
+                "patches/linux7.2-demo-3.0.patch": patch("demo 3.0", "required_marker"),
+            })
+            manifest = {"components": {"demo": {
+                "kind": "git_patch", "repo": str(repo), "ref": "main",
+                "exact_globs": ["patches/linux{series}*-demo-*.patch"],
+                "fallback_globs": ["patches/*-demo-*.patch"],
+                "project_version_regex": r"demo-([0-9.]+)",
+                "required_markers": ["required_marker"], "output": "demo.patch",
+            }}}
+            lock = resolver_module.resolve(manifest, root / "resolved", resolver_module.KernelVersion.parse("7.1.3"), "7.1")
+            record = lock["components"]["demo"]
+            self.assertEqual(record["latest_upstream_version"], "3.0")
+            self.assertEqual(record["project_version"], "3.0")
+            self.assertEqual(record["selected_path"], "patches/linux7.2-demo-3.0.patch")
+            self.assertEqual(record["selection"], "fallback")
+
+    def test_exact_only_policy_cannot_hide_a_newer_foreign_release(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            repo = root / "repo"
+            init_repo(repo, {
+                "patches/linux7.1-demo-2.0.patch": patch("demo 2.0"),
+                "patches/linux7.2-demo-3.0.patch": patch("demo 3.0"),
+            })
+            manifest = {"components": {"demo": {
+                "kind": "git_patch", "repo": str(repo), "ref": "main",
+                "exact_globs": ["patches/linux{series}*-demo-*.patch"],
+                "fallback_globs": ["patches/*-demo-*.patch"],
+                "project_version_regex": r"demo-([0-9.]+)",
+                "require_exact_series": True, "output": "demo.patch",
+            }}}
+            with self.assertRaisesRegex(resolver_module.ResolverError, "refuse downgrade to 2.0"):
+                resolver_module.resolve(manifest, root / "resolved", resolver_module.KernelVersion.parse("7.1.3"), "7.1")
+
     def test_remote_commands_have_a_bounded_timeout(self) -> None:
         with mock.patch.object(
             resolver_module.subprocess,
